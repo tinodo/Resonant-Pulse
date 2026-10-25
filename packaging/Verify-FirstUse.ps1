@@ -33,7 +33,7 @@ foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'AudioOutputPicker', 'Trans
     $controls += @{id=$id;name=$element.Current.Name;visible=$true}
 }
 $picker = Find-Control 'AudioOutputPicker'
-$selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).GetCurrentSelection()
+$selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 if ($selection.Count -eq 0) {
