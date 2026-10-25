@@ -63,7 +63,7 @@ public sealed partial class MainWindow
 
     private UIElement BuildLaneEditor(int index)
     {
-        var revision = _documentRevision;
+        var revision = _editorContentRevision;
         var lane = _document.Lanes[index];
         var id = $"Lane{index}";
         var name = Input("Name", id + "Name", lane.Name);

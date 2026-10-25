@@ -24,7 +24,8 @@ public sealed partial class MainWindow
             // event pair so a rapid 120 -> 132 -> 120 retains both edits.
             var proposed = args.NewValue;
             if (!TempoEdits.IsChange(args.OldValue, proposed)) return;
-            await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = proposed));
+            await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = proposed,
+                editorChange: EditorChangeKind.GlobalTempoOnly));
         };
         var unit = SelectChoices("Unit", "TempoUnit", settings.BeatUnitQuarters.ToString(CultureInfo.InvariantCulture),
         [

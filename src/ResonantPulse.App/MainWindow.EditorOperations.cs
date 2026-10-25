@@ -11,7 +11,7 @@ public sealed partial class MainWindow
 
     private Button EditorActionButton(string key, string id, Func<Task> action)
     {
-        var revision = _documentRevision;
+        var revision = _editorContentRevision;
         return EditorControl(ActionButton(key, id, () => RunEditorOperationAsync(revision, action)));
     }
 
@@ -33,7 +33,7 @@ public sealed partial class MainWindow
     {
         try
         {
-            var accepted = await _editorOperations.TryRunAsync(revision, () => _documentRevision, async () =>
+            var accepted = await _editorOperations.TryRunAsync(revision, () => _editorContentRevision, async () =>
             {
                 _editorOperationRevision = revision;
                 RefreshEditorControlState();

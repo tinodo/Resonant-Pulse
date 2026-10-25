@@ -153,6 +153,80 @@ public sealed class EditorOperationGateTests
         Assert.IsTrue(await gate.TryRunAsync(0, () => 0, () => Task.CompletedTask));
     }
 
+    [TestMethod]
+    [DataRow((int)EditorChangeKind.MasterGainOnly)]
+    [DataRow((int)EditorChangeKind.GlobalTempoOnly)]
+    public async Task GlobalScalarPublicationWhileWaitingForEditsKeepsExistingEditorTokenValid(int changeValue)
+    {
+        var change = (EditorChangeKind)changeValue;
+        var gate = new EditorOperationGate();
+        using var edits = new SemaphoreSlim(0, 1);
+        var waiting = Signal();
+        var documentRevision = 12;
+        var editorRevision = 5;
+        var capturedEditorRevision = editorRevision;
+        var didApplyDraft = false;
+        var operation = gate.TryRunAsync(capturedEditorRevision, () => editorRevision, async () =>
+        {
+            waiting.SetResult(true);
+            await edits.WaitAsync();
+            try
+            {
+                // Production's second check under _edits must also tolerate
+                // a benign publication occurring after command admission.
+                EditorOperationGate.EnsureRevision(capturedEditorRevision, editorRevision);
+                didApplyDraft = true;
+            }
+            finally { edits.Release(); }
+        });
+        await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        documentRevision++;
+        editorRevision = EditorRevisionPolicy.Advance(editorRevision, change);
+        edits.Release();
+        Assert.IsTrue(await operation.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        Assert.AreEqual(13, documentRevision);
+        Assert.AreEqual(capturedEditorRevision, editorRevision);
+        Assert.IsTrue(didApplyDraft);
+        Assert.IsFalse(gate.IsBusy);
+        // The same actual policy is used by CommitAsync's render callback.
+        // Neither successful persistence nor recovery failure rebuilds Studio
+        // for these changes; its existing controls/drafts/focus stay in place.
+        Assert.IsFalse(EditorRevisionPolicy.ShouldRebuild(true, change));
+        Assert.IsFalse(EditorRevisionPolicy.ShouldRebuild(false, change));
+    }
+
+    [TestMethod]
+    public async Task ConflictingPublicationStillInvalidatesEditorAfterBenignChanges()
+    {
+        var gate = new EditorOperationGate();
+        var revision = 5;
+        var capturedEditorRevision = revision;
+        revision = EditorRevisionPolicy.Advance(revision, EditorChangeKind.MasterGainOnly);
+        // Default covers lane/event/program edits (including their gain/tempo
+        // fields), reordering, add/remove, replacement, Next and undo/redo.
+        revision = EditorRevisionPolicy.Advance(revision);
+        revision = EditorRevisionPolicy.Advance(revision, EditorChangeKind.GlobalTempoOnly);
+        var applied = false;
+        var rejected = false;
+        try
+        {
+            await gate.TryRunAsync(capturedEditorRevision, () => revision, () =>
+            {
+                applied = true;
+                return Task.CompletedTask;
+            });
+        }
+        catch (EditorRevisionChangedException) { rejected = true; }
+
+        Assert.AreEqual(6, revision);
+        Assert.IsTrue(rejected);
+        Assert.IsFalse(applied);
+        Assert.IsFalse(gate.IsBusy);
+        Assert.IsTrue(EditorRevisionPolicy.ShouldRebuild(false, EditorChangeKind.Document));
+        Assert.IsFalse(EditorRevisionPolicy.ShouldRebuild(true, EditorChangeKind.Document));
+    }
+
     private static TaskCompletionSource<bool> Signal() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 }

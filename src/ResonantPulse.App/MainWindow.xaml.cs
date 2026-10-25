@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
     private bool _isOutputMissing;
     private int _transportIntent;
     private int _documentRevision;
+    private int _editorContentRevision;
     private int _armedSong = -1;
     private PulseInstrument? _instrument;
     private TextBlock? _position;
@@ -100,7 +101,8 @@ public sealed partial class MainWindow : Window
         {
             _transport.Gain = (float)args.NewValue;
             if (_isReady && !_isSynchronizingGain)
-                _ = GuardAsync(() => CommitAsync(doc => doc.Settings.MasterGain = (float)args.NewValue, false));
+                _ = GuardAsync(() => CommitAsync(doc => doc.Settings.MasterGain = (float)args.NewValue,
+                    false, editorChange: EditorChangeKind.MasterGainOnly));
         };
         Root.KeyDown += OnKeyDown;
         Root.ActualThemeChanged += (_, _) => _instrument?.RefreshTheme();
@@ -237,14 +239,15 @@ public sealed partial class MainWindow : Window
         finally { _isBusy = false; StartButton.IsEnabled = true; RefreshSnapshot(); }
     }
 
-    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true, int? expectedRevision = null)
+    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
+        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
         {
             if (_isLocked) { ShowNotice("Locked"); return; }
             if (expectedRevision is int revision)
-                EditorOperationGate.EnsureRevision(revision, _documentRevision);
+                EditorOperationGate.EnsureRevision(revision, _editorContentRevision);
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
             await ValidateAsync(revised);
@@ -258,6 +261,7 @@ public sealed partial class MainWindow : Window
             _redo.Clear();
             _document = revised;
             _documentRevision++;
+            _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
             if (affectsPlayback && _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
                 _hasPendingEdits = true;
             // Edits are pending until Stop + Start. The immutable active
@@ -267,11 +271,11 @@ public sealed partial class MainWindow : Window
         }, succeeded =>
         {
             if (_isClosed) return;
-            // Preserve focus/value-change behavior on ordinary commits. On a
-            // post-publication failure, replace stale captured editor handlers
-            // before GuardAsync displays the persistence error.
-            if (succeeded) RefreshSnapshot();
-            else { SynchronizeGain(); BuildPage(); }
+            // A failed recovery save still reports its error, but an independent
+            // global scalar change must not discard Studio drafts or focus.
+            if (!succeeded) SynchronizeGain();
+            if (EditorRevisionPolicy.ShouldRebuild(succeeded, editorChange)) BuildPage();
+            else RefreshSnapshot();
         });
     }
 
@@ -285,13 +289,14 @@ public sealed partial class MainWindow : Window
         {
             if (_isLocked) { ShowNotice("Locked"); return; }
             if (expectedRevision is int revision)
-                EditorOperationGate.EnsureRevision(revision, _documentRevision);
+                EditorOperationGate.EnsureRevision(revision, _editorContentRevision);
             var source = redo ? _redo : _undo;
             var target = redo ? _undo : _redo;
             if (source.Count == 0) return;
             target.Push(_document);
             _document = source.Pop();
             _documentRevision++;
+            _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
             _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted;
             published();
             SynchronizeGain();

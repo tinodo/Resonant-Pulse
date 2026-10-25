@@ -2,6 +2,11 @@
 
 ## Build and test
 
+The SDK version in `global.json` is exact (`rollForward: disable`), so setup
+does not silently follow newly advertised SDK releases before their downloads
+are available. SDK upgrades require an explicit reviewed change.
+See [.NET SDK selection policy](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json#rollforward).
+
 `ci.yml` runs deterministic Core tests and publishes x64/ARM64 Windows builds,
 checks the self-contained payload, creates an unsigned development MSIX and
 retains TRX results. The x64 package gate signs a temporary copy, installs it,

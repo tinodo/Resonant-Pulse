@@ -154,6 +154,7 @@ public sealed partial class MainWindow
             _redo.Clear();
             _document = replacement;
             _documentRevision++;
+            _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
             _hasPendingEdits = false;
             _armedSong = -1;
             published();

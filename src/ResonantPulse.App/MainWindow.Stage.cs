@@ -228,6 +228,7 @@ public sealed partial class MainWindow
                 _redo.Clear();
                 _document = next;
                 _documentRevision++;
+                _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
                 _hasPendingEdits = false;
                 _armedSong = selectedIndex + 1 < next.Setlist.Count ? selectedIndex + 1 : -1;
                 published();
