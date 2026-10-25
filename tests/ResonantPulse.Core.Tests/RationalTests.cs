@@ -128,6 +128,29 @@ public sealed class RationalTests
     }
 
     [TestMethod]
+    [DataRow("1e253", true)]
+    [DataRow("1e254", false)]
+    [DataRow("1e-253", true)]
+    [DataRow("1e-254", false)]
+    [DataRow("-1e252", true)]
+    [DataRow("-1e253", false)]
+    [DataRow("1e1024", false)]
+    [DataRow("1e-1024", false)]
+    public void JsonConverter_CanonicalLengthBoundary_RoundTripsOrRejectsBeforeWriting(string text, bool supported)
+    {
+        var value = Rational.Parse(text);
+        if (supported)
+        {
+            var json = JsonSerializer.Serialize(value);
+            Assert.AreEqual(value, JsonSerializer.Deserialize<Rational>(json));
+        }
+        else
+        {
+            Check.Throws<JsonException>(() => JsonSerializer.Serialize(value));
+        }
+    }
+
+    [TestMethod]
     public void JsonConverter_ReadWrite_UsesInvariantCanonicalString()
     {
         var original = CultureInfo.CurrentCulture;

@@ -80,6 +80,21 @@ public sealed class TimingAnalyzerTests
     }
 
     [TestMethod]
+    [DataRow(1d, 0.85, 0)]
+    [DataRow(1d, 1.15, 1)]
+    [DataRow(0.85, 1d, 0)]
+    [DataRow(1.15, 1d, 1)]
+    public void Analyze_DecimalToleranceBoundary_AmbiguityUsesMatchingDistance(
+        double expected, double boundaryObservation, int ambiguity)
+    {
+        var report = TimingAnalyzer.Analyze([expected], [boundaryObservation, expected]);
+        Assert.AreEqual(1, report.Matched);
+        Assert.AreEqual(1, report.Extra);
+        Assert.AreEqual(1, report.Matches[0].ObservedIndex);
+        Assert.AreEqual(ambiguity, report.AmbiguousExpected);
+    }
+
+    [TestMethod]
     public void Analyze_InvalidTimestampsAndNullInputs_Rejects()
     {
         Check.Throws<ArgumentNullException>(() => TimingAnalyzer.Analyze(null!, Array.Empty<double>()));

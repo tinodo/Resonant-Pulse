@@ -10,6 +10,7 @@ namespace ResonantPulse.Core;
 [JsonConverter(typeof(RationalJsonConverter))]
 public readonly struct Rational : IComparable<Rational>, IEquatable<Rational>
 {
+    internal const int MaximumTextLength = 256;
     private readonly BigInteger denominator;
     public BigInteger Numerator { get; }
     public BigInteger Denominator => denominator.IsZero ? BigInteger.One : denominator;
@@ -34,7 +35,7 @@ public readonly struct Rational : IComparable<Rational>, IEquatable<Rational>
     public static Rational Parse(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (value.Length > 256) throw new FormatException("Rational values are limited to 256 characters.");
+        if (value.Length > MaximumTextLength) throw new FormatException($"Rational values are limited to {MaximumTextLength} characters.");
         var slash = value.IndexOf('/');
         if (slash >= 0)
         {
@@ -99,5 +100,11 @@ public sealed class RationalJsonConverter : JsonConverter<Rational>
         catch (Exception e) when (e is FormatException or OverflowException or DivideByZeroException)
         { throw new JsonException("Invalid rational value.", e); }
     }
-    public override void Write(Utf8JsonWriter writer, Rational value, JsonSerializerOptions options) => writer.WriteStringValue(value.ToString());
+    public override void Write(Utf8JsonWriter writer, Rational value, JsonSerializerOptions options)
+    {
+        var text = value.ToString();
+        if (text.Length > Rational.MaximumTextLength)
+            throw new JsonException($"Canonical rational values are limited to {Rational.MaximumTextLength} characters.");
+        writer.WriteStringValue(text);
+    }
 }

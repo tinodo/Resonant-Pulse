@@ -73,9 +73,9 @@ public static class TimingAnalyzer
         int ambiguous = 0, left = 0, right = 0;
         foreach (var e in expected)
         {
-            while (left < m && observed[left].Time < e.Time - toleranceSeconds) left++;
+            while (left < m && e.Time - observed[left].Time > toleranceSeconds) left++;
             if (right < left) right = left;
-            while (right < m && observed[right].Time <= e.Time + toleranceSeconds) right++;
+            while (right < m && Math.Abs(e.Time - observed[right].Time) <= toleranceSeconds) right++;
             if (right - left > 1) ambiguous++;
         }
         double drift = 0;
