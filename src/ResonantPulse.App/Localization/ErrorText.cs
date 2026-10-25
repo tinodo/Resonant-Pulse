@@ -17,6 +17,21 @@ internal static class ErrorText
         if (exception is InvalidDataException or JsonException) return Text.Get("ErrorProject");
         if (exception is IOException) return Text.Get("ErrorFile");
         if (exception is COMException) return Text.Get("AudioError");
+        // Preflight text can contain "constant-tempo steps" or "swing".
+        // Classify export constraints before generic authoring keywords, which
+        // would otherwise recommend the very ramps MIDI explicitly rejects.
+        if (message.Contains("PPQ", StringComparison.OrdinalIgnoreCase))
+            return Text.Get("ErrorMidiPpq");
+        if (message.Contains("MIDI", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("continuous ramp", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("constant-tempo steps", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Tempo-field rounding", StringComparison.OrdinalIgnoreCase))
+        {
+            if (message.Contains("continuous ramp", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("constant-tempo steps", StringComparison.OrdinalIgnoreCase))
+                return Text.Get("ErrorMidiRamp");
+            return Text.Get("ErrorMidi");
+        }
         if (message.Contains("Swing", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorSwing");
         if (message.Contains("Constant", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorRamp");
         if (message.Contains("gap", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorGap");
@@ -24,8 +39,6 @@ internal static class ErrorText
         if (message.Contains("density", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("4096", StringComparison.Ordinal) || message.Contains("million", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("voices", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorDensity");
-        if (message.Contains("MIDI", StringComparison.OrdinalIgnoreCase) || message.Contains("PPQ", StringComparison.OrdinalIgnoreCase))
-            return Text.Get("ErrorMidi");
         if (exception is ArgumentException or FormatException or OverflowException or DivideByZeroException)
             return Text.Get("ErrorRhythm");
         return Text.Get("ErrorGeneral");

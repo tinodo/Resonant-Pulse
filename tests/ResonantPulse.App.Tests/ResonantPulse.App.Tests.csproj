@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="4.5.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="4.5.1" />
+    <ProjectReference Include="../../src/ResonantPulse.Core/ResonantPulse.Core.csproj" />
+    <!-- Exercise the actual UI-independent App sources without bootstrapping
+         WinUI or requiring package identity/audio on the test host. -->
+    <Compile Include="../../src/ResonantPulse.App/AccentPatterns.cs" Link="App/AccentPatterns.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Localization/Text.cs" Link="App/Localization/Text.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Localization/ErrorText.cs" Link="App/Localization/ErrorText.cs" />
+  </ItemGroup>
+</Project>

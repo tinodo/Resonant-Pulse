@@ -79,7 +79,7 @@ public sealed partial class MainWindow
         for (var beat = 0; beat < PrimaryAccentCount(settings); beat++)
         {
             var index = beat;
-            var current = index < settings.Accents.Length ? settings.Accents[index] : Accent.Normal;
+            var current = AccentPatterns.MainAt(settings.Accents, index);
             var button = new Button { Margin = new Thickness(0, 0, 8, 8) };
             void Describe(Accent accent)
             {
@@ -92,7 +92,8 @@ public sealed partial class MainWindow
             {
                 await CommitAsync(doc =>
                 {
-                    var pattern = NormalizeAccents(doc.Settings.Accents, PrimaryAccentCount(doc.Settings));
+                    var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents,
+                        Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings)));
                     pattern[index] = (Accent)(((int)pattern[index] + 1) % 4);
                     doc.Settings.Accents = pattern;
                 });
@@ -115,7 +116,8 @@ public sealed partial class MainWindow
                 doc.Settings.AudibleBars = Integer(audible);
                 doc.Settings.SilentBars = Integer(silent);
                 doc.Settings.BlindGaps = blind.IsChecked == true;
-                doc.Settings.Accents = NormalizeAccents(doc.Settings.Accents, PrimaryAccentCount(doc.Settings));
+                // Preserve the authored period, including a repeating [Silent].
+                // Changing meter/sound/gaps must not rewrite the accent pattern.
             });
             BuildPage();
         });
@@ -131,9 +133,6 @@ public sealed partial class MainWindow
             Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"),
             CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync))));
     }
-
-    private static Accent[] NormalizeAccents(Accent[] source, int count) =>
-        Enumerable.Range(0, count).Select(index => index < source.Length ? source[index] : Accent.Normal).ToArray();
 
     private static int PrimaryAccentCount(PulseSettings settings) =>
         Math.Clamp((int)Math.Ceiling(4d * settings.BeatsPerBar / settings.BeatDenominator / settings.BeatUnitQuarters), 1, 256);

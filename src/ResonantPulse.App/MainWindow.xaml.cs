@@ -55,7 +55,9 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        Diagnostics.Write("MainWindow XAML initialization beginning");
         InitializeComponent();
+        Diagnostics.Write("MainWindow XAML initialization completed");
         Title = "Resonant Pulse";
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var scale = GetDpiForWindow(hwnd) / 96.0;

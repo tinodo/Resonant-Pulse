@@ -12,7 +12,8 @@ public static class RhythmGenerators
     {
         DocumentValidator.Require(steps is >= 1 and <= 256 && attacks >= 0 && attacks <= steps, "Euclidean attacks must be 0..steps; steps must be 1..256.");
         DocumentValidator.CheckRational(cycleQuarters);
-        DocumentValidator.Require(cycleQuarters > 0 && cycleQuarters <= 4096, "Euclidean cycle must be positive and at most 4096 quarters.");
+        DocumentValidator.Require(cycleQuarters >= new Rational(1, 1024) && cycleQuarters <= 4096,
+            "Euclidean cycle must be between 1/1024 and 4096 quarters.");
         // Contract cycle is a double. Reject any cycle whose decimal round-trip would change exact authored semantics.
         double cycle = cycleQuarters.ToDouble();
         DocumentValidator.Require(Rational.FromDouble(cycle) == cycleQuarters,

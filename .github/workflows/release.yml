@@ -79,6 +79,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          args=(--repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --title "Resonant Pulse $VERSION" --notes-file docs/RELEASE-NOTES.md)
+          # Creating a ref is atomic: an existing tag must never relabel tested binaries.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/v$VERSION" -f "sha=$SOURCE_SHA" >/dev/null
+          args=(--repo "$GITHUB_REPOSITORY" --verify-tag --title "Resonant Pulse $VERSION" --notes-file docs/RELEASE-NOTES.md)
           if [[ "$PREVIEW" == "true" ]]; then args+=(--prerelease); fi
           gh release create "v$VERSION" release-assets/*.zip release-assets/*.sha256 "${args[@]}"

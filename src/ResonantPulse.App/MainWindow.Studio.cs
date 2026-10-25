@@ -75,7 +75,7 @@ public sealed partial class MainWindow
         for (var beat = 0; beat < (lane.Events.Count == 0 ? lane.Pulses : 0); beat++)
         {
             var step = beat;
-            var accent = step < lane.Pattern.Length ? lane.Pattern[step] : Accent.Normal;
+            var accent = AccentPatterns.LaneAt(lane.Pattern, step);
             var button = new Button { Margin = new Thickness(0, 0, 8, 8) };
             void Describe(Accent value)
             {
@@ -89,7 +89,8 @@ public sealed partial class MainWindow
                 await CommitAsync(doc =>
                 {
                     var revisedLane = doc.Lanes[index];
-                    var accents = NormalizeAccents(revisedLane.Pattern, revisedLane.Pulses);
+                    var accents = AccentPatterns.ExpandLane(revisedLane.Pattern,
+                        Math.Max(revisedLane.Pattern.Length, revisedLane.Pulses));
                     accents[step] = (Accent)(((int)accents[step] + 1) % 4);
                     revisedLane.Pattern = accents;
                 });
@@ -113,7 +114,8 @@ public sealed partial class MainWindow
                     edited.Sound = Selected(sound);
                     edited.Muted = muted.IsChecked == true;
                     edited.Solo = solo.IsChecked == true;
-                    if (edited.Events.Count == 0) edited.Pattern = NormalizeAccents(edited.Pattern, edited.Pulses);
+                    // Core repeats nonempty patterns and supplies a Strong
+                    // downbeat for an empty lane pattern. Preserve both here.
                 });
                 BuildPage();
             }), pattern, BuildExactEvents(index),
@@ -125,7 +127,7 @@ public sealed partial class MainWindow
                         var edited = doc.Lanes[index];
                         if (edited.Events.Count == 0)
                         {
-                            var accents = NormalizeAccents(edited.Pattern, edited.Pulses);
+                            var accents = AccentPatterns.ExpandLane(edited.Pattern, edited.Pulses);
                             edited.Pattern = accents.Skip(1).Append(accents[0]).ToArray();
                         }
                         else
@@ -146,7 +148,7 @@ public sealed partial class MainWindow
                     {
                         var edited = doc.Lanes[index];
                         if (edited.Events.Count == 0)
-                            edited.Pattern = NormalizeAccents(edited.Pattern, edited.Pulses)
+                            edited.Pattern = AccentPatterns.ExpandLane(edited.Pattern, edited.Pulses)
                                 .Select(accent => accent == Accent.Silent ? Accent.Normal : Accent.Silent).ToArray();
                         else foreach (var item in edited.Events)
                             item.Accent = item.Accent == Accent.Silent ? Accent.Normal : Accent.Silent;

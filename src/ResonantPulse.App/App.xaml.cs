@@ -10,9 +10,16 @@ public partial class App : Application
     {
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             Diagnostics.Write("Unhandled process exception", args.ExceptionObject as Exception);
-        UnhandledException += (_, args) => Diagnostics.Write("Unhandled XAML exception", args.Exception);
+        UnhandledException += (_, args) =>
+            Diagnostics.Write($"Unhandled XAML exception; native message: {args.Message}", args.Exception);
+        // Subscribe before either Application or Window XAML is loaded. Native
+        // resource-resolution details can be absent from Exception.Message.
+        DebugSettings.XamlResourceReferenceFailed += (_, args) =>
+            Diagnostics.Write($"XAML resource reference failed: {args.Message}");
+        DebugSettings.IsXamlResourceReferenceTracingEnabled = true;
         Diagnostics.Write("Application initialization; startup is stopped");
         InitializeComponent();
+        Diagnostics.Write("Application XAML resources initialized");
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

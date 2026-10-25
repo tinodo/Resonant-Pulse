@@ -18,7 +18,7 @@ public sealed partial class MainWindow
                 await CommitAsync(doc =>
                 {
                     var edited = doc.Lanes[laneIndex];
-                    var accents = NormalizeAccents(edited.Pattern, edited.Pulses);
+                    var accents = AccentPatterns.ExpandLane(edited.Pattern, edited.Pulses);
                     var cycle = Rational.FromDouble(edited.CycleQuarters);
                     edited.Events = Enumerable.Range(0, edited.Pulses).Select(index => new RhythmEvent
                     {

@@ -50,6 +50,33 @@ public sealed class RhythmGeneratorsTests
     }
 
     [TestMethod]
+    public void Euclidean_CycleBelowValidatorMinimum_RejectsUsingExactRationalComparison()
+    {
+        var minimum = new Rational(1, 1024);
+        var justBelow = new Rational((System.Numerics.BigInteger.One << 60) - 1,
+            System.Numerics.BigInteger.One << 70);
+        Assert.IsTrue(justBelow < minimum);
+        Assert.AreEqual(minimum.ToDouble(), justBelow.ToDouble(), "The boundary check must precede lossy double conversion.");
+        foreach (var cycle in new[] { new Rational(1, 2048), justBelow })
+        {
+            var error = Check.Throws<ArgumentException>(() => RhythmGenerators.Euclidean(1, 8, cycle));
+            Assert.IsTrue(error.Message.Contains("1/1024", StringComparison.Ordinal));
+        }
+    }
+
+    [TestMethod]
+    public void Euclidean_CycleAtValidatorMinimum_ReturnsDocumentValidLane()
+    {
+        var minimum = new Rational(1, 1024);
+        var lane = RhythmGenerators.Euclidean(1, 8, minimum);
+        Assert.AreEqual(1d / 1024, lane.CycleQuarters);
+        Assert.AreEqual(8, lane.Events.Count);
+        Assert.AreEqual(new Rational(7, 8192), lane.Events[^1].PositionQuarters);
+        var document = Check.Document(); document.Lanes.Add(lane);
+        DocumentValidator.Validate(document);
+    }
+
+    [TestMethod]
     [DataRow(RudimentKind.SingleStroke, "RLRLRLRLRLRLRLRL", 16)]
     [DataRow(RudimentKind.DoubleStroke, "RRLLRRLLRRLLRRLL", 16)]
     [DataRow(RudimentKind.Paradiddle, "RLRRLRLLRLRRLRLL", 16)]

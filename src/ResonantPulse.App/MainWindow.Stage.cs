@@ -48,8 +48,9 @@ public sealed partial class MainWindow
         {
             if (songs.SelectedIndex < 0) return;
             _armedSong = songs.SelectedIndex;
-            cue.Text = Text.Format("ArmedSong", _document.Setlist[_armedSong].Name);
-            notes.Text = _document.Setlist[_armedSong].Notes;
+            // Recreate notes and actions together: their captured indices must
+            // always describe the newly armed song, including first selection.
+            BuildPage();
         };
         panel.Children.Add(songs);
         panel.Children.Add(cue);

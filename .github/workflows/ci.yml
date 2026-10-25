@@ -30,6 +30,8 @@ jobs:
           global-json-file: global.json
       - name: Test deterministic engine
         run: dotnet test tests/ResonantPulse.Core.Tests/ResonantPulse.Core.Tests.csproj --configuration Release --logger "trx;LogFileName=core.trx" --results-directory TestResults
+      - name: Test actual app accent projections and localized recovery guidance
+        run: dotnet test tests/ResonantPulse.App.Tests/ResonantPulse.App.Tests.csproj --configuration Release --logger "trx;LogFileName=app-projections.trx" --results-directory TestResults
       - name: Check whitespace
         run: git diff --check
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -44,6 +46,7 @@ jobs:
           path: |
             src/ResonantPulse.Core/packages.lock.json
             tests/ResonantPulse.Core.Tests/packages.lock.json
+            tests/ResonantPulse.App.Tests/packages.lock.json
           if-no-files-found: error
 
   windows:

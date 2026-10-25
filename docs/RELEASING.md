@@ -10,6 +10,10 @@ retains TRX results. A passing build is not a passed hardware/audio/Store test.
 workflow at that source SHA, then publishes portable ZIPs plus SHA-256 checksums.
 Release and Store packaging also require the main-branch CodeQL run for that
 exact SHA to succeed; an earlier green security scan is insufficient.
+Release versions are single-use: the workflow atomically creates a new tag at
+the tested SHA and rejects an existing tag. It never attaches tested binaries
+to a different pre-existing source tag. If publication fails after tag creation,
+inspect the failure and use a new preview version; do not silently move a tag.
 Use a preview semantic version until hardware/accessibility acceptance is
 established. Failed gates prevent release publication.
 Stable releases additionally require `PRODUCT_ACCEPTANCE_COMPLETED=true`,
