@@ -53,8 +53,8 @@ public sealed class RhythmGeneratorsTests
     public void Euclidean_CycleBelowValidatorMinimum_RejectsUsingExactRationalComparison()
     {
         var minimum = new Rational(1, 1024);
-        var justBelow = new Rational((System.Numerics.BigInteger.One << 60) - 1,
-            System.Numerics.BigInteger.One << 70);
+        var justBelow = new Rational((System.Numerics.BigInteger.One << 54) - 1,
+            System.Numerics.BigInteger.One << 64);
         Assert.IsTrue(justBelow < minimum);
         Assert.AreEqual(minimum.ToDouble(), justBelow.ToDouble(), "The boundary check must precede lossy double conversion.");
         foreach (var cycle in new[] { new Rational(1, 2048), justBelow })

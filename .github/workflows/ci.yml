@@ -76,6 +76,10 @@ jobs:
           @{version=$env:BUILD_VERSION;commit=$env:GITHUB_SHA;run="$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID";architecture='${{ matrix.arch }}'} | ConvertTo-Json | Set-Content "artifacts/portable-${{ matrix.arch }}/build-info.json" -Encoding utf8
       - name: Verify distribution layout
         run: ./packaging/Verify-Layout.ps1 -Payload "artifacts/portable-${{ matrix.arch }}"
+      - name: Record published XAML resource layout
+        run: |
+          $payload = (Resolve-Path "artifacts/portable-${{ matrix.arch }}").Path
+          Get-ChildItem -LiteralPath $payload -File -Recurse | Where-Object { $_.Extension -in '.pri','.xbf' } | ForEach-Object { "$($_.FullName.Substring($payload.Length + 1)) ($($_.Length) bytes)" }
       - name: Include legal and operating information
         run: Copy-Item LICENSE,THIRD-PARTY-NOTICES.md,README.md -Destination "artifacts/portable-${{ matrix.arch }}"
       - name: Activate the native window without starting audio
