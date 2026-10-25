@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Passing hosted tests, x64/ARM64 builds, x64 native startup and first-use controls, development-package install/activation/identity/uninstall verification, guarded release/Store workflows and reserved Store identity | No published GitHub release or Store listing yet. ARM64 hardware/install acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.1 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -37,3 +37,14 @@ Realtek output on the development PC; invoking Start advanced through count-in t
 bar 18, beat 4, at 00:37. Playback was then stopped and the app left open.
 This establishes local playback progression, not audible quality, acoustic timing,
 Contrast/Narrator acceptance or completion of the full product design.
+
+The [published preview](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.1)
+was built from protected main `bee4205` by
+[release run 40245073032](https://github.com/tinodo/Resonant-Pulse/actions/runs/40245073032).
+The downloaded x64 ZIP's checksum and embedded source/version/run metadata were
+verified before replacing the stopped local preview. The released app selected
+the saved output, advanced from count-in into bar 1 after Start, then stopped
+successfully and remained open.
+[Store candidate run 40245073254](https://github.com/tinodo/Resonant-Pulse/actions/runs/40245073254)
+passed installed activation with the reserved product identity; submission was
+explicitly disabled. A candidate is not a certified or published Store app.
