@@ -9,6 +9,56 @@ namespace ResonantPulse.App.Tests;
 public sealed class LocalWorkspaceTests
 {
     [TestMethod]
+    public async Task ConcurrentPreferenceWritersAcrossInstancesPublishCompleteSnapshots()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task SaveAsync(int index)
+        {
+            await release.Task;
+            var id = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await new LocalWorkspace(root).SavePreferencesAsync(new Preferences
+            {
+                Language = id, OutputId = $"output-{id}", OutputName = new string('x', 16384) + id
+            });
+        }
+        var saves = Enumerable.Range(0, 32).Select(SaveAsync).ToArray();
+        try
+        {
+            release.SetResult();
+            await Task.WhenAll(saves);
+            var preferences = await new LocalWorkspace(root).LoadPreferencesAsync();
+            Assert.IsTrue(Enumerable.Range(0, 32).Any(index =>
+                preferences.Language == index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            Assert.AreEqual($"output-{preferences.Language}", preferences.OutputId);
+            Assert.AreEqual(new string('x', 16384) + preferences.Language, preferences.OutputName);
+            Assert.AreEqual(0, Directory.GetFiles(root, "*.tmp").Length);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public async Task PreferenceSaveFailureDoesNotLeaveTemporaryFilesAndAllowsRetry()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        var workspace = new LocalWorkspace(root);
+        var path = Path.Combine(root, "preferences.json");
+        Directory.CreateDirectory(path);
+        try
+        {
+            ArgumentException? failure = null;
+            try { await workspace.SavePreferencesAsync(new Preferences { Language = "nl" }); }
+            catch (ArgumentException exception) { failure = exception; }
+            Assert.IsNotNull(failure);
+            Assert.AreEqual(0, Directory.GetFiles(root, "*.tmp").Length);
+            Directory.Delete(path);
+            await workspace.SavePreferencesAsync(new Preferences { Language = "de" });
+            Assert.AreEqual("de", (await workspace.LoadPreferencesAsync()).Language);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public async Task MixedValidAndCorruptLibraryRetainsGoodProjectsAndReportsExactFailedPaths()
     {
         var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));

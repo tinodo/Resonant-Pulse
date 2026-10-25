@@ -42,14 +42,14 @@ public sealed class LocalWorkspace
 
     public async Task SavePreferencesAsync(Preferences preferences)
     {
-        var json = JsonSerializer.Serialize(preferences);
+        var json = JsonSerializer.SerializeToUtf8Bytes(preferences);
         await _writes.WaitAsync();
         try
         {
             Directory.CreateDirectory(_root);
             var path = Path.Combine(_root, "preferences.json");
-            await File.WriteAllTextAsync(path + ".tmp", json);
-            File.Move(path + ".tmp", path, true);
+            await AtomicFile.WriteAsync(path,
+                (stream, token) => stream.WriteAsync(json, token).AsTask(), CancellationToken.None);
         }
         finally { _writes.Release(); }
     }

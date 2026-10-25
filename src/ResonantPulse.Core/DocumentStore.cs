@@ -72,7 +72,7 @@ public static class DocumentStore
     }
 }
 
-internal static class AtomicFile
+public static class AtomicFile
 {
     internal static string LocalPath(string path)
     {
@@ -90,7 +90,7 @@ internal static class AtomicFile
         if (Directory.Exists(full)) throw new ArgumentException("The selected path is a directory, not a file.", nameof(path));
         return full;
     }
-    internal static async Task WriteAsync(string path, Func<FileStream, CancellationToken, Task> writer, CancellationToken token)
+    public static async Task WriteAsync(string path, Func<FileStream, CancellationToken, Task> writer, CancellationToken token)
     {
         string full = LocalPath(path);
         string temp = Path.Combine(Path.GetDirectoryName(full)!, "." + Path.GetFileName(full) + "." + Guid.NewGuid().ToString("N") + ".tmp");
@@ -105,7 +105,7 @@ internal static class AtomicFile
             }
             token.ThrowIfCancellationRequested();
             if (File.Exists(full)) File.Replace(temp, full, null);
-            else File.Move(temp, full);
+            else File.Move(temp, full, overwrite: true);
         }
         catch (Exception original)
         {
