@@ -117,7 +117,7 @@ public sealed partial class MainWindow : Window
                     false, editorChange: EditorChangeKind.MasterGainOnly));
         };
         Root.KeyDown += OnKeyDown;
-        Root.ActualThemeChanged += (_, _) => _instrument?.RefreshTheme();
+        Root.ActualThemeChanged += (_, _) => RefreshInstrumentTheme();
         Root.Loaded += async (_, _) =>
         {
             if (_isReady) return;

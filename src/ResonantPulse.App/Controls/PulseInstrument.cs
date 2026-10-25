@@ -76,7 +76,8 @@ public sealed class PulseInstrument : Grid
             _horizon.Children.Add(mark);
             _onsets.Add(mark);
         }
-        ThemeBrushes.Track(this, RefreshTheme);
+        Loaded += (_, _) => RefreshTheme();
+        ActualThemeChanged += (_, _) => RefreshTheme();
     }
 
     internal Brush Brush(string key) => ThemeBrushes.Resolve(this, key);

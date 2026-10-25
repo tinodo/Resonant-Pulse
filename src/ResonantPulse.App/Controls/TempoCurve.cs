@@ -28,10 +28,11 @@ public sealed class TempoCurve : StackPanel
         Children.Add(_range);
         AutomationProperties.SetAutomationId(this, "ResolvedTempoCurve");
         AutomationProperties.SetName(this, Text.Get("TempoChartAxis"));
-        ThemeBrushes.Track(this, RefreshBrushes);
+        Loaded += (_, _) => RefreshTheme();
+        ActualThemeChanged += (_, _) => RefreshTheme();
     }
 
-    private void RefreshBrushes()
+    internal void RefreshTheme()
     {
         _curve.Stroke = ThemeBrushes.Resolve(this, "PulseBrush");
         _cursor.Stroke = ThemeBrushes.Resolve(this, "LaneBrush");

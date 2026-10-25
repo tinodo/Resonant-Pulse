@@ -22,6 +22,11 @@ public sealed partial class MainWindow
     {
         _powerCallback = (window, message, wParam, lParam, _, _) =>
         {
+            // Win32 desktop windows receive contrast/theme broadcasts here.
+            // AccessibilitySettings.HighContrastChanged requires a CoreWindow
+            // and throws ERROR_NOT_FOUND in the unpackaged desktop process.
+            if (message is 0x0015 or 0x001A or 0x031A)
+                DispatcherQueue.TryEnqueue(RefreshInstrumentTheme);
             // WM_POWERBROADCAST: suspend, automatic resume, user resume.
             // Waking never starts audio and never catches up missed beats.
             if (message == 0x0218 && wParam is 4 or 7 or 18)
@@ -39,7 +44,14 @@ public sealed partial class MainWindow
             return DefSubclassProc(window, message, wParam, lParam);
         };
         if (!SetWindowSubclass(hwnd, _powerCallback, 0x5250, 0))
-            Diagnostics.Write($"Power notification hook unavailable ({Marshal.GetLastWin32Error()})");
+            Diagnostics.Write($"Window notification hook unavailable ({Marshal.GetLastWin32Error()})");
+    }
+
+    private void RefreshInstrumentTheme()
+    {
+        if (_isClosed) return;
+        _instrument?.RefreshTheme();
+        _tempoCurve?.RefreshTheme();
     }
 
     private void RemovePowerHook(nint hwnd)

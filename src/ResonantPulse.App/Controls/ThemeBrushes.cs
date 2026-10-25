@@ -18,31 +18,4 @@ internal static class ThemeBrushes
                 return (Brush)value;
         return (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
     }
-
-    internal static void Track(FrameworkElement owner, Action refresh)
-    {
-        var isLoaded = false;
-        void ContrastChanged(AccessibilitySettings sender, object args) =>
-            owner.DispatcherQueue.TryEnqueue(() =>
-            {
-                if (isLoaded) refresh();
-            });
-        owner.Loaded += (_, _) =>
-        {
-            if (isLoaded) return;
-            isLoaded = true;
-            Accessibility.HighContrastChanged += ContrastChanged;
-            refresh();
-        };
-        owner.Unloaded += (_, _) =>
-        {
-            if (!isLoaded) return;
-            isLoaded = false;
-            Accessibility.HighContrastChanged -= ContrastChanged;
-        };
-        owner.ActualThemeChanged += (_, _) =>
-        {
-            if (isLoaded) refresh();
-        };
-    }
 }
