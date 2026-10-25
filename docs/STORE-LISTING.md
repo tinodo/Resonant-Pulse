@@ -1,12 +1,15 @@
 # Store listing preparation
 
-Owner-approved working product name: **Resonant Pulse**. Reservation, trademark
-clearance, commercial terms, markets and first certification remain external
-prerequisites. Do not claim the entire design as shipping functionality.
+Product name: **Resonant Pulse**. The owner supplied the reserved Partner Center
+product identity on 25 October 2026; the exact nonsecret values are recorded in
+packaging/StoreIdentity.json and configured as GitHub repository variables.
+Trademark clearance, commercial terms, markets and first certification remain
+external prerequisites. Do not claim the entire design as shipping functionality.
 
 | Field | Prepared value |
 |---|---|
 | Product name | Resonant Pulse |
+| Reserved Store product ID | 9NRFH2C8X2QL |
 | Category candidate | Music |
 | Support | https://github.com/tinodo/ResonantPulse/issues |
 | Privacy | https://github.com/tinodo/ResonantPulse/blob/main/docs/PRIVACY.md |

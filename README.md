@@ -22,9 +22,9 @@ and SHA-256 checksum rather than disabling platform protection.
 ARM64 compilation is distinct from ARM64 hardware validation. Do not interpret
 the presence of an ARM64 artifact as proof of instrument/audio behavior.
 
-**Microsoft Store:** not yet published. The Store workflow requires this
-product's exact Partner Center identity and API authorization. First publication
-is completed in Partner Center; update automation is separately guarded.
+**Microsoft Store:** reserved as product `9NRFH2C8X2QL`, but not yet published.
+The exact Partner Center identity is configured. First submission, certification
+and API authorization remain required; update automation is separately guarded.
 
 ## Development and verification
 
