@@ -11,9 +11,9 @@ external prerequisites. Do not claim the entire design as shipping functionality
 | Product name | Resonant Pulse |
 | Reserved Store product ID | 9NRFH2C8X2QL |
 | Category candidate | Music |
-| Support | https://github.com/tinodo/ResonantPulse/issues |
-| Privacy | https://github.com/tinodo/ResonantPulse/blob/main/docs/PRIVACY.md |
-| Source/license | https://github.com/tinodo/ResonantPulse / MIT |
+| Support | https://github.com/tinodo/Resonant-Pulse/issues |
+| Privacy | https://github.com/tinodo/Resonant-Pulse/blob/main/docs/PRIVACY.md |
+| Source/license | https://github.com/tinodo/Resonant-Pulse / MIT |
 | Package languages | en-US, nl-NL, de-DE, fr-FR, es-ES |
 | Distribution baseline | Windows 11 24H2 or later; x64 and ARM64 builds |
 | Account/cloud requirement | None for local metronome functionality |

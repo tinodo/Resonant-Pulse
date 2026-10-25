@@ -18,10 +18,10 @@ up elsewhere. Windows, GitHub and Microsoft Store have separate privacy
 practices for distribution and platform services.
 
 Support and privacy contact:
-https://github.com/tinodo/ResonantPulse/issues
+https://github.com/tinodo/Resonant-Pulse/issues
 
 Issues are public: do not attach recordings, private projects, credentials or
 personal information. Request an appropriate private contact channel before
 sharing sensitive details. The public policy is maintained at
-https://github.com/tinodo/ResonantPulse/blob/main/docs/PRIVACY.md.
+https://github.com/tinodo/Resonant-Pulse/blob/main/docs/PRIVACY.md.
 This policy is not evidence that a complete Store listing or legal review exists.

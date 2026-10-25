@@ -1,6 +1,6 @@
 # Resonant Pulse
 
-[![Build and test](https://github.com/tinodo/ResonantPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tinodo/ResonantPulse/actions/workflows/ci.yml)
+[![Build and test](https://github.com/tinodo/Resonant-Pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tinodo/Resonant-Pulse/actions/workflows/ci.yml)
 
 A native Windows metronome and rhythm workstation in C#/.NET 10 and WinUI 3,
 with the cyan/magenta instrument aesthetic of Resonant.
@@ -12,7 +12,7 @@ and [release operations](docs/RELEASING.md).
 
 ## Downloads
 
-Verified preview ZIPs are published to [GitHub Releases](https://github.com/tinodo/ResonantPulse/releases)
+Verified preview ZIPs are published to [GitHub Releases](https://github.com/tinodo/Resonant-Pulse/releases)
 only after the release workflow's engine tests and Windows builds pass. Extract
 the entire ZIP and run `ResonantPulse.exe` on Windows 11 24H2 or later with a matching
 architecture. Do not copy only the executable. Downloads include .NET and WinUI runtime
