@@ -61,11 +61,11 @@ public sealed class TempoCurve : StackPanel
             var maximum = plan.TempoSegments.Max(segment => Math.Max(segment.StartTempo, segment.EndTempo));
             var span = Math.Max(10, maximum - minimum);
             var points = new PointCollection();
-            for (var sample = 0; sample <= 256; sample++)
+            foreach (var at in TempoCurveState.SampleFrames(plan))
             {
-                var at = (long)((double)(plan.TotalFrames - 1) * sample / 256);
                 var tempo = plan.PositionAtFrame(at).Tempo;
-                points.Add(new Point(8 + 584d * sample / 256, 166 - (tempo - minimum) * 150 / span));
+                points.Add(new Point(8 + 584d * at / Math.Max(1, plan.TotalFrames - 1),
+                    166 - (tempo - minimum) * 150 / span));
             }
             _curve.Points = points;
             _range.Text = Text.Format("TempoChartRange", minimum, maximum, (double)plan.TotalFrames / plan.SampleRate);

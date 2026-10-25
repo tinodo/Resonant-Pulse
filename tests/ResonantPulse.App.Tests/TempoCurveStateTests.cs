@@ -7,6 +7,32 @@ namespace ResonantPulse.App.Tests;
 public sealed class TempoCurveStateTests
 {
     [TestMethod]
+    public void ChartSamplingRetainsShortSectionsBetweenRegularSamples()
+    {
+        var document = new PulseDocument
+        {
+            Program =
+            [
+                new() { StartTempo = 60, EndTempo = 60, Bars = 8 },
+                new() { StartTempo = 240, EndTempo = 240, Bars = 1 },
+                new() { StartTempo = 60, EndTempo = 60, Bars = 125 }
+            ]
+        };
+        var plan = ScheduleCompiler.Compile(document, 48000, includeCountIn: false);
+        var frames = TempoCurveState.SampleFrames(plan);
+        CollectionAssert.AreEqual(frames.Order().Distinct().ToArray(), frames.ToArray());
+        foreach (var section in plan.SectionBoundaries)
+        {
+            Assert.IsTrue(frames.Contains(section.StartFrame));
+            Assert.IsTrue(frames.Contains(section.EndFrame - 1));
+        }
+        Assert.IsTrue(frames.Any(frame => plan.PositionAtFrame(frame).Tempo == 240));
+        Assert.IsTrue(frames.All(frame => frame >= 0 && frame < plan.TotalFrames));
+        Assert.AreEqual(0L, frames[0]);
+        Assert.AreEqual(plan.TotalFrames - 1, frames[^1]);
+    }
+
+    [TestMethod]
     public void PreviewCompiledDuringPlaybackReturnsAtZeroOnStopAndSubsequentNullRefreshes()
     {
         var state = new TempoCurveState();

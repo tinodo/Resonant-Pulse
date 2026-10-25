@@ -10,6 +10,20 @@ internal readonly record struct TempoCurveFrame(RenderPlan? Plan, long Frame, bo
 /// </summary>
 internal sealed class TempoCurveState
 {
+    internal static IReadOnlyList<long> SampleFrames(RenderPlan plan)
+    {
+        var last = plan.TotalFrames - 1;
+        var frames = new SortedSet<long>();
+        for (var sample = 0; sample <= 256; sample++)
+            frames.Add((long)((double)last * sample / 256));
+        foreach (var section in plan.SectionBoundaries)
+        {
+            frames.Add(section.StartFrame);
+            frames.Add(section.EndFrame - 1);
+        }
+        return frames.ToArray();
+    }
+
     private int? _pendingRevision;
     private int? _attemptedRevision;
     private int? _previewRevision;

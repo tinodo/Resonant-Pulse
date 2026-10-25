@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace ResonantPulse.Core.Tests;
@@ -6,6 +7,27 @@ namespace ResonantPulse.Core.Tests;
 [TestClass]
 public sealed class DocumentStoreTests
 {
+    [TestMethod]
+    public async Task Load_CompactImportExceedingExpandedSaveBudget_IsRejectedBeforePublication()
+    {
+        using var temp = new TempDirectory();
+        var program = string.Join(",", Enumerable.Repeat("{}", 1024));
+        var song = "{\"Document\":{\"SchemaVersion\":1,\"Program\":[" + program + "]}}";
+        var json = "{\"SchemaVersion\":1,\"Setlist\":[" + string.Join(",", Enumerable.Repeat(song, 32)) + "]}";
+        Assert.IsTrue(Encoding.UTF8.GetByteCount(json) < DocumentValidator.MaximumDocumentBytes);
+        var expanded = JsonSerializer.Deserialize<PulseDocument>(json)!;
+        DocumentValidator.Validate(expanded);
+        Assert.IsTrue(JsonSerializer.SerializeToUtf8Bytes(expanded, new JsonSerializerOptions { WriteIndented = true }).Length >
+            DocumentValidator.MaximumDocumentBytes);
+        await File.WriteAllTextAsync(temp.File(), json);
+
+        var error = await Check.ThrowsAsync<InvalidDataException>(() => DocumentStore.LoadAsync(temp.File()));
+
+        Assert.IsTrue(error.Message.Contains("4 MiB", StringComparison.Ordinal));
+        Assert.AreEqual(json, await File.ReadAllTextAsync(temp.File()));
+        temp.NoTemps();
+    }
+
     [TestMethod]
     public async Task SaveLoad_AllAuthoredAndNestedFields_RoundTripsDeepValues()
     {

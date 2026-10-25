@@ -18,9 +18,7 @@ public static class DocumentStore
         cancellationToken.ThrowIfCancellationRequested();
         DocumentValidator.Validate(document);
         cancellationToken.ThrowIfCancellationRequested();
-        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
-        if (bytes.Length > DocumentValidator.MaximumDocumentBytes)
-            throw new ArgumentException("Document exceeds the 4 MiB JSON limit. Split the setlist into separate projects.");
+        byte[] bytes = SerializeWithinBudget(document);
         await AtomicFile.WriteAsync(path, async (stream, token) => { await stream.WriteAsync(bytes, token).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
     }
     public static async Task<PulseDocument> LoadAsync(string path, CancellationToken cancellationToken = default)
@@ -51,11 +49,20 @@ public static class DocumentStore
                 throw new InvalidDataException("Project needs an explicit SchemaVersion of 1; legacy/future schemas require an explicit migration.");
             var document = json.Deserialize<PulseDocument>(JsonOptions) ?? throw new InvalidDataException("Project is null.");
             DocumentValidator.Validate(document);
+            _ = SerializeWithinBudget(document);
             return document;
         }
         catch (JsonException e) { throw new InvalidDataException($"Invalid project JSON at {e.Path ?? "$"}: {e.Message}", e); }
         catch (ArgumentException e) { throw new InvalidDataException($"Invalid project: {e.Message}", e); }
     }
+    private static byte[] SerializeWithinBudget(PulseDocument document)
+    {
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
+        if (bytes.Length > DocumentValidator.MaximumDocumentBytes)
+            throw new ArgumentException("Document exceeds the 4 MiB JSON limit. Split the setlist into separate projects.");
+        return bytes;
+    }
+
     private static void RejectDuplicateProperties(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)
@@ -104,8 +111,23 @@ public static class AtomicFile
                 stream.Flush(flushToDisk: true);
             }
             token.ThrowIfCancellationRequested();
-            if (File.Exists(full)) File.Replace(temp, full, null);
-            else File.Move(temp, full, overwrite: true);
+            for (var attempt = 0; ; attempt++)
+            {
+                token.ThrowIfCancellationRequested();
+                try
+                {
+                    File.Move(temp, full, overwrite: true);
+                    break;
+                }
+                catch (Exception exception) when (attempt < 6 && OperatingSystem.IsWindows() &&
+                    exception is IOException or UnauthorizedAccessException &&
+                    (exception.HResult & 0xFFFF) is 5 or 32 or 33)
+                {
+                    // Windows can briefly deny replacement while another rename
+                    // or reader closes. Permanent failures still propagate.
+                    await Task.Delay(10 << attempt, token).ConfigureAwait(false);
+                }
+            }
         }
         catch (Exception original)
         {
