@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" style="width:100%;height:auto;max-width:1600px;display:block" role="img" aria-labelledby="title desc">
+<title id="title">Resonant Pulse - Play design concept</title>
+<desc id="desc">Static dark native Windows metronome concept. A cyan phase dial surrounds a 120 BPM readout, with magenta subdivisions, four labelled beats, simple musical controls and a fixed transport. A compact player and design notes appear beneath the main screen. This is design artwork, not a functioning app.</desc>
+<defs>
+ <radialGradient id="halo"><stop stop-color="#58e4f4" stop-opacity=".08"/><stop offset="1" stop-color="#58e4f4" stop-opacity="0"/></radialGradient>
+ <linearGradient id="line"><stop stop-color="#58e4f4" stop-opacity="0"/><stop offset=".5" stop-color="#58e4f4"/><stop offset="1" stop-color="#ee83d3" stop-opacity="0"/></linearGradient>
+ <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="5"/></filter>
+ <style>text{font-family:'Segoe UI',Arial,sans-serif;fill:#f0f5f3}.muted{fill:#a6b5b8}.cyan{fill:#58e4f4}.pink{fill:#ee83d3}.gold{fill:#f3e687}.small{font-size:14px}.label{font-size:12px;letter-spacing:1.5px}.number{font-family:Bahnschrift,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums}.stroke{stroke:#33444c;fill:none}</style>
+</defs>
+<rect width="1600" height="1080" fill="#070b10"/>
+<text x="70" y="52" font-size="15" class="cyan" letter-spacing="4">RESONANT PULSE</text>
+<text x="1530" y="52" text-anchor="end" class="small muted">01 / PLAY - STATIC DESIGN CONCEPT</text>
+<rect x="70" y="80" width="1460" height="760" rx="18" fill="#0c1116" stroke="#33444c"/>
+<path d="M70 134H1530" stroke="#23313a"/>
+<circle cx="101" cy="108" r="9" fill="none" stroke="#58e4f4" stroke-width="2"/>
+<path d="M96 108h10M101 103v10" stroke="#58e4f4"/>
+<text x="123" y="114" font-size="17" font-weight="600">Resonant Pulse</text>
+<text x="427" y="114" font-size="15" class="cyan">Play</text>
+<path d="M418 132h48" stroke="#58e4f4" stroke-width="3"/>
+<text x="511" y="114" font-size="15" class="muted">Studio</text>
+<text x="604" y="114" font-size="15" class="muted">Train</text>
+<text x="688" y="114" font-size="15" class="muted">Stage</text>
+<text x="776" y="114" font-size="15" class="muted">Library</text>
+<text x="1272" y="113" font-size="15" class="muted">Settings</text>
+<path d="M1378 108h12M1426 102h12v12h-12zM1475 102l12 12m0-12-12 12" fill="none" stroke="#a6b5b8"/>
+<text x="108" y="178" font-size="18" font-weight="600">Open practice</text>
+<text x="108" y="202" font-size="13" class="muted">4/4  /  quarter-note pulse  /  straight eighths</text>
+<text x="1013" y="178" class="label muted">QUICK CONTROLS</text>
+<text x="1487" y="178" text-anchor="end" class="small muted">Save preset</text>
+<ellipse cx="548" cy="432" rx="335" ry="252" fill="url(#halo)"/>
+<g transform="translate(548 434)">
+ <circle r="210" fill="none" stroke="#182b35"/>
+ <circle r="195" fill="none" stroke="#33444c" stroke-dasharray="1 11"/>
+ <circle r="176" fill="none" stroke="#25444d" stroke-width="2"/>
+ <circle r="176" fill="none" stroke="#58e4f4" stroke-width="3" stroke-dasharray="277 1106" transform="rotate(-90)"/>
+ <circle r="150" fill="none" stroke="#ee83d3" stroke-opacity=".25" stroke-dasharray="2 115.8"/>
+ <path d="M0-218v18M218 0h-18M0 218v-18M-218 0h18" stroke="#a6b5b8" stroke-width="2"/>
+ <circle cx="176" r="9" fill="#58e4f4" filter="url(#glow)"/>
+ <circle cx="176" r="6" fill="#58e4f4"/>
+ <path d="m0-184 8 8-8 8-8-8z" fill="#f3e687"/>
+ <rect x="-5" y="171" width="10" height="10" rx="1" fill="#71858f"/>
+ <rect x="-181" y="-5" width="10" height="10" rx="1" fill="#71858f"/>
+ <circle cx="106" cy="-106" r="4" fill="#ee83d3"/>
+ <circle cx="106" cy="106" r="4" fill="#ee83d3"/>
+ <circle cx="-106" cy="106" r="4" fill="#ee83d3"/>
+ <circle cx="-106" cy="-106" r="4" fill="#ee83d3"/>
+ <text y="-44" text-anchor="middle" class="label muted">TEMPO</text>
+ <text y="42" text-anchor="middle" font-size="112" class="number">120<tspan font-size="36" class="muted">.0</tspan></text>
+ <text y="82" text-anchor="middle" font-size="20" class="cyan">BPM  /  quarter note</text>
+ <text x="0" y="-237" text-anchor="middle" class="small gold">1</text>
+ <text x="241" y="5" text-anchor="middle" class="small cyan">2</text>
+ <text y="250" text-anchor="middle" class="small muted">3</text>
+ <text x="-241" y="5" text-anchor="middle" class="small muted">4</text>
+</g>
+<path d="M230 681H867" stroke="#33444c"/>
+<g stroke="#71858f" fill="#a6b5b8"><path d="M280 674v14M370 674v14M460 674v14"/><circle cx="325" cy="681" r="3"/><circle cx="415" cy="681" r="3"/><circle cx="505" cy="681" r="3"/></g>
+<g stroke="#58e4f4" fill="#58e4f4"><path d="M640 669v24M730 669v24M820 669v24"/><rect x="636" y="677" width="8" height="8"/><rect x="726" y="677" width="8" height="8"/><rect x="816" y="677" width="8" height="8"/></g>
+<g fill="#ee83d3"><circle cx="595" cy="681" r="4"/><circle cx="685" cy="681" r="4"/><circle cx="775" cy="681" r="4"/><circle cx="865" cy="681" r="4"/></g>
+<path d="M550 661v40" stroke="#f0f5f3"/>
+<text x="867" y="652" text-anchor="end" font-size="11" class="muted">UPCOMING ONSETS</text>
+<text x="548" y="723" text-anchor="middle" class="small muted">Beat 2 of 4  /  bar 12</text>
+<path d="M958 218v506" stroke="#23313a"/>
+<text x="1013" y="236" class="label muted">TEMPO</text>
+<rect x="1013" y="251" width="49" height="46" rx="8" fill="#141d24" stroke="#33444c"/>
+<text x="1037" y="280" text-anchor="middle" font-size="24">-</text>
+<rect x="1072" y="251" width="170" height="46" rx="8" fill="#090e12" stroke="#33444c"/>
+<text x="1157" y="281" text-anchor="middle" font-size="23" class="number">120.0</text>
+<rect x="1252" y="251" width="49" height="46" rx="8" fill="#141d24" stroke="#33444c"/>
+<text x="1276" y="281" text-anchor="middle" font-size="24">+</text>
+<rect x="1313" y="251" width="172" height="46" rx="8" fill="#16323a" stroke="#58e4f4"/>
+<text x="1399" y="280" text-anchor="middle" font-size="16" class="cyan">Tap tempo</text>
+<text x="1013" y="333" class="label muted">METER / GROUPING</text>
+<rect x="1013" y="348" width="226" height="46" rx="8" fill="#141d24" stroke="#33444c"/>
+<text x="1031" y="377" font-size="18">4/4</text><path d="m1212 367 6 6 6-6" fill="none" stroke="#a6b5b8"/>
+<rect x="1251" y="348" width="234" height="46" rx="8" fill="#141d24" stroke="#33444c"/>
+<text x="1268" y="377" font-size="17">1 + 1 + 1 + 1</text>
+<text x="1013" y="431" class="label muted">BEAT ACCENTS</text>
+<rect x="1013" y="446" width="108" height="62" rx="9" fill="#343126" stroke="#f3e687"/>
+<text x="1067" y="472" text-anchor="middle" font-size="20" class="gold">1</text><text x="1067" y="494" text-anchor="middle" font-size="12" class="gold">Strong</text>
+<rect x="1134" y="446" width="108" height="62" rx="9" fill="#14343e" stroke="#58e4f4"/>
+<text x="1188" y="472" text-anchor="middle" font-size="20" class="cyan">2</text><text x="1188" y="494" text-anchor="middle" font-size="12">Normal</text>
+<rect x="1255" y="446" width="108" height="62" rx="9" fill="#141d24" stroke="#71858f"/>
+<text x="1309" y="472" text-anchor="middle" font-size="20">3</text><text x="1309" y="494" text-anchor="middle" font-size="12" class="muted">Normal</text>
+<rect x="1377" y="446" width="108" height="62" rx="9" fill="#141d24" stroke="#71858f"/>
+<text x="1431" y="472" text-anchor="middle" font-size="20">4</text><text x="1431" y="494" text-anchor="middle" font-size="12" class="muted">Normal</text>
+<text x="1013" y="546" class="label muted">SUBDIVISION</text>
+<rect x="1013" y="561" width="472" height="46" rx="8" fill="#141d24" stroke="#33444c"/>
+<text x="1031" y="590" font-size="17">Eighths  /  straight</text><path d="m1450 580 6 6 6-6" fill="none" stroke="#a6b5b8"/>
+<text x="1013" y="645" class="label muted">SOUND</text>
+<text x="1013" y="677" font-size="18">Soft wood + glass accent</text>
+<text x="1013" y="706" font-size="13" class="muted">Count-in: 1 bar</text>
+<path d="M94 750h1412" stroke="#33444c"/>
+<rect x="108" y="772" width="143" height="46" rx="8" fill="#58e4f4"/>
+<path d="M137 787v16m8-16v16" stroke="#09291f" stroke-width="3"/>
+<text x="169" y="802" font-size="16" fill="#09291f" style="fill:#09291f;font-weight:600">Pause</text>
+<rect x="265" y="772" width="108" height="46" rx="8" fill="#141d24" stroke="#33444c"/>
+<rect x="285" y="789" width="12" height="12" rx="1" fill="#a6b5b8"/>
+<text x="310" y="802" font-size="15">Stop</text>
+<text x="401" y="791" class="label cyan">PLAYING</text><text x="401" y="813" font-size="13" class="muted">00:24 elapsed</text>
+<text x="650" y="801" class="small muted">Volume</text><path d="M715 795h150" stroke="#33444c" stroke-width="5"/><path d="M715 795h93" stroke="#58e4f4" stroke-width="5"/><circle cx="808" cy="795" r="6" fill="#f0f5f3"/>
+<rect x="884" y="772" width="86" height="46" rx="8" fill="#141d24" stroke="#71858f"/><text x="927" y="801" text-anchor="middle" class="small">Mute</text>
+<text x="1036" y="791" class="label muted">OUTPUT</text><text x="1036" y="813" font-size="13">Headphones / USB</text>
+<text x="1328" y="791" class="label muted">CLOCK</text><text x="1328" y="813" font-size="13" class="cyan">Internal</text>
+<text x="70" y="894" class="label cyan">THE DESIGN RULE</text>
+<text x="70" y="927" font-size="25">The glow follows the rhythm.</text>
+<text x="70" y="959" font-size="16" class="muted">Actual phase. Fixed geometry. Clear musical meaning.</text>
+<text x="70" y="988" font-size="16" class="muted">No fake spectrum, full-screen flashing or restless layout changes.</text>
+<rect x="991" y="879" width="539" height="147" rx="12" fill="#0c1116" stroke="#33444c"/>
+<text x="1014" y="906" class="label muted">COMPACT PLAYER / SAME TRANSPORT</text>
+<text x="1014" y="961" font-size="46" class="number">120<tspan font-size="17" class="muted"> BPM / quarter</tspan></text>
+<text x="1014" y="1003" font-size="14" class="muted">4/4 / beat 2</text>
+<rect x="1162" y="977" width="88" height="40" rx="7" fill="#141d24" stroke="#71858f"/><text x="1206" y="1003" text-anchor="middle" font-size="14">Mute</text>
+<rect x="1262" y="977" width="88" height="40" rx="7" fill="#141d24" stroke="#71858f"/><text x="1306" y="1003" text-anchor="middle" font-size="14">More</text>
+<rect x="1377" y="929" width="61" height="49" rx="8" fill="#58e4f4"/><path d="M1400 944v19m12-19v19" stroke="#09291f" stroke-width="4"/>
+<rect x="1450" y="929" width="57" height="49" rx="8" fill="#141d24" stroke="#33444c"/><rect x="1471" y="947" width="14" height="14" fill="#f0f5f3"/>
+<text x="70" y="1053" font-size="12" class="muted">WinUI 3 / C# / .NET 10 - EN, NL, DE, FR, ES - Original conceptual artwork; no app implementation</text>
+</svg>

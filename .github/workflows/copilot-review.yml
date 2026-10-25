@@ -1,0 +1,27 @@
+name: Copilot review
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request a real GitHub Copilot review
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_REVIEW_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No checkout: pull_request_target must never execute untrusted PR code.
+          gh api --method POST "repos/$GH_REPO/pulls/$PR_NUMBER/requested_reviewers" \
+            -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+          echo "Review requested. This is not an approval and does not prove the review has completed." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/ResonantPulse.Core/ResonantPulse.Core.csproj" />
+  <Project Path="src/ResonantPulse.App/ResonantPulse.App.csproj" />
+  <Project Path="tests/ResonantPulse.Core.Tests/ResonantPulse.Core.Tests.csproj" />
+</Solution>

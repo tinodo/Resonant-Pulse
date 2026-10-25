@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" style="width:100%;height:auto;max-width:1600px;display:block" role="img" aria-labelledby="title desc">
+<title id="title">Resonant Pulse - Practice and Timing Lab design concept</title>
+<desc id="desc">Static practice-screen concept showing a tempo ladder, explicit current and next steps, a muted-bar schedule, local practice history and a clearly disabled timing-analysis panel until an input is chosen and calibrated. No invented player-accuracy score is displayed.</desc>
+<defs><style>text{font-family:'Segoe UI',Arial,sans-serif;fill:#f0f5f3}.muted{fill:#a6b5b8}.cyan{fill:#58e4f4}.pink{fill:#ee83d3}.gold{fill:#f3e687}.label{font-size:12px;letter-spacing:1.4px}.number{font-family:Bahnschrift,'Segoe UI',sans-serif}</style>
+<linearGradient id="area" x2="0" y2="1"><stop stop-color="#58e4f4" stop-opacity=".14"/><stop offset="1" stop-color="#58e4f4" stop-opacity="0"/></linearGradient>
+<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse"><path d="m0 8 8-8" stroke="#53616a" stroke-width="1"/></pattern></defs>
+<rect width="1600" height="1000" fill="#070b10"/>
+<text x="70" y="52" font-size="15" class="cyan" letter-spacing="4">RESONANT PULSE</text><text x="1530" y="52" text-anchor="end" font-size="14" class="muted">03 / TRAIN - STATIC DESIGN CONCEPT</text>
+<rect x="70" y="80" width="1460" height="799" rx="18" fill="#0c1116" stroke="#33444c"/>
+<path d="M70 134H1530" stroke="#23313a"/>
+<text x="103" y="114" font-size="18" font-weight="600">Resonant Pulse</text>
+<text x="429" y="114" font-size="15" class="muted">Play</text><text x="511" y="114" font-size="15" class="muted">Studio</text><text x="610" y="114" font-size="15" class="cyan">Train</text><path d="M601 132h55" stroke="#58e4f4" stroke-width="3"/>
+<text x="694" y="114" font-size="15" class="muted">Stage</text><text x="782" y="114" font-size="15" class="muted">Library</text><text x="1330" y="114" font-size="15" class="muted">Settings</text>
+<text x="106" y="181" font-size="24" font-weight="600">Build your inner clock</text><text x="106" y="211" font-size="14" class="muted">Tempo ladder + gap training / 4/4 / quarter-note BPM</text>
+<rect x="1281" y="157" width="209" height="43" rx="8" fill="#141d24" stroke="#33444c"/><text x="1385" y="184" text-anchor="middle" font-size="15">Edit program</text>
+<rect x="106" y="245" width="904" height="361" rx="12" fill="#090e12" stroke="#33444c"/>
+<text x="132" y="278" class="label muted">TEMPO / QUARTER-NOTE BPM</text><text x="979" y="278" text-anchor="end" font-size="13" class="muted">+4 BPM every 8 bars</text>
+<path d="M173 336h784M173 403.5h784M173 471h784M173 516h784" stroke="#20303a"/>
+<text x="145" y="341" text-anchor="end" font-size="13" class="muted">112</text><text x="145" y="408.5" text-anchor="end" font-size="13" class="muted">100</text><text x="145" y="476" text-anchor="end" font-size="13" class="muted">88</text><text x="145" y="521" text-anchor="end" font-size="13" class="muted">80</text>
+<path d="M173 516h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84V550H173z" fill="url(#area)"/>
+<path d="M173 516h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84v-22.5h84" fill="none" stroke="#58e4f4" stroke-width="3"/>
+<path d="M488 312v235" stroke="#ee83d3" stroke-width="2"/><circle cx="488" cy="448.5" r="7" fill="#ee83d3"/>
+<text x="488" y="307" text-anchor="middle" class="label pink">NOW</text>
+<text x="173" y="570" font-size="13" class="muted">Master bar 1</text><text x="488" y="570" text-anchor="middle" font-size="13" class="muted">6 / 8 bars complete</text><text x="950" y="570" text-anchor="end" font-size="13" class="muted">Master bar 72</text>
+<rect x="1034" y="245" width="456" height="361" rx="12" fill="#141d24" stroke="#33444c"/>
+<text x="1060" y="279" class="label cyan">CURRENT STEP / 2 OF 4</text><text x="1060" y="318" font-size="26">Tempo ladder</text>
+<text x="1060" y="393" font-size="71" class="number">92<tspan font-size="27" class="muted">.0 BPM</tspan></text>
+<text x="1060" y="430" font-size="15" class="muted">Quarter note / 4/4 / 6 of 8 bars complete</text>
+<path d="M1060 458h401" stroke="#33444c"/><text x="1060" y="489" class="label muted">NEXT CHANGE</text><text x="1060" y="519" font-size="19" class="gold">96 BPM in 2 bars</text>
+<text x="1060" y="552" font-size="14" class="muted">Then: 2 audible + 2 silent bars</text><text x="1060" y="582" font-size="14" class="cyan">Hold step   /   Repeat   /   Skip</text>
+<text x="106" y="640" class="label muted">PROGRAM</text>
+<rect x="106" y="655" width="210" height="74" rx="8" fill="#141d24" stroke="#33444c"/><text x="123" y="683" font-size="17">1  Warm up</text><text x="123" y="709" font-size="13" class="muted">80 BPM / 16 bars</text>
+<rect x="328" y="655" width="252" height="74" rx="8" fill="#14313a" stroke="#58e4f4"/><text x="346" y="683" font-size="17" class="cyan">2  Tempo ladder</text><text x="346" y="709" font-size="13" class="muted">80 to 112 / +4 every 8 bars</text>
+<rect x="592" y="655" width="210" height="74" rx="8" fill="#141d24" stroke="#33444c"/><text x="609" y="683" font-size="17">3  Internal time</text><text x="609" y="709" font-size="13" class="muted">2 on / 2 silent / 8 cycles</text>
+<rect x="814" y="655" width="196" height="74" rx="8" fill="#141d24" stroke="#33444c"/><text x="831" y="683" font-size="17">4  Recover</text><text x="831" y="709" font-size="13" class="muted">80 BPM / 60 seconds</text>
+<rect x="1034" y="625" width="456" height="104" rx="10" fill="#090e12" stroke="#33444c"/>
+<text x="1054" y="654" class="label muted">TIMING LAB / NOT ARMED</text><text x="1054" y="682" font-size="15">Choose input and calibrate to assess timing.</text><text x="1054" y="711" font-size="14" class="cyan">Keyboard   /   MIDI   /   Microphone</text>
+<path d="M94 780h1412" stroke="#33444c"/>
+<rect x="106" y="802" width="142" height="48" rx="8" fill="#58e4f4"/><path d="M135 817v19m10-19v19" stroke="#09291f" stroke-width="3"/><text x="169" y="833" font-size="16" style="fill:#09291f;font-weight:600">Pause</text>
+<rect x="262" y="802" width="108" height="48" rx="8" fill="#141d24" stroke="#33444c"/><rect x="281" y="820" width="13" height="13" fill="#a6b5b8"/><text x="309" y="833" font-size="15">Stop</text>
+<text x="401" y="820" class="label cyan">PROGRAM RUNNING</text><text x="401" y="845" font-size="13" class="muted">Running time logged / no accuracy inferred</text>
+<text x="720" y="833" font-size="14" class="muted">Volume</text><path d="M784 826h112" stroke="#71858f" stroke-width="4"/><path d="M784 826h63" stroke="#58e4f4" stroke-width="4"/><circle cx="847" cy="826" r="6" fill="#f0f5f3"/>
+<rect x="932" y="803" width="86" height="46" rx="8" fill="#141d24" stroke="#71858f"/><text x="975" y="833" text-anchor="middle" font-size="14">Mute</text><text x="1088" y="833" font-size="14">Headphones / USB</text><text x="1372" y="833" font-size="14" class="cyan">Internal clock</text>
+<text x="70" y="929" font-size="26">A coach that shows its working.</text><text x="70" y="962" font-size="15" class="muted">Explicit progress, deliberate silence and calibrated feedback. No made-up mastery score.</text>
+</svg>
