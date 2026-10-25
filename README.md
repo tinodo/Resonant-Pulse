@@ -7,15 +7,15 @@ with the cyan/magenta instrument aesthetic of Resonant.
 
 **Development status:** implementation in progress. The full reviewed design is
 the product target, not a claim that every feature is delivered. See
-[delivery evidence](docs/DELIVERY.md), [architecture](docs/IMPLEMENTATION-CONTRACT.md)
+[delivery evidence](docs/DELIVERY.md), [architecture](docs/ARCHITECTURE.md)
 and [release operations](docs/RELEASING.md).
 
 ## Downloads
 
 Verified preview ZIPs are published to [GitHub Releases](https://github.com/tinodo/ResonantPulse/releases)
 only after the release workflow's engine tests and Windows builds pass. Extract
-the entire ZIP and run `ResonantPulse.exe` on a matching supported Windows 11
-system. Do not copy only the executable. Downloads include .NET and WinUI runtime
+the entire ZIP and run `ResonantPulse.exe` on Windows 11 24H2 or later with a matching
+architecture. Do not copy only the executable. Downloads include .NET and WinUI runtime
 dependencies. Unsigned previews may show SmartScreen warnings; inspect the source
 and SHA-256 checksum rather than disabling platform protection.
 

@@ -23,6 +23,9 @@ if ($Development) {
           [string]::IsNullOrWhiteSpace($PublisherDisplayName)) {
     throw 'Exact Partner Center package identity and publisher are required for Store packaging.'
 }
+if (-not $Development -and $Version.Split('.')[3] -ne '0') {
+    throw 'The fourth Store package version component is reserved and must be zero.'
+}
 & (Join-Path $PSScriptRoot 'Verify-Layout.ps1') -Payload $Payload
 $outputPath = [IO.Path]::GetFullPath($Output)
 $payloadPath = [IO.Path]::GetFullPath($Payload)

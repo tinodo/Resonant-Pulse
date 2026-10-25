@@ -8,8 +8,13 @@ retains TRX results. A passing build is not a passed hardware/audio/Store test.
 
 `release.yml` is manually dispatched from main. It invokes the same complete CI
 workflow at that source SHA, then publishes portable ZIPs plus SHA-256 checksums.
+Release and Store packaging also require the main-branch CodeQL run for that
+exact SHA to succeed; an earlier green security scan is insufficient.
 Use a preview semantic version until hardware/accessibility acceptance is
 established. Failed gates prevent release publication.
+Stable releases additionally require `PRODUCT_ACCEPTANCE_COMPLETED=true`,
+configured only after full-product/device acceptance is recorded. Every ZIP
+contains build-info.json with its source SHA, version, architecture and CI run.
 
 Dependabot checks NuGet and GitHub Actions weekly. `copilot-review.yml` requests
 the actual `copilot-pull-request-reviewer[bot]` reviewer on PRs, including

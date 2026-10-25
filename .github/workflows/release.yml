@@ -28,6 +28,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           REF: ${{ github.ref }}
           PREVIEW: ${{ inputs.prerelease }}
+          ACCEPTED: ${{ vars.PRODUCT_ACCEPTANCE_COMPLETED }}
         shell: bash
         run: |
           [[ "$REF" == "refs/heads/main" ]] || { echo "::error::Release must run from main."; exit 1; }
@@ -35,14 +36,21 @@ jobs:
           if [[ "$PREVIEW" != "true" && "$VERSION" == *-* ]]; then
             echo "::error::A prerelease version cannot be labelled stable."; exit 1
           fi
+          if [[ "$PREVIEW" != "true" && "$ACCEPTED" != "true" ]]; then
+            echo "::error::Stable delivery requires recorded full-product/device acceptance and PRODUCT_ACCEPTANCE_COMPLETED=true."; exit 1
+          fi
   verified-build:
     needs: validate
     uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ inputs.version }}
   release:
     needs: verified-build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,6 +60,16 @@ jobs:
           pattern: windows-*
           merge-multiple: true
           path: release-assets
+      - name: Require successful security analysis of the exact source commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow codeql.yml --commit "$SOURCE_SHA" --event push --json databaseId --jq '.[0].databaseId // empty')
+          [[ -n "$run_id" ]] || { echo "::error::No main-branch CodeQL run exists for this exact commit."; exit 1; }
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
       - name: Publish verified downloads
         env:
           GH_TOKEN: ${{ github.token }}

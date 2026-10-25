@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      version:
+        type: string
+        default: 0.1.0-dev
 
 permissions:
   contents: read
@@ -61,9 +65,12 @@ jobs:
       - name: Generate original application artwork
         run: ./packaging/Generate-Assets.ps1
       - name: Publish self-contained Windows application
+        env:
+          BUILD_VERSION: ${{ inputs.version || '0.1.0-dev' }}
         run: |
-          dotnet publish src/ResonantPulse.App/ResonantPulse.App.csproj --configuration Release --runtime win-${{ matrix.arch }} -p:Platform=${{ matrix.arch }} -p:DistributionMode=Portable --self-contained true --output artifacts/portable-${{ matrix.arch }}
+          dotnet publish src/ResonantPulse.App/ResonantPulse.App.csproj --configuration Release --runtime win-${{ matrix.arch }} -p:Platform=${{ matrix.arch }} -p:DistributionMode=Portable "-p:Version=$env:BUILD_VERSION" --self-contained true --output artifacts/portable-${{ matrix.arch }}
           if ($LASTEXITCODE -ne 0) { throw 'Windows publish failed.' }
+          @{version=$env:BUILD_VERSION;commit=$env:GITHUB_SHA;run="$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID";architecture='${{ matrix.arch }}'} | ConvertTo-Json | Set-Content "artifacts/portable-${{ matrix.arch }}/build-info.json" -Encoding utf8
       - name: Verify distribution layout
         run: ./packaging/Verify-Layout.ps1 -Payload "artifacts/portable-${{ matrix.arch }}"
       - name: Include legal and operating information

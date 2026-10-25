@@ -49,9 +49,15 @@ jobs:
   verified-build:
     needs: preflight
     uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ inputs.version }}
   package:
     needs: verified-build
     runs-on: windows-2025
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         shell: pwsh
@@ -63,6 +69,15 @@ jobs:
         with:
           name: windows-x64
           path: artifacts
+      - name: Require exact-commit security analysis
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          $runId = gh run list --repo $env:GITHUB_REPOSITORY --workflow codeql.yml --commit $env:SOURCE_SHA --event push --json databaseId --jq '.[0].databaseId // empty'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runId)) { throw 'No main-branch CodeQL run exists for this exact commit.' }
+          gh run watch $runId --repo $env:GITHUB_REPOSITORY --exit-status --interval 15
+          if ($LASTEXITCODE -ne 0) { throw 'Security analysis did not complete successfully.' }
       - name: Package the verified payload with Partner Center identity
         env:
           PACKAGE_NAME: ${{ vars.STORE_IDENTITY_NAME }}
