@@ -12,6 +12,9 @@
     <!-- Exercise the actual UI-independent App sources without bootstrapping
          WinUI or requiring package identity/audio on the test host. -->
     <Compile Include="../../src/ResonantPulse.App/AccentPatterns.cs" Link="App/AccentPatterns.cs" />
+    <Compile Include="../../src/ResonantPulse.App/TempoEdits.cs" Link="App/TempoEdits.cs" />
+    <Compile Include="../../src/ResonantPulse.App/TimingRunRules.cs" Link="App/TimingRunRules.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Storage/LocalWorkspace.cs" Link="App/Storage/LocalWorkspace.cs" />
     <Compile Include="../../src/ResonantPulse.App/Localization/Text.cs" Link="App/Localization/Text.cs" />
     <Compile Include="../../src/ResonantPulse.App/Localization/ErrorText.cs" Link="App/Localization/ErrorText.cs" />
   </ItemGroup>

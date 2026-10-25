@@ -48,8 +48,19 @@ public sealed partial class MainWindow
 
     private async Task RefreshLibraryAsync()
     {
-        _library = await _workspace.ListAsync();
+        var result = await _workspace.ListAsync();
+        _library = result.Items;
         FilterLibrary();
+        if (result.Failures.Count > 0)
+        {
+            foreach (var failure in result.Failures)
+                Diagnostics.Write($"Library entry could not be read: {failure.Path}", failure.Error);
+            Notice.Severity = InfoBarSeverity.Warning;
+            Notice.Title = Text.Get("LibraryPartial");
+            Notice.Message = Text.Format("LibraryFailedPaths", result.Failures.Count,
+                string.Join(Environment.NewLine, result.Failures.Select(failure => failure.Path)));
+            Notice.IsOpen = true;
+        }
     }
 
     private void FilterLibrary()

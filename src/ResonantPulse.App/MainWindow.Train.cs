@@ -44,8 +44,11 @@ public sealed partial class MainWindow
         panel.Children.Add(Copy("TimingLimits"));
         panel.Children.Add(Copy("TimingBudget"));
         var targets = new List<Choice> { new("-1", Text.Get("MainTarget")) };
-        for (var index = 0; index < _document.Lanes.Count; index++)
-            targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), _document.Lanes[index].Name));
+        var targetDocument = _isTimingArmed && _timingRevision is not null ? _timingRevision.Document : _document;
+        if (!_isTimingArmed && !TimingRunRules.IsValidTarget(_timingLane, targetDocument.Lanes.Count))
+            _timingLane = -1;
+        for (var index = 0; index < targetDocument.Lanes.Count; index++)
+            targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), targetDocument.Lanes[index].Name));
         var target = SelectChoices("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
         var tolerance = Number("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
         var includeSilent = Check("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
@@ -60,7 +63,10 @@ public sealed partial class MainWindow
                 var snapshot = _transport.Snapshot();
                 if (snapshot.State != TransportState.Playing || snapshot.Revision is null)
                     throw new InvalidOperationException(Text.Get("TimingRequiresPlayback"));
-                _timingLane = int.Parse(Selected(target), System.Globalization.CultureInfo.InvariantCulture);
+                var selectedLane = int.Parse(Selected(target), System.Globalization.CultureInfo.InvariantCulture);
+                if (!TimingRunRules.CanArm(_hasPendingEdits, selectedLane, snapshot.Revision.Document.Lanes.Count))
+                    throw new InvalidOperationException(Text.Get(_hasPendingEdits ? "TimingPendingEdits" : "TimingTargetChanged"));
+                _timingLane = selectedLane;
                 _timingTolerance = Value(tolerance) / 1000;
                 _includeSilentTargets = includeSilent.IsChecked == true;
                 _timingRevision = snapshot.Revision;
@@ -88,9 +94,11 @@ public sealed partial class MainWindow
         // Deliberately no audible preview or beat-rate UIA live announcements.
     }
 
-    private void FinishTiming()
+    private void FinishTiming() => FinishTiming(null);
+
+    private void FinishTiming(long? completedFrame)
     {
-        try { FinishTimingCore(); }
+        try { FinishTimingCore(completedFrame); }
         catch (Exception exception)
         {
             _isTimingArmed = false;
@@ -99,13 +107,15 @@ public sealed partial class MainWindow
         }
     }
 
-    private void FinishTimingCore()
+    private void FinishTimingCore(long? completedFrame)
     {
         if (!_isTimingArmed || _timingRevision is null) return;
         var revision = _timingRevision;
         _isTimingArmed = false;
-        var seconds = Math.Min(600, Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds);
-        var endFrame = _timingStartFrame + (long)(seconds * revision.Initial.SampleRate);
+        var endFrame = TimingRunRules.EndFrame(_timingStartFrame,
+            Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds, revision.Initial.SampleRate,
+            revision.IsFinite ? revision.Initial.TotalFrames : null, completedFrame);
+        var seconds = (double)(endFrame - _timingStartFrame) / revision.Initial.SampleRate;
         var expected = new List<double>();
         void Append(RenderPlan plan, long origin, long excludeBefore)
         {

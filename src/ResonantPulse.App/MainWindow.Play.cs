@@ -20,7 +20,7 @@ public sealed partial class MainWindow
         var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000, 0.1);
         tempo.ValueChanged += async (_, args) =>
         {
-            if (!double.IsFinite(args.NewValue)) return;
+            if (!TempoEdits.IsChange(_document.Settings.Tempo, args.NewValue)) return;
             await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = args.NewValue));
         };
         var unit = SelectChoices("Unit", "TempoUnit", settings.BeatUnitQuarters.ToString(CultureInfo.InvariantCulture),
@@ -33,15 +33,13 @@ public sealed partial class MainWindow
             await CommitAsync(doc => doc.Settings.BeatUnitQuarters = double.Parse(Selected(unit), CultureInfo.InvariantCulture));
             BuildPage();
         });
-        var tap = ActionButton("Tap", "TapTempo", async () =>
+        var tap = ActionButton("Tap", "TapTempo", () =>
         {
             var estimate = _tap.Tap((double)Stopwatch.GetTimestamp() / Stopwatch.Frequency);
-            if (estimate is { } bpm)
-            {
-                // The estimator returns selected tempo-unit beats/minute.
-                await CommitAsync(doc => doc.Settings.Tempo = Math.Clamp(bpm, 1, 1000));
-                tempo.Value = _document.Settings.Tempo;
-            }
+            // NumberBox.ValueChanged is the single commit path. An unchanged
+            // estimate must not add a redundant undo entry or recovery write.
+            if (TempoEdits.TryApplyTap(tempo.Value, estimate, out var proposed))
+                tempo.Value = proposed;
         });
         var controls = Column(Heading(Text.Get("Tempo")), Flow(tempo, unit),
             CommandFlow(

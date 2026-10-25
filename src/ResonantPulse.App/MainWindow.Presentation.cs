@@ -50,7 +50,17 @@ public sealed partial class MainWindow
             TransportState.Playing => "Playing", TransportState.Paused => "Paused",
             TransportState.Faulted => "AudioError", TransportState.Completed => "Completed", _ => "Stopped"
         });
-        if (snapshot.State == TransportState.Completed) InvalidateTiming();
+        switch (TimingRunRules.Update(_isTimingArmed,
+            ReferenceEquals(_timingRevision, snapshot.Revision),
+            snapshot.State == TransportState.Playing, snapshot.State == TransportState.Completed))
+        {
+            case TimingRunUpdate.Finish:
+                FinishTiming(snapshot.ProcessedFrame);
+                break;
+            case TimingRunUpdate.Invalidate:
+                InvalidateTiming();
+                break;
+        }
         var detail = blind ? Text.Get("Silent") :
             position?.IsCountIn == true ? Text.Get("CountInActive") :
             Text.Format("Position", barOffset + (position?.BarIndex ?? 0) + 1, (position?.BeatIndex ?? 0) + 1, time);

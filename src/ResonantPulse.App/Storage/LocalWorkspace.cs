@@ -15,12 +15,18 @@ public sealed class Preferences
 }
 
 public sealed record LibraryItem(string Path, string Name);
+public sealed record LibraryReadFailure(string Path, Exception Error);
+public sealed record LibraryReadResult(IReadOnlyList<LibraryItem> Items, IReadOnlyList<LibraryReadFailure> Failures);
 
 public sealed class LocalWorkspace
 {
     private readonly SemaphoreSlim _writes = new(1);
-    private readonly string _root = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ResonantPulse");
+    private readonly string _root;
+
+    public LocalWorkspace() : this(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ResonantPulse")) { }
+
+    internal LocalWorkspace(string root) => _root = Path.GetFullPath(root);
     public string RecoveryPath => Path.Combine(_root, "recovery.pulse");
     public string LibraryPath => Path.Combine(_root, "Library");
 
@@ -63,17 +69,34 @@ public sealed class LocalWorkspace
         await DocumentStore.SaveAsync(Path.Combine(LibraryPath, $"{Guid.NewGuid():N}.pulse"), document);
     }
 
-    public async Task<IReadOnlyList<LibraryItem>> ListAsync()
+    public async Task<LibraryReadResult> ListAsync()
     {
-        if (!Directory.Exists(LibraryPath)) return [];
-        var result = new List<LibraryItem>();
-        // Only app-owned files, no recursive scans or external attachment fetching.
-        foreach (var path in Directory.EnumerateFiles(LibraryPath, "*.pulse").Take(1000))
+        string[] paths;
+        try { paths = Directory.EnumerateFiles(LibraryPath, "*.pulse").Take(1000).ToArray(); }
+        catch (DirectoryNotFoundException) when (!File.Exists(LibraryPath))
         {
-            var document = await DocumentStore.LoadAsync(path);
-            result.Add(new(path, document.Name));
+            // A not-yet-created Library is normal on first launch. Permission,
+            // I/O and other enumeration failures are intentionally not swallowed.
+            return new([], []);
         }
-        return result.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        var result = new List<LibraryItem>();
+        var failures = new List<LibraryReadFailure>();
+        // Only app-owned files, no recursive scans or external attachment fetching.
+        foreach (var path in paths)
+        {
+            try
+            {
+                var document = await DocumentStore.LoadAsync(path);
+                result.Add(new(path, document.Name));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                or InvalidDataException or JsonException or ArgumentException)
+            {
+                failures.Add(new(path, exception));
+            }
+        }
+        return new(result.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToArray(),
+            failures.ToArray());
     }
 
     public static PulseDocument Clone(PulseDocument document) =>

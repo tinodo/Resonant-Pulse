@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Passing hosted tests, x64/ARM64 builds and packaging, verified stopped x64 native startup, release/Store workflows and reserved Store identity | Public preview download not yet published; ARM64 hardware/install acceptance, first Store submission and certification not established |
+| Distribution | Passing hosted tests, x64/ARM64 builds, stopped x64 native startup, development-package install/activation/identity/uninstall verification, release/Store workflows and reserved Store identity | Public preview download not yet published; ARM64 hardware/install acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live

@@ -253,9 +253,10 @@ public sealed partial class MainWindow : Window
             _redo.Clear();
             _document = revised;
             _documentRevision++;
-            if (affectsPlayback && _transport.State is TransportState.Playing or TransportState.Paused)
+            if (affectsPlayback && _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
                 _hasPendingEdits = true;
-            if (affectsPlayback) InvalidateTiming();
+            // Edits are pending until Stop + Start. The immutable active
+            // revision and a measurement against it have not changed.
             await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
         }
         finally { _edits.Release(); }
@@ -277,8 +278,7 @@ public sealed partial class MainWindow : Window
             target.Push(_document);
             _document = source.Pop();
             _documentRevision++;
-            _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused;
-            InvalidateTiming();
+            _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted;
             await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
             SynchronizeGain();
         }

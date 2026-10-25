@@ -57,4 +57,38 @@ public sealed class ErrorTextTests
         Assert.AreEqual(Text.Get("ErrorMidi"),
             ErrorText.Explain(new ArgumentException("MIDI duration exceeds the supported tick range.")));
     }
+
+    [TestMethod]
+    public void TimingGuardsAndPartialLibraryWarningsAreLocalizedInAllFiveLanguages()
+    {
+        var previousLanguage = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        var keys = new[] { "TimingPendingEdits", "TimingTargetChanged", "LibraryPartial", "LibraryFailedPaths" };
+        var translations = keys.ToDictionary(key => key, _ => new HashSet<string>());
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                foreach (var key in keys)
+                {
+                    var translated = Text.Get(key);
+                    Assert.AreNotEqual(key, translated);
+                    translations[key].Add(translated);
+                }
+                var paths = Path.Combine("Library", "corrupt.pulse");
+                StringAssert.Contains(Text.Format("LibraryFailedPaths", 1, paths), paths);
+                Assert.AreEqual(Text.Get("TimingPendingEdits"),
+                    ErrorText.Explain(new InvalidOperationException(Text.Get("TimingPendingEdits"))));
+            }
+            foreach (var key in keys) Assert.AreEqual(5, translations[key].Count);
+        }
+        finally
+        {
+            Text.Select(previousLanguage);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
 }
