@@ -237,12 +237,14 @@ public sealed partial class MainWindow : Window
         finally { _isBusy = false; StartButton.IsEnabled = true; RefreshSnapshot(); }
     }
 
-    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true)
+    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true, int? expectedRevision = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
-        await _edits.WaitAsync();
-        try
+        await DocumentPublication.RunAsync(_edits, async published =>
         {
+            if (_isLocked) { ShowNotice("Locked"); return; }
+            if (expectedRevision is int revision)
+                EditorOperationGate.EnsureRevision(revision, _documentRevision);
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
             await ValidateAsync(revised);
@@ -260,21 +262,30 @@ public sealed partial class MainWindow : Window
                 _hasPendingEdits = true;
             // Edits are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.
+            published();
             await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
-        }
-        finally { _edits.Release(); }
-        RefreshSnapshot();
+        }, succeeded =>
+        {
+            if (_isClosed) return;
+            // Preserve focus/value-change behavior on ordinary commits. On a
+            // post-publication failure, replace stale captured editor handlers
+            // before GuardAsync displays the persistence error.
+            if (succeeded) RefreshSnapshot();
+            else { SynchronizeGain(); BuildPage(); }
+        });
     }
 
     private static Task ValidateAsync(PulseDocument document) =>
         Task.Run(() => { _ = ScheduleCompiler.Compile(document, 48000, 1, false); });
 
-    private async Task UndoAsync(bool redo)
+    private async Task UndoAsync(bool redo, int? expectedRevision = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
-        await _edits.WaitAsync();
-        try
+        await DocumentPublication.RunAsync(_edits, async published =>
         {
+            if (_isLocked) { ShowNotice("Locked"); return; }
+            if (expectedRevision is int revision)
+                EditorOperationGate.EnsureRevision(revision, _documentRevision);
             var source = redo ? _redo : _undo;
             var target = redo ? _undo : _redo;
             if (source.Count == 0) return;
@@ -282,11 +293,10 @@ public sealed partial class MainWindow : Window
             _document = source.Pop();
             _documentRevision++;
             _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted;
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            published();
             SynchronizeGain();
-        }
-        finally { _edits.Release(); }
-        BuildPage();
+            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+        }, _ => { if (!_isClosed) BuildPage(); });
     }
 
     private void SynchronizeGain()

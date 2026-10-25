@@ -104,7 +104,8 @@ public static class WaveExporter
                 if (rollbackErrors.Count != 0)
                 {
                     preserveBackups = true;
-                    throw new IOException(
+                    throw new WaveExportException(WaveExportFailure.RollbackFailed, full, manifestPath,
+                        [waveBackup, manifestBackup],
                         $"WAV export commit and rollback failed. The pair '{full}' and '{manifestPath}' may not match. " +
                         $"Any original backups are retained at '{waveBackup}' and '{manifestBackup}'; recover them before retrying.",
                         new AggregateException(new[] { error }.Concat(rollbackErrors)));
@@ -130,8 +131,13 @@ public static class WaveExporter
             if (cleanupErrors.Count != 0)
             {
                 if (failure is not null) cleanupErrors.Insert(0, failure);
-                throw new IOException(
-                    committed
+                var outcome = preserveBackups ? WaveExportFailure.RollbackFailed
+                    : committed ? WaveExportFailure.CommittedCleanupFailed : WaveExportFailure.FailedCleanup;
+                throw new WaveExportException(outcome, full, manifestPath,
+                    preserveBackups ? [waveBackup, manifestBackup] : [waveStage, manifestStage, waveBackup, manifestBackup],
+                    preserveBackups
+                        ? $"WAV export rollback and cleanup failed for '{full}' and '{manifestPath}'. Outputs may not match; recover retained original backups before retrying."
+                        : committed
                         ? $"Both export outputs were committed, but temporary/backup cleanup failed for '{full}'. The committed pair is complete."
                         : $"WAV export did not complete and temporary/backup cleanup also failed for '{full}'. See inner errors for recovery details.",
                     new AggregateException(cleanupErrors));

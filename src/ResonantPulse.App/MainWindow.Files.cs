@@ -138,8 +138,7 @@ public sealed partial class MainWindow
     private async Task ReplaceDocumentAsync(PulseDocument document)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
-        await _edits.WaitAsync();
-        try
+        await DocumentPublication.RunAsync(_edits, async published =>
         {
             // All callers enter without _edits held. Keep validation, backup,
             // replacement and recovery in the same transaction as normal edits
@@ -157,13 +156,10 @@ public sealed partial class MainWindow
             _documentRevision++;
             _hasPendingEdits = false;
             _armedSong = -1;
+            published();
             SynchronizeGain();
             await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
-        }
-        finally { _edits.Release(); }
-        // Rebuilding may wire controls that request edits. Do it after release,
-        // never by reentering CommitAsync while the transaction holds _edits.
-        BuildPage();
+        }, _ => { if (!_isClosed) BuildPage(); });
     }
 
     private async Task ExportAsync(bool midi)

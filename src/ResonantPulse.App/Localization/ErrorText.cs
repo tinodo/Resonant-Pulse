@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Localization;
 
@@ -7,6 +8,22 @@ internal static class ErrorText
 {
     public static string Explain(Exception exception)
     {
+        // Typed export outcomes take precedence even over a coincidentally
+        // known localized Message. Recovery semantics never depend on parsing
+        // Core's English diagnostics or on the generic IOException classifier.
+        if (exception is WaveExportException wave)
+        {
+            var key = wave.Failure switch
+            {
+                WaveExportFailure.RollbackFailed => "ErrorWaveRollback",
+                WaveExportFailure.CommittedCleanupFailed => "ErrorWaveCommittedCleanup",
+                WaveExportFailure.FailedCleanup => "ErrorWaveFailedCleanup",
+                _ => "ErrorFile"
+            };
+            return Text.Get(key) + Environment.NewLine + Environment.NewLine +
+                Text.Format("ErrorWavePaths", wave.WavePath, wave.ManifestPath,
+                    string.Join(Environment.NewLine, wave.RecoveryPaths));
+        }
         // OS/provider/Core diagnostics are kept intact in the local log. They
         // are not passed off as a translated application message.
         var message = exception.Message;

@@ -24,6 +24,8 @@ established. Failed gates prevent release publication.
 Stable releases additionally require `PRODUCT_ACCEPTANCE_COMPLETED=true`,
 configured only after full-product/device acceptance is recorded. Every ZIP
 contains build-info.json with its source SHA, version, architecture and CI run.
+Public Store update submission requires the same acceptance flag; generating
+an identity-correct candidate does not claim that acceptance or publish it.
 
 Dependabot checks NuGet and GitHub Actions weekly. The repository's active
 `Automatic Copilot review` ruleset requests real reviews for main-targeting PRs,
@@ -34,7 +36,9 @@ checks out or executes PR code; no owner token is stored merely to review
 Dependabot PRs.
 A missing review or timeout fails visibly. Copilot availability/entitlement is
 account-dependent. Completion is not approval or an assertion of zero findings;
-review conversations must still be resolved before merge.
+review conversations must still be resolved before merge. `Copilot review
+completion` is a required branch-protection check, verified end to end in hosted
+run 40223399203 without an owner credential.
 
 ## Microsoft Store prerequisites
 

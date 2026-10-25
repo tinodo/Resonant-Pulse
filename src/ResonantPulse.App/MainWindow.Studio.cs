@@ -11,24 +11,29 @@ public sealed partial class MainWindow
 {
     private UIElement BuildStudio()
     {
+        _editorOperationControls.Clear();
         var panel = Column(Heading(_document.Name), Copy("EditBoundary"),
-            CommandFlow(ActionButton("Undo", "StudioUndo", () => UndoAsync(false)),
-                ActionButton("Redo", "StudioRedo", () => UndoAsync(true)),
-                ActionButton("AddLane", "AddLane", () => AddLaneAsync(4, 4)),
-                ActionButton("Polyrhythm", "AddPolyrhythm", () => AddLaneAsync(3, 4)),
-                ActionButton("Polymeter", "AddPolymeter", () => AddLaneAsync(3, 3))));
+            CommandFlow(EditorActionButton("Undo", "StudioUndo", () => UndoEditorAsync(false)),
+                EditorActionButton("Redo", "StudioRedo", () => UndoEditorAsync(true)),
+                EditorActionButton("AddLane", "AddLane", () => AddLaneAsync(4, 4)),
+                EditorActionButton("Polyrhythm", "AddPolyrhythm", () => AddLaneAsync(3, 4)),
+                EditorActionButton("Polymeter", "AddPolymeter", () => AddLaneAsync(3, 3))));
         for (var index = 0; index < _document.Lanes.Count; index++)
             panel.Children.Add(BuildLaneEditor(index));
         panel.Children.Add(BuildGenerator());
         var seed = Number("Seed", "DocumentSeed", _document.Seed, int.MinValue, int.MaxValue);
         panel.Children.Add(seed);
-        panel.Children.Add(ActionButton("Apply", "ApplySeed", () => CommitAsync(doc => doc.Seed = Integer(seed))));
+        panel.Children.Add(EditorActionButton("Apply", "ApplySeed", async () =>
+        {
+            await CommitEditorAsync(doc => doc.Seed = Integer(seed));
+            BuildPage();
+        }));
         panel.Children.Add(Heading(Text.Get("Program")));
         for (var index = 0; index < _document.Program.Count; index++)
             panel.Children.Add(BuildStepEditor(index));
-        panel.Children.Add(ActionButton("AddStep", "AddProgramStep", async () =>
+        panel.Children.Add(EditorActionButton("AddStep", "AddProgramStep", async () =>
         {
-            await CommitAsync(doc => doc.Program.Add(new ProgramStep
+            await CommitEditorAsync(doc => doc.Program.Add(new ProgramStep
             {
                 Name = $"{Text.Get("Step")} {doc.Program.Count + 1}",
                 StartTempo = doc.Settings.Tempo,
@@ -43,7 +48,7 @@ public sealed partial class MainWindow
 
     private async Task AddLaneAsync(int pulses, double quarters)
     {
-        await CommitAsync(doc =>
+        await CommitEditorAsync(doc =>
         {
             if (doc.Lanes.Count >= 8) throw new ArgumentException(Text.Get("LaneLimit"));
             doc.Lanes.Add(new RhythmLane
@@ -58,6 +63,7 @@ public sealed partial class MainWindow
 
     private UIElement BuildLaneEditor(int index)
     {
+        var revision = _documentRevision;
         var lane = _document.Lanes[index];
         var id = $"Lane{index}";
         var name = Input("Name", id + "Name", lane.Name);
@@ -84,9 +90,10 @@ public sealed partial class MainWindow
                 Identify(button, $"{id}Step{step}", label);
             }
             Describe(accent);
-            button.Click += async (_, _) => await GuardAsync(async () =>
+            EditorControl(button);
+            button.Click += async (_, _) => await GuardAsync(() => RunEditorOperationAsync(revision, async () =>
             {
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     var revisedLane = doc.Lanes[index];
                     var accents = AccentPatterns.ExpandLane(revisedLane.Pattern,
@@ -94,14 +101,14 @@ public sealed partial class MainWindow
                     accents[step] = (Accent)(((int)accents[step] + 1) % 4);
                     revisedLane.Pattern = accents;
                 });
-                Describe(_document.Lanes[index].Pattern[step]);
-            });
+                BuildPage();
+            }));
             pattern.Children.Add(button);
         }
         var panel = Column(Flow(name, pulses, cycle, offset, volume, pan, probability, sound), muted, solo,
-            ActionButton("Apply", id + "Apply", async () =>
+            EditorActionButton("Apply", id + "Apply", async () =>
             {
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     var edited = doc.Lanes[index];
                     edited.Name = name.Text;
@@ -120,9 +127,9 @@ public sealed partial class MainWindow
                 BuildPage();
             }), pattern, BuildExactEvents(index),
             CommandFlow(
-                ActionButton("Rotate", id + "Rotate", async () =>
+                EditorActionButton("Rotate", id + "Rotate", async () =>
                 {
-                    await CommitAsync(doc =>
+                    await CommitEditorAsync(doc =>
                     {
                         var edited = doc.Lanes[index];
                         if (edited.Events.Count == 0)
@@ -142,9 +149,9 @@ public sealed partial class MainWindow
                     });
                     BuildPage();
                 }),
-                ActionButton("Invert", id + "Invert", async () =>
+                EditorActionButton("Invert", id + "Invert", async () =>
                 {
-                    await CommitAsync(doc =>
+                    await CommitEditorAsync(doc =>
                     {
                         var edited = doc.Lanes[index];
                         if (edited.Events.Count == 0)
@@ -155,9 +162,9 @@ public sealed partial class MainWindow
                     });
                     BuildPage();
                 }),
-                ActionButton("Duplicate", id + "Duplicate", async () =>
+                EditorActionButton("Duplicate", id + "Duplicate", async () =>
                 {
-                    await CommitAsync(doc =>
+                    await CommitEditorAsync(doc =>
                     {
                         if (doc.Lanes.Count >= 8) throw new ArgumentException(Text.Get("LaneLimit"));
                         // Clone the document once rather than sharing pattern arrays.
@@ -165,10 +172,10 @@ public sealed partial class MainWindow
                     });
                     BuildPage();
                 }),
-                ActionButton("Remove", id + "Remove", async () =>
+                EditorActionButton("Remove", id + "Remove", async () =>
                 {
                     if (!await ConfirmAsync(Text.Format("ConfirmRemove", lane.Name), "Remove")) return;
-                    await CommitAsync(doc => doc.Lanes.RemoveAt(index));
+                    await CommitEditorAsync(doc => doc.Lanes.RemoveAt(index));
                     BuildPage();
                 })));
         var expander = new Expander { Header = lane.Name, Content = panel, HorizontalAlignment = HorizontalAlignment.Stretch, IsExpanded = true };
@@ -191,9 +198,9 @@ public sealed partial class MainWindow
         var audible = Number("AudibleBars", id + "Audible", step.AudibleBars, 0, 100000);
         var silent = Number("SilentBars", id + "Silent", step.SilentBars, 0, 100000);
         var content = Column(Flow(name, start, end, bars, repeats, ramp, beats, denominator, audible, silent),
-            CommandFlow(ActionButton("Apply", id + "Apply", async () =>
+            CommandFlow(EditorActionButton("Apply", id + "Apply", async () =>
             {
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     var edited = doc.Program[index];
                     edited.Name = name.Text;
@@ -209,22 +216,22 @@ public sealed partial class MainWindow
                 });
                 BuildPage();
             }),
-            ActionButton("MoveUp", id + "MoveUp", async () =>
+            EditorActionButton("MoveUp", id + "MoveUp", async () =>
             {
                 if (index == 0) return;
-                await CommitAsync(doc => (doc.Program[index - 1], doc.Program[index]) = (doc.Program[index], doc.Program[index - 1]));
+                await CommitEditorAsync(doc => (doc.Program[index - 1], doc.Program[index]) = (doc.Program[index], doc.Program[index - 1]));
                 BuildPage();
             }),
-            ActionButton("MoveDown", id + "MoveDown", async () =>
+            EditorActionButton("MoveDown", id + "MoveDown", async () =>
             {
                 if (index >= _document.Program.Count - 1) return;
-                await CommitAsync(doc => (doc.Program[index + 1], doc.Program[index]) = (doc.Program[index], doc.Program[index + 1]));
+                await CommitEditorAsync(doc => (doc.Program[index + 1], doc.Program[index]) = (doc.Program[index], doc.Program[index + 1]));
                 BuildPage();
             }),
-            ActionButton("Remove", id + "Remove", async () =>
+            EditorActionButton("Remove", id + "Remove", async () =>
             {
                 if (!await ConfirmAsync(Text.Format("ConfirmRemove", step.Name), "Remove")) return;
-                await CommitAsync(doc => doc.Program.RemoveAt(index));
+                await CommitEditorAsync(doc => doc.Program.RemoveAt(index));
                 BuildPage();
             })));
         var expander = new Expander { Header = $"{index + 1}. {step.Name}", Content = content, HorizontalAlignment = HorizontalAlignment.Stretch };

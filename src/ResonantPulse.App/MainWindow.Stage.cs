@@ -212,28 +212,30 @@ public sealed partial class MainWindow
         var intent = _transportIntent;
         _isBusy = true;
         StartButton.IsEnabled = false;
-        await _edits.WaitAsync();
         try
         {
-            var selectedIndex = GetArmedSongIndex(_document);
-            var next = LocalWorkspace.Clone(_document.Setlist[selectedIndex].Document);
-            await ValidateAsync(next);
-            if (intent != _transportIntent || _isClosed) return;
-            next.Settings.CountInBars = Math.Max(1, next.Settings.CountInBars);
-            next.Setlist = LocalWorkspace.Clone(_document).Setlist;
-            InvalidateTiming();
-            _transport.Stop();
-            _undo.Push(_document);
-            _redo.Clear();
-            _document = next;
-            _documentRevision++;
-            _hasPendingEdits = false;
-            _armedSong = selectedIndex + 1 < next.Setlist.Count ? selectedIndex + 1 : -1;
-            SynchronizeGain();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
-            BuildPage();
+            await DocumentPublication.RunAsync(_edits, async published =>
+            {
+                var selectedIndex = GetArmedSongIndex(_document);
+                var next = LocalWorkspace.Clone(_document.Setlist[selectedIndex].Document);
+                await ValidateAsync(next);
+                if (intent != _transportIntent || _isClosed) return;
+                next.Settings.CountInBars = Math.Max(1, next.Settings.CountInBars);
+                next.Setlist = LocalWorkspace.Clone(_document).Setlist;
+                InvalidateTiming();
+                _transport.Stop();
+                _undo.Push(_document);
+                _redo.Clear();
+                _document = next;
+                _documentRevision++;
+                _hasPendingEdits = false;
+                _armedSong = selectedIndex + 1 < next.Setlist.Count ? selectedIndex + 1 : -1;
+                published();
+                SynchronizeGain();
+                await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            }, _ => { if (!_isClosed) BuildPage(); });
         }
-        finally { _edits.Release(); _isBusy = false; StartButton.IsEnabled = true; }
+        finally { _isBusy = false; StartButton.IsEnabled = true; }
         if (intent == _transportIntent && !_isClosed) await TogglePlaybackAsync();
     }
 }

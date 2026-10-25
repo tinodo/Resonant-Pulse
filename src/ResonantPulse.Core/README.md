@@ -26,6 +26,10 @@ The budgets below are explicit defensive limits, **not achieved benchmarks**.
   queued does not acquire the gate. This bounds export concurrency even for
   different destinations. This is not crash-atomic across two files and does
   not coordinate external processes modifying the destinations.
+  `WaveExportException` distinguishes failed rollback (possibly mismatched
+  outputs), successful commit with failed cleanup, and failed export cleanup.
+  Its typed outcome and candidate recovery paths let callers localize the
+  correct recovery action without parsing an English exception message.
 - `MidiExporter.Preflight` reports PPQ, timing-error bound, errors and notices.
   `ExportAsync` writes SMF type 0 or throws an actionable `ArgumentException`.
 - `DocumentStore.SaveAsync/LoadAsync` implement local schema-one JSON.

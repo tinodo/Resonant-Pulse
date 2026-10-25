@@ -9,6 +9,45 @@ namespace ResonantPulse.Core.Tests;
 public sealed class WaveExporterTests
 {
     [TestMethod]
+    [DataRow(WaveExportFailure.RollbackFailed)]
+    [DataRow(WaveExportFailure.CommittedCleanupFailed)]
+    [DataRow(WaveExportFailure.FailedCleanup)]
+    public void Export_RecoveryException_PreservesTypedOutcomePathsAndCauseWithoutMutableAliases(WaveExportFailure failure)
+    {
+        var paths = new[] { "original.wav.bak", "original.json.bak" };
+        var cause = new IOException("Original failure");
+        var error = new WaveExportException(failure, "out.wav", "out.wav.manifest.json",
+            paths, "Recovery is required", cause);
+        paths[0] = "changed";
+
+        Assert.IsInstanceOfType<IOException>(error);
+        Assert.AreEqual(failure, error.Failure);
+        Assert.AreEqual("out.wav", error.WavePath);
+        Assert.AreEqual("out.wav.manifest.json", error.ManifestPath);
+        CollectionAssert.AreEqual(new[] { "original.wav.bak", "original.json.bak" }, error.RecoveryPaths.ToArray());
+        Assert.AreEqual("Recovery is required", error.Message);
+        Assert.AreSame(cause, error.InnerException);
+    }
+
+    [TestMethod]
+    public void Export_RecoveryException_RejectsUndefinedOutcomeAndMissingLocations()
+    {
+        var cause = new IOException("Original failure");
+        Check.Throws<ArgumentOutOfRangeException>(() => new WaveExportException((WaveExportFailure)int.MaxValue,
+            "out.wav", "out.json", [], "Failure", cause));
+        Check.Throws<ArgumentNullException>(() => new WaveExportException(WaveExportFailure.RollbackFailed,
+            null!, "out.json", [], "Failure", cause));
+        Check.Throws<ArgumentException>(() => new WaveExportException(WaveExportFailure.RollbackFailed,
+            " ", "out.json", [], "Failure", cause));
+        Check.Throws<ArgumentNullException>(() => new WaveExportException(WaveExportFailure.RollbackFailed,
+            "out.wav", null!, [], "Failure", cause));
+        Check.Throws<ArgumentException>(() => new WaveExportException(WaveExportFailure.RollbackFailed,
+            "out.wav", " ", [], "Failure", cause));
+        Check.Throws<ArgumentNullException>(() => new WaveExportException(WaveExportFailure.RollbackFailed,
+            "out.wav", "out.json", null!, "Failure", cause));
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task Export_ConcurrentSameDestination_CommitsOneMatchingPairWithoutLosingSuccessfulRequests(bool existing)

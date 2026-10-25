@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ResonantPulse.App.Localization;
+using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Tests;
 
@@ -65,7 +66,7 @@ public sealed class ErrorTextTests
         var previousCulture = CultureInfo.CurrentCulture;
         var previousUiCulture = CultureInfo.CurrentUICulture;
         var keys = new[] { "TimingPendingEdits", "TimingTargetChanged", "LibraryPartial", "LibraryFailedPaths",
-            "LibraryLimited", "LibraryOverflow", "StageBusy" };
+            "LibraryLimited", "LibraryOverflow", "StageBusy", "EditorBusy", "EditorChanged", "ErrorWavePaths" };
         var translations = keys.ToDictionary(key => key, _ => new HashSet<string>());
         try
         {
@@ -86,6 +87,57 @@ public sealed class ErrorTextTests
                     ErrorText.Explain(new InvalidOperationException(Text.Get("TimingPendingEdits"))));
             }
             foreach (var key in keys) Assert.AreEqual(5, translations[key].Count);
+        }
+        finally
+        {
+            Text.Select(previousLanguage);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+
+    }
+
+    [TestMethod]
+    [DataRow(WaveExportFailure.RollbackFailed, "ErrorWaveRollback", 2)]
+    [DataRow(WaveExportFailure.CommittedCleanupFailed, "ErrorWaveCommittedCleanup", 4)]
+    [DataRow(WaveExportFailure.FailedCleanup, "ErrorWaveFailedCleanup", 4)]
+    public void TypedWaveOutcomesPreserveAllPathsAndSpecificGuidanceInEveryLanguage(
+        WaveExportFailure failure, string key, int candidateCount)
+    {
+        var previousLanguage = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        var translations = new HashSet<string>();
+        var wavePath = Path.Combine("exports", "concert {1} é.wav");
+        var manifestPath = wavePath + ".manifest.json";
+        var candidates = Enumerable.Range(0, candidateCount)
+            .Select(index => Path.Combine("exports", $"original-or-staged-{index}.backup")).ToArray();
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                // Even a Message equal to the generic translated I/O text
+                // cannot override the machine-readable typed outcome.
+                var exception = new WaveExportException(failure, wavePath, manifestPath, candidates,
+                    Text.Get("ErrorFile"), new IOException("Untranslated technical cause"));
+                var explanation = ErrorText.Explain(exception);
+                var expected = Text.Get(key) + Environment.NewLine + Environment.NewLine +
+                    Text.Format("ErrorWavePaths", wavePath, manifestPath, string.Join(Environment.NewLine, candidates));
+                Assert.AreEqual(expected, explanation);
+                Assert.AreNotEqual(key, Text.Get(key));
+                Assert.IsFalse(string.IsNullOrWhiteSpace(explanation));
+                Assert.AreNotEqual(ErrorText.Explain(new IOException("I/O")), explanation);
+                StringAssert.Contains(explanation, wavePath);
+                StringAssert.Contains(explanation, manifestPath);
+                foreach (var candidate in candidates) StringAssert.Contains(explanation, candidate);
+                Assert.IsFalse(explanation.Contains("Untranslated technical cause", StringComparison.Ordinal));
+                Assert.AreEqual(explanation, ErrorText.Explain(new AggregateException(exception)));
+                var outcomes = new[] { "ErrorWaveRollback", "ErrorWaveCommittedCleanup", "ErrorWaveFailedCleanup" };
+                Assert.AreEqual(3, outcomes.Select(Text.Get).Distinct().Count());
+                translations.Add(Text.Get(key));
+            }
+            Assert.AreEqual(5, translations.Count);
         }
         finally
         {

@@ -13,9 +13,9 @@ public sealed partial class MainWindow
         var panel = Column(Copy("ExactEventHelp"));
         if (lane.Events.Count == 0)
         {
-            panel.Children.Add(ActionButton("ConvertEvents", $"Lane{laneIndex}ConvertEvents", async () =>
+            panel.Children.Add(EditorActionButton("ConvertEvents", $"Lane{laneIndex}ConvertEvents", async () =>
             {
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     var edited = doc.Lanes[laneIndex];
                     var accents = AccentPatterns.ExpandLane(edited.Pattern, edited.Pulses);
@@ -33,9 +33,9 @@ public sealed partial class MainWindow
         }
         for (var index = 0; index < lane.Events.Count; index++)
             panel.Children.Add(BuildEventEditor(laneIndex, index));
-        panel.Children.Add(ActionButton("AddEvent", $"Lane{laneIndex}AddEvent", async () =>
+        panel.Children.Add(EditorActionButton("AddEvent", $"Lane{laneIndex}AddEvent", async () =>
         {
-            await CommitAsync(doc =>
+            await CommitEditorAsync(doc =>
             {
                 var edited = doc.Lanes[laneIndex];
                 if (edited.Events.Count >= 256) throw new ArgumentException(Text.Get("EventLimit"));
@@ -67,9 +67,9 @@ public sealed partial class MainWindow
         var probability = Number("Probability", id + "Probability", item.Probability, 0, 1, 0.05);
         var tie = Check("Tie", id + "Tie", item.Tie);
         var row = Column(Flow(position, accent, gain, probability), tie,
-            CommandFlow(ActionButton("Apply", id + "Apply", async () =>
+            CommandFlow(EditorActionButton("Apply", id + "Apply", async () =>
             {
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     var edited = doc.Lanes[laneIndex].Events[eventIndex];
                     // Fractions remain exact; invariant syntax is explicitly
@@ -81,10 +81,10 @@ public sealed partial class MainWindow
                     edited.Tie = tie.IsChecked == true;
                 });
                 BuildPage();
-            }), ActionButton("Remove", id + "Remove", async () =>
+            }), EditorActionButton("Remove", id + "Remove", async () =>
             {
                 if (!await ConfirmAsync(Text.Format("ConfirmRemove", $"{Text.Get("Step")} {eventIndex + 1}"), "Remove")) return;
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     var edited = doc.Lanes[laneIndex];
                     edited.Events.RemoveAt(eventIndex);
@@ -114,9 +114,9 @@ public sealed partial class MainWindow
         var cycle = Number("Cycle", "EuclideanCycle", 4, 0.125, 256, 0.125);
         var rotation = Number("Rotation", "EuclideanRotation", 0, -256, 256);
         return Column(Heading(Text.Get("Euclidean")), Flow(attacks, steps, cycle, rotation),
-            ActionButton("AddLane", "GenerateEuclidean", async () =>
+            EditorActionButton("AddLane", "GenerateEuclidean", async () =>
             {
-                await CommitAsync(doc =>
+                await CommitEditorAsync(doc =>
                 {
                     if (doc.Lanes.Count >= 8) throw new ArgumentException(Text.Get("LaneLimit"));
                     var lane = RhythmGenerators.Euclidean(Integer(attacks), Integer(steps),
