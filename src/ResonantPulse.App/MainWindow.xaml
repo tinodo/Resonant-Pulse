@@ -1,0 +1,53 @@
+<Window x:Class="ResonantPulse.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid x:Name="Root" Background="{ThemeResource SurfaceBrush}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <NavigationView x:Name="Navigation" PaneDisplayMode="Top"
+                    IsBackButtonVisible="Collapsed" IsSettingsVisible="True"
+                    AutomationProperties.AutomationId="Destinations">
+      <Grid Padding="20,8,20,8" Background="{ThemeResource SurfaceBrush}">
+        <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
+      </Grid>
+    </NavigationView>
+    <InfoBar x:Name="Notice" Grid.Row="1" IsOpen="False" IsClosable="True"
+             Margin="16,4" AutomationProperties.AutomationId="StatusNotice" />
+    <Grid x:Name="TransportPanel" Grid.Row="2" Padding="20,12" Background="{ThemeResource RaisedBrush}" RowSpacing="8">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <Grid ColumnSpacing="8">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" MinWidth="100"
+                AutomationProperties.AutomationId="TransportStartPause" HorizontalAlignment="Stretch" IsEnabled="False" />
+        <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" AutomationProperties.AutomationId="TransportStop" />
+        <Button x:Name="MuteButton" Grid.Column="2" MinWidth="100" MaxWidth="180"
+                AutomationProperties.AutomationId="EmergencyMute" />
+      </Grid>
+      <TextBlock x:Name="TransportStatus" Grid.Row="1" TextWrapping="Wrap"
+                 AutomationProperties.AutomationId="TransportStatus" Foreground="{ThemeResource MutedBrush}" />
+      <Grid x:Name="OutputRow" Grid.Row="2" ColumnSpacing="12" RowSpacing="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid x:Name="OutputControls" ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <ComboBox x:Name="OutputPicker" HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                    AutomationProperties.AutomationId="AudioOutputPicker" />
+          <Button x:Name="OutputButton" Grid.Column="1" VerticalAlignment="Bottom" MinWidth="44"
+                  AutomationProperties.AutomationId="RefreshAudioOutputs">
+            <FontIcon Glyph="&#xE72C;" />
+          </Button>
+        </Grid>
+        <Slider x:Name="MasterGain" Grid.Column="1" Minimum="0" Maximum="1" StepFrequency="0.01" Value="0.5"
+                VerticalAlignment="Top" AutomationProperties.AutomationId="MasterGain" />
+      </Grid>
+    </Grid>
+  </Grid>
+</Window>

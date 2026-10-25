@@ -1,0 +1,143 @@
+name: Microsoft Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Four-part MSIX version, monotonically greater than the previous package"
+        required: true
+        default: "0.1.0.0"
+      submit_update:
+        description: "Submit an update (requires a previously published free Store product)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: microsoft-store
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require a real product identity
+        env:
+          PACKAGE_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          PACKAGE_PUBLISHER: ${{ vars.STORE_IDENTITY_PUBLISHER }}
+          PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
+          PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+          VERSION: ${{ inputs.version }}
+          SUBMIT: ${{ inputs.submit_update }}
+          FIRST_PUBLISHED: ${{ vars.STORE_FIRST_PUBLICATION_COMPLETED }}
+          FREE_PRODUCT: ${{ vars.STORE_IS_FREE }}
+          ACCEPTED: ${{ vars.PRODUCT_ACCEPTANCE_COMPLETED }}
+          REF: ${{ github.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REF" == "refs/heads/main" ]] || { echo "::error::Store delivery is restricted to main."; exit 1; }
+          for variable in PACKAGE_NAME PACKAGE_PUBLISHER PUBLISHER_NAME PRODUCT_ID; do
+            [[ -n "${!variable}" ]] || { echo "::error::Missing $variable. Reserve Pulse in Partner Center and configure the exact identity; development placeholders are not valid."; exit 1; }
+          done
+          jq -e --arg name "$PACKAGE_NAME" --arg publisher "$PACKAGE_PUBLISHER" --arg display "$PUBLISHER_NAME" --arg product "$PRODUCT_ID" \
+            '.identityName == $name and .publisher == $publisher and .publisherDisplayName == $display and .storeProductId == $product' packaging/StoreIdentity.json >/dev/null \
+            || { echo "::error::Configured identity differs from the owner-supplied product identity."; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid MSIX version."; exit 1; }
+          if [[ "$SUBMIT" == "true" ]]; then
+            [[ "$ACCEPTED" == "true" ]] || { echo "::error::Public Store submission requires recorded full-product/device acceptance and PRODUCT_ACCEPTANCE_COMPLETED=true."; exit 1; }
+            [[ "$FIRST_PUBLISHED" == "true" ]] || { echo "::error::First publication must be completed through Partner Center; CLI cannot perform it."; exit 1; }
+            [[ "$FREE_PRODUCT" == "true" ]] || { echo "::error::This CLI path currently supports free-product updates only."; exit 1; }
+          fi
+  verified-build:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ inputs.version }}
+  package:
+    needs: verified-build
+    runs-on: windows-2025
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-x64
+          path: artifacts
+      - name: Require exact-commit security analysis
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          $runId = gh run list --repo $env:GITHUB_REPOSITORY --workflow codeql.yml --commit $env:SOURCE_SHA --event push --json databaseId --jq '.[0].databaseId // empty'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runId)) { throw 'No main-branch CodeQL run exists for this exact commit.' }
+          gh run watch $runId --repo $env:GITHUB_REPOSITORY --exit-status --interval 15
+          if ($LASTEXITCODE -ne 0) { throw 'Security analysis did not complete successfully.' }
+      - name: Package the verified payload with Partner Center identity
+        env:
+          PACKAGE_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          PACKAGE_PUBLISHER: ${{ vars.STORE_IDENTITY_PUBLISHER }}
+          PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+        run: |
+          Expand-Archive artifacts/ResonantPulse-win-x64.zip -DestinationPath artifacts/store-payload
+          ./packaging/New-Package.ps1 -Payload artifacts/store-payload -Architecture x64 -Version $env:PACKAGE_VERSION -IdentityName $env:PACKAGE_NAME -Publisher $env:PACKAGE_PUBLISHER -PublisherDisplayName $env:PUBLISHER_NAME -Output artifacts/ResonantPulse-store-x64.msix
+      - name: Verify installed activation with the actual product identity
+        run: ./packaging/Smoke-Package.ps1 -Package artifacts/ResonantPulse-store-x64.msix
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: store-installed-startup
+          path: artifacts/packaged-startup/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: store-submission-candidate
+          path: artifacts/ResonantPulse-store-x64.msix
+          if-no-files-found: error
+  submit:
+    if: inputs.submit_update
+    needs: package
+    runs-on: windows-2025
+    environment: microsoft-store
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: store-submission-candidate
+          path: store-package
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - uses: microsoft/setup-msstore-cli@cc9910a8d59f2eb55cbb83df0a3800cf3b5300e0 # v1.4
+        with:
+          version: v0.4.3
+      - name: Authenticate and submit update
+        env:
+          TENANT_ID: ${{ secrets.STORE_TENANT_ID }}
+          SELLER_ID: ${{ secrets.STORE_SELLER_ID }}
+          CLIENT_ID: ${{ secrets.STORE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.STORE_CLIENT_SECRET }}
+          PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in 'TENANT_ID','SELLER_ID','CLIENT_ID','CLIENT_SECRET','PRODUCT_ID') {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Missing $name in the microsoft-store environment." }
+          }
+          msstore reconfigure --tenantId $env:TENANT_ID --sellerId $env:SELLER_ID --clientId $env:CLIENT_ID --clientSecret $env:CLIENT_SECRET
+          if ($LASTEXITCODE -ne 0) { throw 'Store authentication failed.' }
+          msstore publish store-package/ResonantPulse-store-x64.msix -id $env:PRODUCT_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Store submission failed.' }
+          msstore submission poll $env:PRODUCT_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Store certification/publication polling failed; inspect Partner Center status.' }

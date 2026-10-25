@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" style="width:100%;height:auto;max-width:1600px;display:block" role="img" aria-labelledby="title desc">
+<title id="title">Resonant Pulse - Rhythm Studio design concept</title>
+<desc id="desc">Static dark rhythm-editing concept with cyan and magenta 3 against 4 lanes over a shared bar, an exact cycle diagram, a section timeline and a contextual inspector. Musical timing is shown rather than a decorative dashboard.</desc>
+<defs><style>text{font-family:'Segoe UI',Arial,sans-serif;fill:#f0f5f3}.muted{fill:#a6b5b8}.cyan{fill:#58e4f4}.pink{fill:#ee83d3}.gold{fill:#f3e687}.label{font-size:12px;letter-spacing:1.4px}.number{font-family:Bahnschrift,'Segoe UI',sans-serif}</style>
+<pattern id="grid" width="60" height="160" patternUnits="userSpaceOnUse"><path d="M0 0v160" stroke="#293942"/></pattern>
+<filter id="glow"><feGaussianBlur stdDeviation="4"/></filter></defs>
+<rect width="1600" height="1000" fill="#070b10"/>
+<text x="70" y="52" font-size="15" class="cyan" letter-spacing="4">RESONANT PULSE</text><text x="1530" y="52" text-anchor="end" font-size="14" class="muted">02 / RHYTHM STUDIO - STATIC DESIGN CONCEPT</text>
+<rect x="70" y="80" width="1460" height="799" rx="18" fill="#0c1116" stroke="#33444c"/>
+<path d="M70 134H1530" stroke="#23313a"/>
+<text x="103" y="114" font-size="18" font-weight="600">Resonant Pulse</text>
+<text x="429" y="114" font-size="15" class="muted">Play</text><text x="511" y="114" font-size="15" class="cyan">Studio</text><path d="M502 132h66" stroke="#58e4f4" stroke-width="3"/>
+<text x="610" y="114" font-size="15" class="muted">Train</text><text x="694" y="114" font-size="15" class="muted">Stage</text><text x="782" y="114" font-size="15" class="muted">Library</text><text x="1330" y="114" font-size="15" class="muted">Settings</text>
+<text x="106" y="178" font-size="23" font-weight="600">Three against four</text>
+<text x="106" y="207" font-size="14" class="muted">Polyrhythm / 3 attacks against 4 / shared cycle: one 4/4 bar</text>
+<text x="1034" y="178" class="label muted">QUARTER NOTE =</text><text x="1184" y="180" font-size="25" class="number cyan">96.0 BPM</text>
+<rect x="1360" y="156" width="130" height="42" rx="8" fill="#141d24" stroke="#33444c"/><text x="1425" y="183" text-anchor="middle" font-size="15">Save</text>
+<text x="106" y="252" class="label muted">RHYTHM LANES</text><text x="1114" y="252" class="label muted">SELECTED LANE</text>
+<rect x="106" y="271" width="946" height="258" rx="10" fill="#090e12" stroke="#33444c"/>
+<rect x="294" y="304" width="720" height="180" fill="url(#grid)"/>
+<path d="M294 304v180M474 304v180M654 304v180M834 304v180M1014 304v180" stroke="#4b616a"/>
+<text x="294" y="295" text-anchor="middle" font-size="13" class="muted">1</text><text x="474" y="295" text-anchor="middle" font-size="13" class="muted">2</text><text x="654" y="295" text-anchor="middle" font-size="13" class="muted">3</text><text x="834" y="295" text-anchor="middle" font-size="13" class="muted">4</text><text x="1014" y="295" text-anchor="middle" font-size="13" class="muted">1</text>
+<circle cx="134" cy="356" r="5" fill="#58e4f4"/><text x="151" y="350" font-size="17">Quarter pulse</text><text x="151" y="375" font-size="13" class="muted">Wood / centered</text><text x="151" y="404" font-size="12" class="cyan">MUTE   SOLO</text>
+<path d="M294 357H1014" stroke="#58e4f4" stroke-opacity=".25"/>
+<rect x="284" y="337" width="20" height="40" rx="5" fill="#58e4f4"/><rect x="464" y="337" width="20" height="40" rx="5" fill="#58e4f4"/><rect x="644" y="337" width="20" height="40" rx="5" fill="#58e4f4"/><rect x="824" y="337" width="20" height="40" rx="5" fill="#58e4f4"/>
+<path d="M106 424h946" stroke="#23313a"/>
+<circle cx="134" cy="462" r="5" fill="#ee83d3"/><text x="151" y="456" font-size="17">Three over bar</text><text x="151" y="481" font-size="13" class="muted">Glass / right 20%</text><text x="151" y="508" font-size="12" class="pink">MUTE   SOLO</text>
+<path d="M294 463H1014" stroke="#ee83d3" stroke-opacity=".25"/>
+<circle cx="294" cy="463" r="12" fill="#ee83d3"/><circle cx="534" cy="463" r="12" fill="#ee83d3"/><circle cx="774" cy="463" r="12" fill="#ee83d3"/>
+<path d="M654 307v205" stroke="#f0f5f3" stroke-width="2"/><path d="m648 304 6 9 6-9" fill="#f0f5f3"/>
+<text x="106" y="559" font-size="14" class="cyan">+ Add lane</text><text x="258" y="559" font-size="14" class="muted">Polyrhythm</text><text x="390" y="559" font-size="14" class="muted">Polymeter</text><text x="520" y="559" font-size="14" class="muted">Euclidean</text><text x="915" y="559" font-size="14" class="muted">Undo / Redo</text>
+<rect x="1090" y="271" width="400" height="431" rx="10" fill="#141d24" stroke="#33444c"/>
+<text x="1114" y="307" font-size="20" class="pink">Three over bar</text><text x="1114" y="335" font-size="14" class="muted">3 equally spaced attacks in 4 quarters</text>
+<text x="1114" y="380" class="label muted">RATIO</text><text x="1459" y="380" text-anchor="end" font-size="18">3 : 4</text>
+<path d="M1114 398h352" stroke="#33444c"/><text x="1114" y="429" class="label muted">SOUND</text><text x="1459" y="429" text-anchor="end" font-size="16">Glass</text>
+<text x="1114" y="475" class="label muted">SWING</text><text x="1459" y="475" text-anchor="end" font-size="16">Off</text>
+<text x="1114" y="521" class="label muted">OFFSET</text><text x="1459" y="521" text-anchor="end" font-size="16">0 beats</text>
+<text x="1114" y="567" class="label muted">PROBABILITY</text><text x="1459" y="567" text-anchor="end" font-size="16">100%</text>
+<text x="1114" y="613" class="label muted">CHANGE BOUNDARY</text><text x="1114" y="641" font-size="16" class="gold">Next master bar</text>
+<text x="1114" y="678" font-size="13" class="muted">Exact ratio / no nearest-grid rounding</text>
+<text x="106" y="606" class="label muted">PROGRAM ARRANGEMENT / SECTION REFERENCES + OVERRIDES</text>
+<rect x="106" y="625" width="235" height="77" rx="9" fill="#14313a" stroke="#58e4f4"/><text x="123" y="653" font-size="17">Explore 3 : 4</text><text x="123" y="681" font-size="13" class="muted">8 bars / 96 BPM</text>
+<rect x="351" y="625" width="341" height="77" rx="9" fill="#241f30" stroke="#6b4269"/><text x="369" y="653" font-size="17">Displace secondary layer</text><text x="369" y="681" font-size="13" class="muted">8 bars / +1 eighth offset</text>
+<rect x="702" y="625" width="350" height="77" rx="9" fill="#141d24" stroke="#33444c"/><text x="720" y="653" font-size="17">Keep it through the gap</text><text x="720" y="681" font-size="13" class="muted">2 audible + 2 silent / 4 cycles</text>
+<text x="106" y="742" font-size="14" class="muted">One musical document. Grid, notation and orbit views are the same rhythm.</text>
+<path d="M94 780h1412" stroke="#33444c"/>
+<rect x="106" y="802" width="142" height="48" rx="8" fill="#58e4f4"/><path d="m132 816 0 19 16-9.5z" fill="#09291f"/><text x="164" y="833" font-size="16" style="fill:#09291f;font-weight:600">Start</text>
+<rect x="262" y="802" width="108" height="48" rx="8" fill="#141d24" stroke="#33444c"/><rect x="281" y="820" width="13" height="13" fill="#a6b5b8"/><text x="309" y="833" font-size="15">Stop</text>
+<text x="401" y="820" class="label muted">STOPPED</text><text x="401" y="845" font-size="13" class="muted">Count-in: 1 bar</text>
+<text x="700" y="833" font-size="14" class="muted">Volume</text><path d="M766 826h130" stroke="#71858f" stroke-width="4"/><path d="M766 826h72" stroke="#58e4f4" stroke-width="4"/><circle cx="838" cy="826" r="6" fill="#f0f5f3"/>
+<rect x="932" y="803" width="86" height="46" rx="8" fill="#141d24" stroke="#71858f"/><text x="975" y="833" text-anchor="middle" font-size="14">Mute</text><text x="1088" y="833" font-size="14">Headphones / USB</text><text x="1372" y="833" font-size="14" class="cyan">Internal clock</text>
+<text x="70" y="931" font-size="26">Complex time, made readable.</text>
+<text x="70" y="963" font-size="15" class="muted">Polyrhythm shares a cycle. Polymeter shares a pulse. The interface makes the distinction visible.</text>
+</svg>

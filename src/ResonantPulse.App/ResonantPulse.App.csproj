@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>ResonantPulse.App</RootNamespace>
+    <AssemblyName>ResonantPulse</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon Condition="Exists('Assets\App.ico')">Assets\App.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SelfContained>true</SelfContained>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishSingleFile>false</PublishSingleFile>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+  </PropertyGroup>
+  <!-- Intentional standalone GitHub distribution. Normal builds retain packaged
+       WinUI activation. This switch is NOT a runtime/launch failure workaround.
+       The release workflow packages this payload separately with Store identity. -->
+  <PropertyGroup Condition="'$(DistributionMode)' == 'Portable'">
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <AppxPackage>false</AppxPackage>
+    <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
+    <!-- Keep application resource generation enabled without MSIX generation.
+         Use the supported PRI properties, independently of the CLR namespace. -->
+    <AppxGeneratePriEnabled>true</AppxGeneratePriEnabled>
+    <ProjectPriIndexName>$(AssemblyName)</ProjectPriIndexName>
+    <ProjectPriFileName>$(AssemblyName).pri</ProjectPriFileName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <ProjectReference Include="..\ResonantPulse.Core\ResonantPulse.Core.csproj" />
+    <Content Include="Assets\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\App.ico" Condition="Exists('Assets\App.ico')" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- The unpackaged MRT/XAML targets generate the project PRI and compiled
+       pages, but their copy-to-build-output items do not all reach .NET Publish.
+       Hosted run 40216884229 published framework PRIs only: no application PRI
+       or XBF, causing LoadComponent(ms-appx:///MainWindow.xaml) to fail.
+       Publish the actual generated artifacts with their SDK-assigned paths;
+       never rename the resource URI or copy source XAML in place of compiled XBF. -->
+  <Target Name="IncludePortableCompiledXamlResources"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(DistributionMode)' == 'Portable'">
+    <Error Condition="'$(ProjectPriFullPath)' == '' or '$(ProjectPriFileName)' == ''"
+           Text="Portable publish requires the generated application PRI. ProjectPriFullPath/ProjectPriFileName were not set by the resource tooling." />
+    <ItemGroup>
+      <_PulseCompiledXamlToPublish Include="@(_ProcessedXamlFilesToCopyLocalWithTargetPath)"
+                                   Condition="'%(_ProcessedXamlFilesToCopyLocalWithTargetPath.Extension)' == '.xbf'" />
+      <_PulseXamlResourcesToPublish Include="$(ProjectPriFullPath)">
+        <TargetPath>$(ProjectPriFileName)</TargetPath>
+      </_PulseXamlResourcesToPublish>
+      <_PulseXamlResourcesToPublish Include="@(_PulseCompiledXamlToPublish)" />
+    </ItemGroup>
+    <Error Condition="'@(_PulseCompiledXamlToPublish)' == ''"
+           Text="Portable publish requires generated compiled XAML pages, but the XAML output group is empty." />
+    <Error Condition="!Exists('%(_PulseXamlResourcesToPublish.Identity)')"
+           Text="Generated XAML resource is missing: %(_PulseXamlResourcesToPublish.Identity)" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_PulseXamlResourcesToPublish)"
+                             Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>%(_PulseXamlResourcesToPublish.TargetPath)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+    <Message Importance="High"
+             Text="Portable compiled XAML: @(_PulseXamlResourcesToPublish->'%(Identity) =&gt; %(TargetPath)', '; ')" />
+  </Target>
+</Project>
