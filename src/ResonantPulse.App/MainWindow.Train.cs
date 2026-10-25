@@ -1,0 +1,152 @@
+using System.Diagnostics;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using ResonantPulse.App.Audio;
+using ResonantPulse.App.Controls;
+using ResonantPulse.App.Localization;
+using ResonantPulse.Core;
+
+namespace ResonantPulse.App;
+
+public sealed partial class MainWindow
+{
+    private bool _isTimingArmed;
+    private long _timingStartTimestamp;
+    private long _timingStartFrame;
+    private PlaybackRevision? _timingRevision;
+    private int _timingLane = -1;
+    private double _timingTolerance = 0.15;
+    private bool _includeSilentTargets = true;
+    private readonly List<double> _observed = [];
+    private string _lastTimingReport = "";
+
+    private UIElement BuildTrain()
+    {
+        _instrument = new PulseInstrument();
+        _position = Body("");
+        _programStatus = Body("");
+        _tempoCurve = new TempoCurve();
+        var previewCurve = _tempoCurve;
+        var previewDocument = Storage.LocalWorkspace.Clone(_document);
+        _ = GuardAsync(async () =>
+        {
+            var plan = await Task.Run(() => ScheduleCompiler.Compile(previewDocument, 48000, 16, true));
+            if (_transport.Snapshot().Plan is null) previewCurve.Present(plan, 0, false);
+        });
+        _progress = new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 };
+        Identify(_progress, "ProgramProgress", Text.Get("Program"));
+        var panel = Column(Heading(Text.Get("Train")), _programStatus, _progress,
+            Copy("TempoChartAxis"), _tempoCurve, _instrument, _position, Copy("PresentationLimits"), Copy("ProgramEmpty"));
+        foreach (var step in _document.Program)
+            panel.Children.Add(Body($"{step.Name} · {step.StartTempo.ToString("0.0", Text.Culture)} → {step.EndTempo.ToString("0.0", Text.Culture)} · {step.Bars} × {step.Repeats} {Text.Get("Bars")} · {step.BeatsPerBar}/{step.BeatDenominator} · {Text.Get(step.Ramp)}"));
+        panel.Children.Add(ActionButton("Program", "EditProgram", () => SelectView("Studio")));
+        panel.Children.Add(Heading(Text.Get("TimingLab")));
+        panel.Children.Add(Copy("TimingLimits"));
+        panel.Children.Add(Copy("TimingBudget"));
+        var targets = new List<Choice> { new("-1", Text.Get("MainTarget")) };
+        for (var index = 0; index < _document.Lanes.Count; index++)
+            targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), _document.Lanes[index].Name));
+        var target = SelectChoices("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
+        var tolerance = Number("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
+        var includeSilent = Check("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
+        target.IsEnabled = !_isTimingArmed;
+        tolerance.IsEnabled = !_isTimingArmed;
+        includeSilent.IsEnabled = !_isTimingArmed;
+        panel.Children.Add(Flow(target, tolerance));
+        panel.Children.Add(includeSilent);
+        panel.Children.Add(CommandFlow(
+            ActionButton("BeginTiming", "BeginKeyboardTiming", () =>
+            {
+                var snapshot = _transport.Snapshot();
+                if (snapshot.State != TransportState.Playing || snapshot.Revision is null)
+                    throw new InvalidOperationException(Text.Get("TimingRequiresPlayback"));
+                _timingLane = int.Parse(Selected(target), System.Globalization.CultureInfo.InvariantCulture);
+                _timingTolerance = Value(tolerance) / 1000;
+                _includeSilentTargets = includeSilent.IsChecked == true;
+                _timingRevision = snapshot.Revision;
+                _timingStartFrame = snapshot.ProcessedFrame;
+                _timingStartTimestamp = Stopwatch.GetTimestamp();
+                _observed.Clear();
+                _lastTimingReport = "";
+                _isTimingArmed = true;
+                BuildPage();
+                ShowNotice("TimingArmed");
+            }),
+            ActionButton("Hit", "KeyboardAttack", RecordAttack),
+            ActionButton("FinishTiming", "FinishKeyboardTiming", FinishTiming)));
+        _timingStatus = Body(_isTimingArmed ? Text.Get("TimingArmed") : _lastTimingReport);
+        panel.Children.Add(_timingStatus);
+        panel.Children.Add(Copy("IntegrationGates"));
+        return Scroll(panel);
+    }
+
+    private void RecordAttack()
+    {
+        if (!_isTimingArmed) { ShowNotice("TimingRequiresPlayback"); return; }
+        if (_observed.Count >= 10000) { FinishTiming(); return; }
+        _observed.Add(Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds);
+        // Deliberately no audible preview or beat-rate UIA live announcements.
+    }
+
+    private void FinishTiming()
+    {
+        try { FinishTimingCore(); }
+        catch (Exception exception)
+        {
+            _isTimingArmed = false;
+            _lastTimingReport = "";
+            ShowError(exception);
+        }
+    }
+
+    private void FinishTimingCore()
+    {
+        if (!_isTimingArmed || _timingRevision is null) return;
+        var revision = _timingRevision;
+        _isTimingArmed = false;
+        var seconds = Math.Min(600, Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds);
+        var endFrame = _timingStartFrame + (long)(seconds * revision.Initial.SampleRate);
+        var expected = new List<double>();
+        void Append(RenderPlan plan, long origin, long excludeBefore)
+        {
+            foreach (var onset in plan.Targets)
+            {
+                if (onset.LaneIndex != _timingLane || onset.Accent == Accent.Silent || (!_includeSilentTargets && !onset.Audible)) continue;
+                var frame = origin + onset.Frame;
+                if (frame < Math.Max(_timingStartFrame, excludeBefore) || frame >= endFrame) continue;
+                expected.Add((double)(frame - _timingStartFrame) / plan.SampleRate);
+            }
+        }
+        Append(revision.Initial, 0, revision.CountInFrames);
+        if (!revision.IsFinite)
+        {
+            var firstCycle = Math.Max(0, (_timingStartFrame - revision.Initial.TotalFrames) / revision.Body.TotalFrames);
+            for (var cycle = firstCycle; ; cycle++)
+            {
+                var origin = revision.Initial.TotalFrames + cycle * revision.Body.TotalFrames;
+                if (origin >= endFrame) break;
+                Append(revision.Body, origin, origin);
+            }
+        }
+        var report = TimingAnalyzer.Analyze(expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
+        _lastTimingReport = report.Matched == 0
+            ? Text.Format("TimingNoMatches", report.Missed, report.Extra)
+            : Text.Format("TimingReport", report.Matched, report.Missed, report.Extra,
+                report.MedianOffsetMilliseconds, report.SpreadMilliseconds, report.Coverage) +
+              "\n" + (report.Matched >= 4
+                  ? Text.Format("TimingAdditional", report.DriftMillisecondsPerSecond, report.AmbiguousExpected)
+                  : Text.Get("TimingDriftUnavailable"));
+        if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
+        if (_view == "Train") BuildPage();
+    }
+
+    private void InvalidateTiming()
+    {
+        if (!_isTimingArmed) return;
+        _isTimingArmed = false;
+        _timingRevision = null;
+        _observed.Clear();
+        _lastTimingReport = Text.Get("TimingInvalidated");
+        if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
+    }
+}
