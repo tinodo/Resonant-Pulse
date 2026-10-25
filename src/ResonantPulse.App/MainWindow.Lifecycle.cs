@@ -23,8 +23,8 @@ public sealed partial class MainWindow
         _powerCallback = (window, message, wParam, lParam, _, _) =>
         {
             // Win32 desktop windows receive contrast/theme broadcasts here.
-            // AccessibilitySettings.HighContrastChanged requires a CoreWindow
-            // and throws ERROR_NOT_FOUND in the unpackaged desktop process.
+            // WinRT accessibility event registration failed with ERROR_NOT_FOUND
+            // in the unpackaged desktop host.
             if (message is 0x0015 or 0x001A or 0x031A)
                 DispatcherQueue.TryEnqueue(RefreshInstrumentTheme);
             // WM_POWERBROADCAST: suspend, automatic resume, user resume.
