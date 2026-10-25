@@ -4,7 +4,12 @@
 
 `ci.yml` runs deterministic Core tests and publishes x64/ARM64 Windows builds,
 checks the self-contained payload, creates an unsigned development MSIX and
-retains TRX results. A passing build is not a passed hardware/audio/Store test.
+retains TRX results. The x64 package gate signs a temporary copy, installs it,
+activates through its application user model ID, verifies the running process's
+package identity, captures the responsive window, and uninstalls it. This runs
+only on disposable elevated GitHub-hosted Windows runners. Test trust, private
+key and signed copy are removed; no test certificate is shipped. A passing
+build/install check is not a passed hardware/audio/Store test.
 
 `release.yml` is manually dispatched from main. It invokes the same complete CI
 workflow at that source SHA, then publishes portable ZIPs plus SHA-256 checksums.
@@ -45,7 +50,9 @@ values. Configure repository variables:
 | STORE_IS_FREE | `true` only if the product is actually free |
 
 Run the Microsoft Store workflow with `submit_update=false` to get the real
-identity-bearing candidate. Review/install-test the package, run applicable
+identity-bearing candidate. The workflow also exercises installed activation
+with that exact product identity on a disposable runner. Review/install-test
+the package on physical supported Windows devices, run applicable
 Windows App Certification Kit checks and complete the first submission through
 Partner Center: listing, genuine screenshots, age rating, markets, pricing,
 privacy/support URLs, capability declarations and certification.
@@ -74,6 +81,9 @@ workflow installs a certificate into the developer machine.
 - https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/commands
 - https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/github-actions
 - https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-code-review
+- https://learn.microsoft.com/en-us/windows/msix/package/create-certificate-package-signing
+- https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-iapplicationactivationmanager-activateapplication
+- https://learn.microsoft.com/en-us/windows/win32/api/appmodel/nf-appmodel-getpackagefullname
 
 ## Release acceptance beyond compilation
 

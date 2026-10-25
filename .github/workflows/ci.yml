@@ -99,6 +99,15 @@ jobs:
       - name: Build unsigned development MSIX
         run: |
           ./packaging/New-Package.ps1 -Payload "artifacts/portable-${{ matrix.arch }}" -Architecture '${{ matrix.arch }}' -Version '0.1.0.0' -Output "artifacts/ResonantPulse-development-${{ matrix.arch }}.msix" -Development
+      - name: Install, activate and uninstall the packaged application
+        if: matrix.arch == 'x64'
+        run: ./packaging/Smoke-Package.ps1 -Package artifacts/ResonantPulse-development-x64.msix
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: matrix.arch == 'x64' && always()
+        with:
+          name: packaged-startup
+          path: artifacts/packaged-startup/
+          if-no-files-found: warn
       - name: Archive portable distribution and checksums
         run: |
           Compress-Archive -Path "artifacts/portable-${{ matrix.arch }}/*" -DestinationPath "artifacts/ResonantPulse-win-${{ matrix.arch }}.zip"

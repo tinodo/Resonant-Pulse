@@ -10,9 +10,9 @@ or a successful compile as the complete workstation.
 | Architecture/contracts | Implementing | IMPLEMENTATION-CONTRACT.md |
 | Musical engine | Hosted regression suite and Windows rollback tests passed | Run 40217950155 at 9f7cb63: Linux 173 executed/passed of 177 cases; four Windows-specific cases covered by the separate Windows file-integrity job |
 | App semantic regressions | Actual-source projection tests passed | Run 40217950155: 7/7 accent-pattern and five-language MIDI-guidance cases |
-| Native application | x64/ARM64 compilation and real x64 native startup passed | Run 40217950155: XAML initialized, native window activated, workspace initialized stopped without playback/capture; first-launch theme/window-fit refinements require a fresh run |
-| CI/download/MSIX | Hosted CI and unsigned packaging passed; public download not yet published | Run 40217950155; release requires a protected-main workflow run |
-| Dependabot/Copilot | Dependency review and CodeQL passed; actual Copilot review completed | All eight PR #1 findings have fixes and resolved conversations; subsequent source changes still require fresh gates |
+| Native application | x64/ARM64 compilation and real x64 native startup passed | Run 40218751867 at a46ba31: dark first launch, complete native frame within a 1024x720 work area, workspace initialized stopped without playback/capture |
+| CI/download/MSIX | Hosted CI and unsigned packaging passed; installed-identity gate being added; public download not yet published | Run 40218751867; release requires fresh gates on protected main |
+| Dependabot/Copilot | Dependency review and CodeQL passed; two actual Copilot reviews completed | Initial eight findings fixed and confirmed resolved by re-review; four additional correctness fixes in progress |
 | Physical-device/accessibility validation | Not established | Requires actual installed app/device results |
 | Store identity | Supplied and configured | packaging/StoreIdentity.json; owner-provided Partner Center screenshot, 25 October 2026 |
 | Store first publication | Not submitted; Partner Center certification and authorization still required | RELEASING.md |
@@ -21,10 +21,10 @@ The coordinator updates this table with actual CI links, review outcomes and
 capability gaps before a release is described as complete.
 
 Verified native/build/test evidence:
-https://github.com/tinodo/ResonantPulse/actions/runs/40217950155
+https://github.com/tinodo/ResonantPulse/actions/runs/40218751867
 
 Exact-source CodeQL evidence:
-https://github.com/tinodo/ResonantPulse/actions/runs/40217950170
+https://github.com/tinodo/ResonantPulse/actions/runs/40218751874
 
 The native smoke gate verifies activation and a responsive stopped window, not
 speaker output, timing precision or musical interaction. Its capture must contain

@@ -1,8 +1,22 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Payload,[string]$Screenshot = 'artifacts\startup.png')
+param(
+    [Parameter(Mandatory)][string]$Payload,
+    [string]$Screenshot = 'artifacts\startup.png',
+    [int]$ExistingProcessId,
+    [string]$PackageFamilyName
+)
 $ErrorActionPreference = 'Stop'
 $artifactDirectory = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Screenshot))
-$process = Start-Process -FilePath (Join-Path ([IO.Path]::GetFullPath($Payload)) 'ResonantPulse.exe') -PassThru -RedirectStandardOutput (Join-Path $artifactDirectory 'application-stdout.log') -RedirectStandardError (Join-Path $artifactDirectory 'application-stderr.log')
+$executable = Join-Path ([IO.Path]::GetFullPath($Payload)) 'ResonantPulse.exe'
+if ($ExistingProcessId) {
+    $process = [Diagnostics.Process]::GetProcessById($ExistingProcessId)
+    if (-not [string]::Equals($process.MainModule.FileName,$executable,[StringComparison]::OrdinalIgnoreCase)) {
+        $process.Dispose()
+        throw 'The supplied process does not belong to the expected application payload.'
+    }
+} else {
+    $process = Start-Process -FilePath $executable -PassThru -RedirectStandardOutput (Join-Path $artifactDirectory 'application-stdout.log') -RedirectStandardError (Join-Path $artifactDirectory 'application-stderr.log')
+}
 try {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
@@ -45,9 +59,15 @@ public static class NativeCaptureBounds
     Write-Output 'This startup check does not establish audio timing, interaction or accessibility acceptance.'
 } finally {
     try {
-        $log = Join-Path $env:LOCALAPPDATA 'ResonantPulse\Logs\app.log'
-        if (Test-Path -LiteralPath $log) {
-            Copy-Item -LiteralPath $log -Destination (Join-Path $artifactDirectory 'native-app.log')
+        $logs = @(Join-Path $env:LOCALAPPDATA 'ResonantPulse\Logs\app.log')
+        if ($PackageFamilyName) {
+            $logs += Join-Path $env:LOCALAPPDATA "Packages\$PackageFamilyName\LocalCache\Local\ResonantPulse\Logs\app.log"
+        }
+        foreach ($log in $logs) {
+            if (Test-Path -LiteralPath $log) {
+                $name = if ($log -eq $logs[0]) { 'native-app.log' } else { 'packaged-app.log' }
+                Copy-Item -LiteralPath $log -Destination (Join-Path $artifactDirectory $name)
+            }
         }
         & wevtutil.exe qe Application '/q:*[System[(EventID=1000 or EventID=1026) and TimeCreated[timediff(@SystemTime) <= 120000]]]' /f:text /c:6 /rd:true | Set-Content (Join-Path $artifactDirectory 'native-events.log')
         if ($LASTEXITCODE -ne 0) { Write-Warning 'Windows application-event diagnostics could not be collected.' }

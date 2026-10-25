@@ -91,6 +91,14 @@ jobs:
         run: |
           Expand-Archive artifacts/ResonantPulse-win-x64.zip -DestinationPath artifacts/store-payload
           ./packaging/New-Package.ps1 -Payload artifacts/store-payload -Architecture x64 -Version $env:PACKAGE_VERSION -IdentityName $env:PACKAGE_NAME -Publisher $env:PACKAGE_PUBLISHER -PublisherDisplayName $env:PUBLISHER_NAME -Output artifacts/ResonantPulse-store-x64.msix
+      - name: Verify installed activation with the actual product identity
+        run: ./packaging/Smoke-Package.ps1 -Package artifacts/ResonantPulse-store-x64.msix
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: store-installed-startup
+          path: artifacts/packaged-startup/
+          if-no-files-found: warn
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: store-submission-candidate
