@@ -71,8 +71,8 @@ public sealed partial class MainWindow : Window
             Math.Max(0, Math.Min(area.Width, area.Height) / 20));
         var availableWidth = Math.Max(1, area.Width - 2 * inset);
         var availableHeight = Math.Max(1, area.Height - 2 * inset);
-        var width = Math.Min(availableWidth, (int)Math.Round(1080 * scale));
-        var height = Math.Min(availableHeight, (int)Math.Round(820 * scale));
+        var width = Math.Min(availableWidth, (int)Math.Round(1040 * scale));
+        var height = Math.Min(availableHeight, (int)Math.Round(780 * scale));
         var bounds = new RectInt32(area.X + (area.Width - width) / 2,
             area.Y + (area.Height - height) / 2, width, height);
         AppWindow.MoveAndResize(bounds);
@@ -96,7 +96,19 @@ public sealed partial class MainWindow : Window
             RefreshSnapshot();
         };
         MuteButton.Click += (_, _) => { _transport.IsMuted = !_transport.IsMuted; RefreshSnapshot(); };
-        OutputButton.Click += (_, _) => SelectView("Settings");
+        OutputButton.Click += async (_, _) => await GuardAsync(RefreshOutputsAsync);
+        OutputPicker.SelectionChanged += async (_, _) =>
+        {
+            if (!_isRefreshingOutputs && OutputPicker.SelectedItem is OutputDevice device)
+                await GuardAsync(() => SelectOutputAsync(device));
+        };
+        OutputRow.SizeChanged += (_, args) =>
+        {
+            var narrow = args.NewSize.Width < 600;
+            OutputRow.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(220);
+            Grid.SetColumn(MasterGain, narrow ? 0 : 1);
+            Grid.SetRow(MasterGain, narrow ? 1 : 0);
+        };
         MasterGain.ValueChanged += (_, args) =>
         {
             _transport.Gain = (float)args.NewValue;
@@ -139,10 +151,7 @@ public sealed partial class MainWindow : Window
         Text.Select(_preferences.Language);
         try
         {
-            var outputs = await AudioTransport.EnumerateOutputsAsync();
-            var selected = outputs.FirstOrDefault(device => device.Id == _preferences.OutputId);
-            _isOutputMissing = !string.IsNullOrEmpty(_preferences.OutputId) && selected is null;
-            if (selected is not null) _preferences.OutputName = selected.Name;
+            await RefreshOutputsAsync();
         }
         catch (Exception exception) { ShowError(exception, "AudioError"); }
         _document = new() { Name = Text.Get("OpenPractice") };
@@ -219,12 +228,17 @@ public sealed partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
-        if (_isBusy) return;
+        if (_isBusy || !_isReady) return;
         InvalidateTiming();
         if (_transport.State == TransportState.Playing)
         {
             _transport.Pause();
             RefreshSnapshot();
+            return;
+        }
+        if (!HasSelectedOutput)
+        {
+            PromptForOutput();
             return;
         }
         _isBusy = true;
@@ -236,7 +250,7 @@ public sealed partial class MainWindow : Window
             await _transport.StartAsync(_document, _preferences.OutputId);
             if (!retainsRevision) _hasPendingEdits = startRevision != _documentRevision;
         }
-        finally { _isBusy = false; StartButton.IsEnabled = true; RefreshSnapshot(); }
+        finally { _isBusy = false; RefreshSnapshot(); }
     }
 
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
@@ -346,18 +360,11 @@ public sealed partial class MainWindow : Window
     private void LocalizeTransport()
     {
         LabelButton(StopButton, "Stop");
-        LabelButton(OutputButton, "Output");
-        OutputButton.MaxWidth = 220;
-        if (!string.IsNullOrEmpty(_preferences.OutputName))
-        {
-            OutputButton.Content = new TextBlock
-            {
-                Text = $"{Text.Get("Output")}\n{_preferences.OutputName}",
-                TextWrapping = TextWrapping.Wrap,
-                TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 2
-            };
-            AutomationProperties.SetName(OutputButton, $"{Text.Get("Output")}: {_preferences.OutputName}");
-        }
+        OutputPicker.Header = Text.Get("Output");
+        OutputPicker.PlaceholderText = Text.Get("ChooseOutput");
+        Identify(OutputPicker, "AudioOutputPicker", Text.Get("Output"));
+        AutomationProperties.SetName(OutputButton, Text.Get("RefreshDevices"));
+        ToolTipService.SetToolTip(OutputButton, Text.Get("RefreshDevices"));
         Identify(MasterGain, "MasterGain", Text.Get("Volume"));
         MasterGain.Header = Text.Get("Volume");
         MasterGain.MinHeight = 44;

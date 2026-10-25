@@ -51,31 +51,21 @@ public sealed partial class MainWindow
             loadingDevices = true;
             try
             {
-                var devices = await AudioTransport.EnumerateOutputsAsync();
-                outputs.ItemsSource = devices;
-                outputs.SelectedItem = devices.FirstOrDefault(device => device.Id == _preferences.OutputId);
+                await this.RefreshOutputsAsync();
+                outputs.ItemsSource = _outputDevices;
+                outputs.SelectedItem = _outputDevices.FirstOrDefault(device => device.Id == _preferences.OutputId);
             }
             finally { loadingDevices = false; }
         }
         outputs.SelectionChanged += async (_, _) =>
         {
             if (loadingDevices || outputs.SelectedItem is not OutputDevice device) return;
-            await GuardAsync(async () =>
-            {
-                InvalidateTiming();
-                _transport.SuspendForEndpointChange();
-                _preferences.OutputId = device.Id;
-                _preferences.OutputName = device.Name;
-                _isOutputMissing = false;
-                await _workspace.SavePreferencesAsync(_preferences);
-                LocalizeTransport();
-                RefreshSnapshot();
-            });
+            await GuardAsync(() => SelectOutputAsync(device));
         };
         _ = GuardAsync(RefreshOutputsAsync);
         var bars = Number("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
         var panel = Column(Heading(Text.Get("Settings")), Flow(language, theme), reduced,
-            outputs, Copy("SelectOutput"),
+            outputs, Copy("OutputPolicy"),
             ActionButton("RefreshDevices", "RefreshAudioOutputs", RefreshOutputsAsync),
             bars,
             ActionButton("Apply", "SaveExportBars", async () =>

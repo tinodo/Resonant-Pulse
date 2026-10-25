@@ -28,6 +28,8 @@ try {
     Start-Sleep -Seconds 3
     $process.Refresh()
     if ($process.HasExited -or -not $process.Responding) { throw 'Application crashed or stopped responding after activation.' }
+    & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'Verify-FirstUse.ps1') -AppProcessId $process.Id -ReportPath (Join-Path $artifactDirectory 'first-use.json')
+    if ($LASTEXITCODE -ne 0) { throw 'Native first-use interaction verification failed.' }
     Add-Type -AssemblyName System.Drawing
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type @'
@@ -56,7 +58,7 @@ public static class NativeCaptureBounds
         $bitmap.Save([IO.Path]::GetFullPath($Screenshot),[Drawing.Imaging.ImageFormat]::Png)
     } finally { $graphics.Dispose(); $bitmap.Dispose() }
     Write-Output "Native window activated and remained responsive. Title: $($process.MainWindowTitle)"
-    Write-Output 'This startup check does not establish audio timing, interaction or accessibility acceptance.'
+    Write-Output 'First-use visibility and basic playback are checked when an output exists; acoustic timing and complete interaction/accessibility acceptance are not established.'
 } finally {
     try {
         $logs = @(Join-Path $env:LOCALAPPDATA 'ResonantPulse\Logs\app.log')

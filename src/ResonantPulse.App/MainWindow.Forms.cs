@@ -19,55 +19,59 @@ public sealed partial class MainWindow
         return panel;
     }
 
-    private static VariableSizedWrapGrid Flow(params UIElement[] children)
+    private static Grid Flow(params UIElement[] children) => WrapControls(220, children);
+
+    private static Grid WrapControls(double minimumWidth, params UIElement[] children)
     {
         var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        var panel = new VariableSizedWrapGrid
-        {
-            Orientation = Orientation.Horizontal,
-            ItemWidth = 230,
-            ItemHeight = 130 * scale,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        panel.SizeChanged += (_, args) => panel.ItemWidth = Math.Min(Math.Max(100, args.NewSize.Width), 230 * Math.Sqrt(scale));
+        var panel = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
         foreach (var child in children)
         {
-            if (child is FrameworkElement element) element.Margin = new Thickness(0, 0, 12, 8);
+            if (child is not FrameworkElement element)
+                throw new ArgumentException("Form controls must be framework elements.", nameof(children));
+            element.VerticalAlignment = VerticalAlignment.Top;
+            element.HorizontalAlignment = HorizontalAlignment.Stretch;
             panel.Children.Add(child);
         }
+        var lastColumns = 0;
+        void Arrange(double width)
+        {
+            var columns = Math.Clamp((int)Math.Floor((Math.Max(0, width) + 12) /
+                (minimumWidth * Math.Sqrt(scale) + 12)), 1, Math.Max(1, children.Length));
+            if (columns == lastColumns) return;
+            lastColumns = columns;
+            panel.ColumnDefinitions.Clear();
+            panel.RowDefinitions.Clear();
+            for (var column = 0; column < columns; column++)
+                panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var row = 0; row < (children.Length + columns - 1) / columns; row++)
+                panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (var index = 0; index < children.Length; index++)
+            {
+                if (children[index] is FrameworkElement element)
+                {
+                    Grid.SetColumn(element, index % columns);
+                    Grid.SetRow(element, index / columns);
+                }
+            }
+        }
+        Arrange(0);
+        panel.SizeChanged += (_, args) => Arrange(args.NewSize.Width);
         return panel;
     }
 
     private static StackPanel Commands(params UIElement[] children)
     {
-        // The host scrolls vertically; command rows use wrapping native layout
-        // through a VariableSizedWrapGrid where long translated labels need it.
         var panel = new StackPanel { Spacing = 8 };
         foreach (var child in children) panel.Children.Add(child);
         return panel;
     }
 
-    private static UIElement CommandFlow(params UIElement[] children)
-    {
-        var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        var panel = new VariableSizedWrapGrid
-        {
-            Orientation = Orientation.Horizontal,
-            ItemWidth = 245,
-            ItemHeight = 72 * scale
-        };
-        panel.SizeChanged += (_, args) => panel.ItemWidth = Math.Min(Math.Max(100, args.NewSize.Width), 245 * Math.Sqrt(scale));
-        foreach (var child in children)
-        {
-            if (child is FrameworkElement element) element.Margin = new Thickness(0, 0, 8, 8);
-            panel.Children.Add(child);
-        }
-        return panel;
-    }
+    private static UIElement CommandFlow(params UIElement[] children) => WrapControls(170, children);
 
     private static TextBlock Body(string text) => new()
     {
-        Text = text,
+        Text = text, FontSize = 14,
         Style = (Style)Application.Current.Resources["BodyStyle"]
     };
 
@@ -115,7 +119,8 @@ public sealed partial class MainWindow
                 NumberRounder = new Windows.Globalization.NumberFormatting.SignificantDigitsNumberRounder { SignificantDigits = 12 }
             },
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top
         };
         Identify(input, id, Text.Get(key));
         return input;

@@ -35,7 +35,12 @@ public sealed partial class MainWindow
         var phase = position is null ? 0 : (position.BeatIndex + position.BeatPhase) / meterBeats;
         var tempo = position?.Tempo ?? settings.Tempo;
         _instrument?.Present(shownSettings, tempo, phase, plan, frame, blind, _preferences.IsReducedMotion);
-        _tempoCurve?.Present(plan, frame, blind);
+        if (_tempoCurve is { } curve)
+        {
+            EnsureTempoPreview();
+            var presentation = _tempoCurveState.Select(_documentRevision, plan, frame, blind);
+            curve.Present(presentation.Plan, presentation.Frame, presentation.IsBlind);
+        }
         var elapsed = plan is null ? TimeSpan.Zero : TimeSpan.FromSeconds((double)snapshot.ProcessedFrame / plan.SampleRate);
         var time = elapsed.ToString(elapsed.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss", Text.Culture);
         long barOffset = 0;
@@ -70,10 +75,13 @@ public sealed partial class MainWindow
             _stageTempo.FontSize = Math.Clamp(Root.ActualWidth / 8, 32, 96);
             _stageTempo.Text = blind ? Text.Get("Silent") : $"{tempo.ToString("0.0", Text.Culture)}\n{PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}";
         }
-        TransportStatus.Text = $"{state} · {(blind ? Text.Get("Silent") : detail)} · {Text.Get("InternalClock")}" +
+        TransportStatus.Text = $"{state} · {(blind ? Text.Get("Silent") : detail)}" +
             (snapshot.IsMuted ? $" · {Text.Get("Muted")}" : "") +
             (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : "") +
+            (!HasSelectedOutput && !_isOutputMissing ? $"\n{Text.Get("ChooseOutput")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
+        StartButton.IsEnabled = !_isBusy && (snapshot.State == TransportState.Playing || HasSelectedOutput);
+        StopButton.IsEnabled = snapshot.State != TransportState.Stopped;
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
         {

@@ -15,11 +15,6 @@ using WinRT;
 
 namespace ResonantPulse.App.Audio;
 
-public sealed record OutputDevice(string Id, string Name)
-{
-    public override string ToString() => Name;
-}
-
 public enum TransportState { Stopped, Playing, Paused, Faulted, Completed }
 
 public sealed record TransportSnapshot(
@@ -105,8 +100,14 @@ public sealed class AudioTransport : IDisposable
     public static async Task<IReadOnlyList<OutputDevice>> EnumerateOutputsAsync()
     {
         var devices = await DeviceInformation.FindAllAsync(MediaDevice.GetAudioRenderSelector());
-        return devices.Select(device => new OutputDevice(device.Id, device.Name)).ToArray();
+        return devices.Where(device => device.IsEnabled)
+            .Select(device => new OutputDevice(device.Id, device.Name)).ToArray();
     }
+
+    /// <summary>Returns the current Windows default playback endpoint identifier.</summary>
+    /// <returns>The endpoint identifier, or an empty string when no default exists.</returns>
+    public static string DefaultOutputId() =>
+        MediaDevice.GetDefaultAudioRenderId(AudioDeviceRole.Default);
 
     public async Task StartAsync(PulseDocument document, string outputId)
     {

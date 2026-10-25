@@ -13,6 +13,7 @@
       <SolidColorBrush x:Key="PulseBrush" Color="#58E4F4" />
       <SolidColorBrush x:Key="LaneBrush" Color="#EE83D3" />
       <SolidColorBrush x:Key="AccentBrush" Color="#F3E687" />
+      <SolidColorBrush x:Key="OutlineBrush" Color="#273943" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="SurfaceBrush" Color="#F3F7F5" />
@@ -24,6 +25,7 @@
       <SolidColorBrush x:Key="PulseBrush" Color="#00677A" />
       <SolidColorBrush x:Key="LaneBrush" Color="#A62785" />
       <SolidColorBrush x:Key="AccentBrush" Color="#805000" />
+      <SolidColorBrush x:Key="OutlineBrush" Color="#CBD8D2" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="HighContrast">
       <SolidColorBrush x:Key="SurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
@@ -35,8 +37,16 @@
       <SolidColorBrush x:Key="PulseBrush" Color="{ThemeResource SystemColorHighlightColor}" />
       <SolidColorBrush x:Key="LaneBrush" Color="{ThemeResource SystemColorHotlightColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+      <SolidColorBrush x:Key="OutlineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
+  <Style x:Key="InstrumentCardStyle" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource RaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource OutlineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="20,12" />
+  </Style>
   <Style TargetType="Button">
     <Setter Property="MinHeight" Value="44" />
     <Setter Property="MinWidth" Value="44" />

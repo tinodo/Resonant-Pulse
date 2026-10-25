@@ -209,6 +209,11 @@ public sealed partial class MainWindow
     private async Task StartArmedSongAsync()
     {
         if (_isBusy) return;
+        if (!HasSelectedOutput)
+        {
+            PromptForOutput();
+            return;
+        }
         var intent = _transportIntent;
         _isBusy = true;
         StartButton.IsEnabled = false;
@@ -236,7 +241,7 @@ public sealed partial class MainWindow
                 await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
             }, _ => { if (!_isClosed) BuildPage(); });
         }
-        finally { _isBusy = false; StartButton.IsEnabled = true; }
+        finally { _isBusy = false; RefreshSnapshot(); }
         if (intent == _transportIntent && !_isClosed) await TogglePlaybackAsync();
     }
 }

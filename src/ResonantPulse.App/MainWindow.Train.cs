@@ -22,6 +22,7 @@ public sealed partial class MainWindow
     private CheckBox? _timingSilentTargets;
     private readonly List<double> _observed = [];
     private string _lastTimingReport = "";
+    private readonly TempoCurveState _tempoCurveState = new();
 
     private UIElement BuildTrain()
     {
@@ -29,13 +30,6 @@ public sealed partial class MainWindow
         _position = Body("");
         _programStatus = Body("");
         _tempoCurve = new TempoCurve();
-        var previewCurve = _tempoCurve;
-        var previewDocument = Storage.LocalWorkspace.Clone(_document);
-        _ = GuardAsync(async () =>
-        {
-            var plan = await Task.Run(() => ScheduleCompiler.Compile(previewDocument, 48000, 16, true));
-            if (_transport.Snapshot().Plan is null) previewCurve.Present(plan, 0, false);
-        });
         _progress = new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 };
         Identify(_progress, "ProgramProgress", Text.Get("Program"));
         var panel = Column(Heading(Text.Get("Train")), _programStatus, _progress,
@@ -88,6 +82,35 @@ public sealed partial class MainWindow
         panel.Children.Add(_timingStatus);
         panel.Children.Add(Copy("IntegrationGates"));
         return Scroll(panel);
+    }
+
+    private void EnsureTempoPreview()
+    {
+        var revision = _documentRevision;
+        if (!_tempoCurveState.TryBegin(revision)) return;
+        _ = GuardAsync(async () =>
+        {
+            try
+            {
+                // Clone on the UI thread before awaiting. Completion only
+                // updates the preview cache, never the document or audio plan.
+                var document = Storage.LocalWorkspace.Clone(_document);
+                var plan = await Task.Run(() => ScheduleCompiler.Compile(document, 48000, 16, true));
+                _tempoCurveState.TryComplete(revision, _documentRevision, plan);
+            }
+            catch (Exception exception)
+            {
+                _tempoCurveState.TryComplete(revision, _documentRevision, null);
+                if (revision == _documentRevision) throw;
+                Diagnostics.Write("Discarded stale tempo-preview compilation failure", exception);
+            }
+            finally
+            {
+                // Refresh the current page only; never capture an old curve.
+                // A stale completion also permits the latest revision to start.
+                if (!_isClosed && _tempoCurve is not null) RefreshSnapshot();
+            }
+        });
     }
 
     private void RecordAttack()

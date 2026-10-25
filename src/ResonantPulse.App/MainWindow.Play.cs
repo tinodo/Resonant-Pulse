@@ -16,8 +16,8 @@ public sealed partial class MainWindow
         var name = Input("Name", "DocumentName", _document.Name);
         var instrument = new PulseInstrument();
         _instrument = instrument;
-        _position = Body("");
-        var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000, 0.1);
+        var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000);
+        tempo.FontSize = 32;
         tempo.ValueChanged += async (_, args) =>
         {
             // The document can lag behind queued validation. Compare the UI
@@ -45,17 +45,35 @@ public sealed partial class MainWindow
             if (TempoEdits.TryApplyTap(tempo.Value, estimate, out var proposed))
                 tempo.Value = proposed;
         });
-        var controls = Column(Heading(Text.Get("Tempo")), Flow(tempo, unit),
-            CommandFlow(
-                ActionButton("TempoDown", "TempoDown", () => { tempo.Value = Math.Max(1, tempo.Value - 0.1); }),
-                ActionButton("TempoUp", "TempoUp", () => { tempo.Value = Math.Min(1000, tempo.Value + 0.1); }),
-                tap, ActionButton("ResetTap", "ResetTap", () => _tap.Reset()),
+        var decrease = ActionButton("TempoDown", "TempoDown", () => { tempo.Value = Math.Max(1, tempo.Value - 1); });
+        var increase = ActionButton("TempoUp", "TempoUp", () => { tempo.Value = Math.Min(1000, tempo.Value + 1); });
+        decrease.Content = "-1";
+        increase.Content = "+1";
+        var tempoCommands = new Grid { ColumnSpacing = 8 };
+        tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        tempoCommands.Children.Add(decrease);
+        Grid.SetColumn(increase, 1);
+        tempoCommands.Children.Add(increase);
+        Grid.SetColumn(tap, 2);
+        tap.HorizontalAlignment = HorizontalAlignment.Stretch;
+        tempoCommands.Children.Add(tap);
+        var tempoOptions = new Expander
+        {
+            Header = Text.Get("TempoOptions"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = Column(unit, CommandFlow(
                 ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, tempo.Value / 2); }),
-                ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, tempo.Value * 2); })));
-        var instrumentArea = Column(_instrument, _position, Copy("Horizon"));
+                ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, tempo.Value * 2); }),
+                ActionButton("ResetTap", "ResetTap", () => _tap.Reset())))
+        };
+        var controls = Column(tempo, tempoCommands, Copy("FirstUseHint"));
+        var instrumentArea = instrument;
         var hero = new Grid { ColumnSpacing = 24, RowSpacing = 20 };
         hero.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        hero.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(410) });
+        hero.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
         hero.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         hero.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         hero.Children.Add(instrumentArea);
@@ -63,11 +81,9 @@ public sealed partial class MainWindow
         hero.Children.Add(controls);
         hero.SizeChanged += (_, args) =>
         {
-            var narrow = args.NewSize.Width < 850;
-            // Keep the entire phase dial useful on short hosted/laptop screens;
-            // additional native editors remain in the existing vertical scroller.
-            instrument.MaxHeight = Math.Clamp(Root.ActualHeight * 0.42, 220, 500);
-            hero.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(410);
+            var narrow = args.NewSize.Width < 640;
+            instrument.MaxHeight = Math.Clamp(Root.ActualHeight * 0.30, 180, 280);
+            hero.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(300);
             Grid.SetColumn(controls, narrow ? 0 : 1);
             Grid.SetRow(controls, narrow ? 1 : 0);
         };
@@ -78,6 +94,8 @@ public sealed partial class MainWindow
         var swing = Number("Swing", "Swing", settings.Swing, 0.5, 0.9, 0.01);
         var countIn = Number("CountIn", "CountInBars", settings.CountInBars, 0, 32);
         var sound = Select("Sound", "MainSound", settings.Sound, "Wood", "Glass", "Click", "Kick", "HiHat");
+        sound.SelectionChanged += async (_, _) => await GuardAsync(() =>
+            CommitAsync(doc => doc.Settings.Sound = Selected(sound)));
         var audible = Number("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
         var silent = Number("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
         var blind = Check("Blind", "BlindGaps", settings.BlindGaps);
@@ -86,7 +104,7 @@ public sealed partial class MainWindow
         {
             var index = beat;
             var current = AccentPatterns.MainAt(settings.Accents, index);
-            var button = new Button { Margin = new Thickness(0, 0, 8, 8) };
+            var button = new Button { Margin = new Thickness(0, 0, 8, 8), VerticalAlignment = VerticalAlignment.Top };
             void Describe(Accent accent)
             {
                 var label = Text.Format("BeatAccent", index + 1, Text.Get(accent.ToString()));
@@ -107,7 +125,7 @@ public sealed partial class MainWindow
             });
             accents.Children.Add(button);
         }
-        var apply = ActionButton("Apply", "ApplyPlaySettings", async () =>
+        var apply = ActionButton("ApplyRhythm", "ApplyPlaySettings", async () =>
         {
             await CommitAsync(doc =>
             {
@@ -127,17 +145,51 @@ public sealed partial class MainWindow
             });
             BuildPage();
         });
-        return Scroll(Column(name,
-            ActionButton("Apply", "ApplyDocumentName", () => CommitAsync(doc => doc.Name = name.Text, false)),
-            hero, Heading(Text.Get("Accent")), Copy("GroupAccentRule"), accents,
-            ActionButton("AllNormal", "AllNormalAccents", async () =>
-            {
-                await CommitAsync(doc => doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray());
-                BuildPage();
-            }),
-            Flow(beats, denominator, groups, division, swing, countIn, sound, audible, silent), blind, apply,
-            Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"),
-            CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync))));
+        var rhythmOptions = new Expander
+        {
+            Header = Text.Get("RhythmOptions"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = Column(Copy("RhythmDraftHint"),
+                Flow(beats, denominator, groups, division, swing, countIn, audible, silent),
+                blind, apply, Copy("GroupAccentRule"),
+                ActionButton("AllNormal", "AllNormalAccents", async () =>
+                {
+                    await CommitAsync(doc => doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray());
+                    BuildPage();
+                }))
+        };
+        Identify(rhythmOptions, "RhythmOptions", Text.Get("RhythmOptions"));
+        var meter = ActionButton("TimeSignature", "QuickMeter", () =>
+        {
+            rhythmOptions.IsExpanded = true;
+            rhythmOptions.StartBringIntoView();
+            beats.Focus(FocusState.Programmatic);
+        });
+        meter.Content = $"{settings.BeatsPerBar} / {settings.BeatDenominator}";
+        meter.FontSize = 20;
+        meter.HorizontalAlignment = HorizontalAlignment.Stretch;
+        Identify(meter, "QuickMeter", $"{Text.Get("TimeSignature")}: {settings.BeatsPerBar}/{settings.BeatDenominator}");
+        var project = new Expander
+        {
+            Header = Text.Get("ProjectOptions"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = Column(name,
+                ActionButton("RenameProject", "ApplyDocumentName", () => CommitAsync(doc => doc.Name = name.Text, false)),
+                CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync)))
+        };
+        var help = new Expander
+        {
+            Header = Text.Get("Help"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = Column(Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"), Copy("Horizon"))
+        };
+        var heroCard = new Border { Style = (Style)Application.Current.Resources["InstrumentCardStyle"], Child = hero };
+        return Scroll(Column(Heading(Text.Get("Metronome")), heroCard,
+            Flow(Column(Copy("TimeSignature"), meter), sound), accents,
+            rhythmOptions, tempoOptions, project, help));
     }
 
     private static int PrimaryAccentCount(PulseSettings settings) =>

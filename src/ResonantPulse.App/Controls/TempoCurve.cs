@@ -42,7 +42,18 @@ public sealed class TempoCurve : StackPanel
     public void Present(RenderPlan? plan, long frame, bool blind)
     {
         Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
-        if (blind || plan is null) return;
+        if (plan is null)
+        {
+            _plan = null;
+            _curve.Points = new PointCollection();
+            _range.Text = "";
+            _cursor.X1 = 8;
+            _cursor.X2 = 8;
+            _cursor.Visibility = Visibility.Collapsed;
+            return;
+        }
+        if (blind) return;
+        _cursor.Visibility = Visibility.Visible;
         if (!ReferenceEquals(_plan, plan))
         {
             _plan = plan;
