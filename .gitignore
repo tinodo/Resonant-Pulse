@@ -1,0 +1,17 @@
+bin/
+obj/
+artifacts/
+TestResults/
+.vs/
+*.user
+*.pfx
+*.cer
+*.snk
+*.msix
+*.msixbundle
+*.appx
+*.appxupload
+*.trx
+.env
+*.secrets.json
+.store/
