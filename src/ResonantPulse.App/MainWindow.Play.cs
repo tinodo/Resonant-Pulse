@@ -14,7 +14,8 @@ public sealed partial class MainWindow
     {
         var settings = _document.Settings;
         var name = Input("Name", "DocumentName", _document.Name);
-        _instrument = new PulseInstrument();
+        var instrument = new PulseInstrument();
+        _instrument = instrument;
         _position = Body("");
         var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000, 0.1);
         tempo.ValueChanged += async (_, args) =>
@@ -61,6 +62,9 @@ public sealed partial class MainWindow
         hero.SizeChanged += (_, args) =>
         {
             var narrow = args.NewSize.Width < 850;
+            // Keep the entire phase dial useful on short hosted/laptop screens;
+            // additional native editors remain in the existing vertical scroller.
+            instrument.MaxHeight = Math.Clamp(Root.ActualHeight * 0.42, 220, 500);
             hero.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(410);
             Grid.SetColumn(controls, narrow ? 0 : 1);
             Grid.SetRow(controls, narrow ? 1 : 0);

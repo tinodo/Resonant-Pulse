@@ -16,7 +16,25 @@ try {
     if ($process.HasExited -or -not $process.Responding) { throw 'Application crashed or stopped responding after activation.' }
     Add-Type -AssemblyName System.Drawing
     Add-Type -AssemblyName System.Windows.Forms
-    $bounds = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeCaptureBounds
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(IntPtr window, uint attribute, out Rect bounds, uint size);
+}
+'@
+    $frame = [NativeCaptureBounds+Rect]::new()
+    $result = [NativeCaptureBounds]::DwmGetWindowAttribute($process.MainWindowHandle,9,[ref]$frame,16)
+    if ($result -ne 0) { throw "Could not read native window bounds: HRESULT $result." }
+    $bounds = [Drawing.Rectangle]::FromLTRB($frame.Left,$frame.Top,$frame.Right,$frame.Bottom)
+    $screen = [Windows.Forms.Screen]::FromHandle($process.MainWindowHandle).Bounds
+    if ($bounds.Width -le 0 -or $bounds.Height -le 0 -or -not $screen.Contains($bounds)) {
+        throw 'The native window is empty or extends beyond its display; required controls may be off-screen.'
+    }
     $bitmap = [Drawing.Bitmap]::new($bounds.Width,$bounds.Height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     try {

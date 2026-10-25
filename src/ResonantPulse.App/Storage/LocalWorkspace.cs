@@ -6,7 +6,7 @@ namespace ResonantPulse.App.Storage;
 public sealed class Preferences
 {
     public string Language { get; set; } = "";
-    public string Theme { get; set; } = "Default";
+    public string Theme { get; set; } = "Dark";
     public string OutputId { get; set; } = "";
     public string OutputName { get; set; } = "";
     public bool IsReducedMotion { get; set; }

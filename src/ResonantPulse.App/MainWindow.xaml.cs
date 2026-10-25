@@ -60,10 +60,22 @@ public sealed partial class MainWindow : Window
         Diagnostics.Write("MainWindow XAML initialization completed");
         Title = "Resonant Pulse";
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var scale = GetDpiForWindow(hwnd) / 96.0;
-        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        AppWindow.Resize(new SizeInt32(Math.Min(area.Width, (int)(1080 * scale)),
-            Math.Min(area.Height, (int)(820 * scale))));
+        var dpi = GetDpiForWindow(hwnd);
+        var scale = dpi == 0 ? 1 : dpi / 96.0;
+        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
+        // AppWindow/DisplayArea coordinates are physical pixels. Resizing alone
+        // leaves the default position offset and can push the far edges outside
+        // the work area, even when width/height individually fit.
+        var inset = Math.Min((int)Math.Round(8 * scale),
+            Math.Max(0, Math.Min(area.Width, area.Height) / 20));
+        var availableWidth = Math.Max(1, area.Width - 2 * inset);
+        var availableHeight = Math.Max(1, area.Height - 2 * inset);
+        var width = Math.Min(availableWidth, (int)Math.Round(1080 * scale));
+        var height = Math.Min(availableHeight, (int)Math.Round(820 * scale));
+        var bounds = new RectInt32(area.X + (area.Width - width) / 2,
+            area.Y + (area.Height - height) / 2, width, height);
+        AppWindow.MoveAndResize(bounds);
+        Diagnostics.Write($"Initial physical window bounds: {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height}; work area: {area.X},{area.Y} {area.Width}x{area.Height}; DPI: {dpi}");
         Navigation.SelectionChanged += (sender, args) =>
         {
             if (!_isReady) return;
