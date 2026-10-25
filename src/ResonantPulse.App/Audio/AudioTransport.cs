@@ -273,7 +273,7 @@ public sealed class AudioTransport : IDisposable
             using (var referenceAbi = MarshalInspectable<IMemoryBufferReference>.CreateMarshaler(reference))
             {
                 var iid = MemoryBufferByteAccessId;
-                Marshal.ThrowExceptionForHR(Marshal.QueryInterface(referenceAbi.ThisPtr, ref iid, out var access));
+                Marshal.ThrowExceptionForHR(Marshal.QueryInterface(referenceAbi.ThisPtr, in iid, out var access));
                 try
                 {
                     byte* bytes = null;

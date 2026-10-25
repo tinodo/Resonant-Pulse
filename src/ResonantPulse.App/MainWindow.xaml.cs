@@ -62,7 +62,7 @@ public sealed partial class MainWindow : Window
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         AppWindow.Resize(new SizeInt32(Math.Min(area.Width, (int)(1080 * scale)),
             Math.Min(area.Height, (int)(820 * scale))));
-        Navigation.SelectionChanged += (_, args) =>
+        Navigation.SelectionChanged += (sender, args) =>
         {
             if (!_isReady) return;
             _view = args.IsSettingsSelected ? "Settings" :
