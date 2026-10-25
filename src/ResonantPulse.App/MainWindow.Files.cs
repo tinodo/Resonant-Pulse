@@ -51,14 +51,18 @@ public sealed partial class MainWindow
         var result = await _workspace.ListAsync();
         _library = result.Items;
         FilterLibrary();
-        if (result.Failures.Count > 0)
+        if (result.Failures.Count > 0 || result.HasMore)
         {
             foreach (var failure in result.Failures)
                 Diagnostics.Write($"Library entry could not be read: {failure.Path}", failure.Error);
             Notice.Severity = InfoBarSeverity.Warning;
-            Notice.Title = Text.Get("LibraryPartial");
-            Notice.Message = Text.Format("LibraryFailedPaths", result.Failures.Count,
-                string.Join(Environment.NewLine, result.Failures.Select(failure => failure.Path)));
+            Notice.Title = Text.Get(result.HasMore ? "LibraryLimited" : "LibraryPartial");
+            var warnings = new List<string>();
+            if (result.HasMore) warnings.Add(Text.Format("LibraryOverflow", LocalWorkspace.LibraryScanLimit));
+            if (result.Failures.Count > 0)
+                warnings.Add(Text.Format("LibraryFailedPaths", result.Failures.Count,
+                    string.Join(Environment.NewLine, result.Failures.Select(failure => failure.Path))));
+            Notice.Message = string.Join(Environment.NewLine + Environment.NewLine, warnings);
             Notice.IsOpen = true;
         }
     }

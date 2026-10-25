@@ -17,6 +17,9 @@ public sealed partial class MainWindow
     private int _timingLane = -1;
     private double _timingTolerance = 0.15;
     private bool _includeSilentTargets = true;
+    private ComboBox? _timingTarget;
+    private NumberBox? _timingToleranceInput;
+    private CheckBox? _timingSilentTargets;
     private readonly List<double> _observed = [];
     private string _lastTimingReport = "";
 
@@ -52,9 +55,10 @@ public sealed partial class MainWindow
         var target = SelectChoices("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
         var tolerance = Number("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
         var includeSilent = Check("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
-        target.IsEnabled = !_isTimingArmed;
-        tolerance.IsEnabled = !_isTimingArmed;
-        includeSilent.IsEnabled = !_isTimingArmed;
+        _timingTarget = target;
+        _timingToleranceInput = tolerance;
+        _timingSilentTargets = includeSilent;
+        RefreshTimingControlState();
         panel.Children.Add(Flow(target, tolerance));
         panel.Children.Add(includeSilent);
         panel.Children.Add(CommandFlow(
@@ -74,7 +78,7 @@ public sealed partial class MainWindow
                 _timingStartTimestamp = Stopwatch.GetTimestamp();
                 _observed.Clear();
                 _lastTimingReport = "";
-                _isTimingArmed = true;
+                SetTimingArmed(true);
                 BuildPage();
                 ShowNotice("TimingArmed");
             }),
@@ -101,8 +105,9 @@ public sealed partial class MainWindow
         try { FinishTimingCore(completedFrame); }
         catch (Exception exception)
         {
-            _isTimingArmed = false;
+            SetTimingArmed(false);
             _lastTimingReport = "";
+            if (_timingStatus is not null) _timingStatus.Text = "";
             ShowError(exception);
         }
     }
@@ -111,7 +116,7 @@ public sealed partial class MainWindow
     {
         if (!_isTimingArmed || _timingRevision is null) return;
         var revision = _timingRevision;
-        _isTimingArmed = false;
+        SetTimingArmed(false);
         var endFrame = TimingRunRules.EndFrame(_timingStartFrame,
             Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds, revision.Initial.SampleRate,
             revision.IsFinite ? revision.Initial.TotalFrames : null, completedFrame);
@@ -153,10 +158,39 @@ public sealed partial class MainWindow
     private void InvalidateTiming()
     {
         if (!_isTimingArmed) return;
-        _isTimingArmed = false;
+        SetTimingArmed(false);
         _timingRevision = null;
         _observed.Clear();
         _lastTimingReport = Text.Get("TimingInvalidated");
         if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
+    }
+
+    private void SetTimingArmed(bool isArmed)
+    {
+        var wasArmed = _isTimingArmed;
+        _isTimingArmed = isArmed;
+        RefreshTimingControlState();
+        if (wasArmed && !isArmed && _timingTarget is not null)
+        {
+            // Pending edits may have changed lane names/order while the run
+            // retained its original snapshot. Refresh only the picker on exit,
+            // not the entire page from the transport refresh loop.
+            // This is a UI selection only. Do not change the measured lane
+            // while FinishTimingCore is still producing its original report.
+            var selectedLane = TimingRunRules.IsValidTarget(_timingLane, _document.Lanes.Count) ? _timingLane : -1;
+            var targets = new List<Choice> { new("-1", Text.Get("MainTarget")) };
+            for (var index = 0; index < _document.Lanes.Count; index++)
+                targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), _document.Lanes[index].Name));
+            _timingTarget.ItemsSource = targets;
+            _timingTarget.SelectedIndex = selectedLane + 1;
+        }
+    }
+
+    private void RefreshTimingControlState()
+    {
+        var isEnabled = TimingRunRules.CanEditArmingOptions(_isTimingArmed);
+        if (_timingTarget is not null) _timingTarget.IsEnabled = isEnabled;
+        if (_timingToleranceInput is not null) _timingToleranceInput.IsEnabled = isEnabled;
+        if (_timingSilentTargets is not null) _timingSilentTargets.IsEnabled = isEnabled;
     }
 }

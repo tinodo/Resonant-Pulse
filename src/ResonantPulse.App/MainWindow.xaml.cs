@@ -197,6 +197,9 @@ public sealed partial class MainWindow : Window
         _programStatus = null;
         _progress = null;
         _timingStatus = null;
+        _timingTarget = null;
+        _timingToleranceInput = null;
+        _timingSilentTargets = null;
         _tempoCurve = null;
         _libraryList = null;
         _search = null;

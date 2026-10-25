@@ -5,6 +5,8 @@ internal enum TimingRunUpdate { None, Continue, Finish, Invalidate }
 /// <summary>Timing follows the active immutable playback revision, not pending edits.</summary>
 internal static class TimingRunRules
 {
+    internal static bool CanEditArmingOptions(bool isArmed) => !isArmed;
+
     internal static TimingRunUpdate Update(bool isArmed, bool isSameRevision, bool isPlaying, bool isCompleted)
     {
         if (!isArmed) return TimingRunUpdate.None;

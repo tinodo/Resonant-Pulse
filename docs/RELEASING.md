@@ -25,14 +25,15 @@ Stable releases additionally require `PRODUCT_ACCEPTANCE_COMPLETED=true`,
 configured only after full-product/device acceptance is recorded. Every ZIP
 contains build-info.json with its source SHA, version, architecture and CI run.
 
-Dependabot checks NuGet and GitHub Actions weekly. `copilot-review.yml` requests
-the actual `copilot-pull-request-reviewer[bot]` reviewer on PRs, including
-Dependabot PRs. It never checks out or executes PR code under
-`pull_request_target`. Failure to obtain a review is a visible failed job, not a
-fake successful review. If the default Actions token cannot request Copilot,
-configure a narrowly scoped `COPILOT_REVIEW_TOKEN` with repository PR access.
-Copilot availability/entitlement is account-dependent. A request is not a
-completed review or a required human approval.
+Dependabot checks NuGet and GitHub Actions weekly. The repository's active
+`Automatic Copilot review` ruleset requests real reviews for main-targeting PRs,
+including new pushes. `copilot-review.yml` verifies that native rule and waits
+for the real `copilot-pull-request-reviewer[bot]` review of the exact PR head.
+It uses read-only permissions and never checks out or executes PR code under
+`pull_request_target`; no owner token is stored merely to review Dependabot PRs.
+A missing review or timeout fails visibly. Copilot availability/entitlement is
+account-dependent. Completion is not approval or an assertion of zero findings;
+review conversations must still be resolved before merge.
 
 ## Microsoft Store prerequisites
 
@@ -81,6 +82,8 @@ workflow installs a certificate into the developer machine.
 - https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/commands
 - https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/github-actions
 - https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-code-review
+- https://docs.github.com/en/copilot/how-tos/copilot-on-github/set-up-copilot/configure-code-review
+- https://docs.github.com/en/rest/repos/rules#create-a-repository-ruleset
 - https://learn.microsoft.com/en-us/windows/msix/package/create-certificate-package-signing
 - https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-iapplicationactivationmanager-activateapplication
 - https://learn.microsoft.com/en-us/windows/win32/api/appmodel/nf-appmodel-getpackagefullname

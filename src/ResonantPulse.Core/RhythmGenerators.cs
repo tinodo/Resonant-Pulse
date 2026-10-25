@@ -87,6 +87,8 @@ public static class TempoPrograms
         }
         if (steps[^1].StartTempo != end) steps.Add(new() { Name = $"Tempo {end:R}", StartTempo = end, EndTempo = end, Bars = barsPerStep });
         DocumentValidator.Require(steps.Count <= 1024, "Ladder exceeds 1024 steps.");
+        DocumentValidator.Require((long)steps.Count * barsPerStep <= DocumentValidator.MaximumProgramBars,
+            $"Ladder exceeds {DocumentValidator.MaximumProgramBars} total bars; reduce its steps or bars per step.");
         return steps;
     }
 }

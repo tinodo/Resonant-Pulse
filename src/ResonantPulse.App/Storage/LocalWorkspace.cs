@@ -16,10 +16,12 @@ public sealed class Preferences
 
 public sealed record LibraryItem(string Path, string Name);
 public sealed record LibraryReadFailure(string Path, Exception Error);
-public sealed record LibraryReadResult(IReadOnlyList<LibraryItem> Items, IReadOnlyList<LibraryReadFailure> Failures);
+public sealed record LibraryReadResult(IReadOnlyList<LibraryItem> Items, IReadOnlyList<LibraryReadFailure> Failures,
+    bool HasMore);
 
 public sealed class LocalWorkspace
 {
+    internal const int LibraryScanLimit = 1000;
     private readonly SemaphoreSlim _writes = new(1);
     private readonly string _root;
 
@@ -72,17 +74,29 @@ public sealed class LocalWorkspace
     public async Task<LibraryReadResult> ListAsync()
     {
         string[] paths;
-        try { paths = Directory.EnumerateFiles(LibraryPath, "*.pulse").Take(1000).ToArray(); }
+        try
+        {
+            // Keep the first limit+1 paths in ordinal order regardless of the
+            // filesystem's enumeration order. Metadata memory is bounded, and
+            // at most limit documents are loaded. The extra path detects overflow.
+            var candidates = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var path in Directory.EnumerateFiles(LibraryPath, "*.pulse"))
+            {
+                candidates.Add(path);
+                if (candidates.Count > LibraryScanLimit + 1) candidates.Remove(candidates.Max!);
+            }
+            paths = candidates.ToArray();
+        }
         catch (DirectoryNotFoundException) when (!File.Exists(LibraryPath))
         {
             // A not-yet-created Library is normal on first launch. Permission,
             // I/O and other enumeration failures are intentionally not swallowed.
-            return new([], []);
+            return new([], [], false);
         }
         var result = new List<LibraryItem>();
         var failures = new List<LibraryReadFailure>();
         // Only app-owned files, no recursive scans or external attachment fetching.
-        foreach (var path in paths)
+        foreach (var path in paths.Take(LibraryScanLimit))
         {
             try
             {
@@ -96,7 +110,7 @@ public sealed class LocalWorkspace
             }
         }
         return new(result.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToArray(),
-            failures.ToArray());
+            failures.ToArray(), paths.Length > LibraryScanLimit);
     }
 
     public static PulseDocument Clone(PulseDocument document) =>

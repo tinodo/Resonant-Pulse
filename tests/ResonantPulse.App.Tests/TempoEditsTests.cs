@@ -6,6 +6,46 @@ namespace ResonantPulse.App.Tests;
 public sealed class TempoEditsTests
 {
     [TestMethod]
+    public async Task RapidReturnUsesUiEventPairWhilePublishedDocumentIsStillDelayed()
+    {
+        var publishedTempo = 120d;
+        var commits = new List<double>();
+        var validatingFirst = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishValidation = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var edits = new SemaphoreSlim(1);
+
+        async Task QueueValueChangedAsync(double oldUiValue, double newUiValue)
+        {
+            // Same actual guard called by NumberBox.ValueChanged. The published
+            // document intentionally remains at 120 while the first edit waits.
+            if (!TempoEdits.IsChange(oldUiValue, newUiValue)) return;
+            await edits.WaitAsync();
+            try
+            {
+                if (newUiValue == 132)
+                {
+                    validatingFirst.SetResult(true);
+                    await finishValidation.Task;
+                }
+                publishedTempo = newUiValue;
+                commits.Add(newUiValue);
+            }
+            finally { edits.Release(); }
+        }
+
+        var outward = QueueValueChangedAsync(120, 132);
+        await validatingFirst.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var returning = QueueValueChangedAsync(132, 120);
+        var valueBeforeValidationCompletes = publishedTempo;
+        finishValidation.SetResult(true);
+        await Task.WhenAll(outward, returning).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.AreEqual(120d, valueBeforeValidationCompletes);
+        CollectionAssert.AreEqual(new[] { 132d, 120d }, commits.ToArray());
+        Assert.AreEqual(120d, publishedTempo);
+    }
+
+    [TestMethod]
     public void ChangedTapProducesOneNumberBoxValueChange()
     {
         var value = 120d;

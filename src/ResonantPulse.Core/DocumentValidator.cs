@@ -8,6 +8,7 @@ public static class DocumentValidator
     public const int MaximumOnsets = 1_000_000;
     public const int MaximumOnsetsPerSecond = 4096;
     public const int MaximumDocumentBytes = 4 * 1024 * 1024;
+    public const int MaximumProgramBars = 100_000;
     public static void Validate(PulseDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -69,9 +70,10 @@ public static class DocumentValidator
             Tempo(p.StartTempo); Tempo(p.EndTempo); Meter(p.BeatsPerBar, p.BeatDenominator);
             Require(s.Groups.Length == 0 || (p.BeatsPerBar == s.BeatsPerBar && p.BeatDenominator == s.BeatDenominator),
                 "Additive Settings.Groups apply only to their authored meter. Clear Groups or use matching program meters; per-section group overrides are not supported.");
-            Require(p.Bars is >= 1 and <= 100_000 && p.Repeats is >= 1 and <= 1024, "Section bars/repeats exceed finite limits.");
+            Require(p.Bars is >= 1 and <= MaximumProgramBars && p.Repeats is >= 1 and <= 1024, "Section bars/repeats exceed finite limits.");
             expanded += p.Repeats; bars += (long)p.Bars * p.Repeats;
-            Require(expanded <= 4096 && bars <= 100_000, "Expanded program exceeds 4096 sections or 100000 bars.");
+            Require(expanded <= 4096 && bars <= MaximumProgramBars,
+                $"Expanded program exceeds 4096 sections or {MaximumProgramBars} bars.");
             Require(p.Ramp is "Constant" or "LinearTime" or "LinearBeat", "Ramp must be Constant, LinearTime or LinearBeat.");
             Require(p.Ramp != "Constant" || p.StartTempo == p.EndTempo,
                 "A Constant step must have equal start/end tempos. Select a ramp to change tempo.");

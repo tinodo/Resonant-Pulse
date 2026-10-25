@@ -20,8 +20,11 @@ public sealed partial class MainWindow
         var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000, 0.1);
         tempo.ValueChanged += async (_, args) =>
         {
-            if (!TempoEdits.IsChange(_document.Settings.Tempo, args.NewValue)) return;
-            await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = args.NewValue));
+            // The document can lag behind queued validation. Compare the UI
+            // event pair so a rapid 120 -> 132 -> 120 retains both edits.
+            var proposed = args.NewValue;
+            if (!TempoEdits.IsChange(args.OldValue, proposed)) return;
+            await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = proposed));
         };
         var unit = SelectChoices("Unit", "TempoUnit", settings.BeatUnitQuarters.ToString(CultureInfo.InvariantCulture),
         [

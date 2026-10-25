@@ -7,6 +7,14 @@ namespace ResonantPulse.App.Tests;
 public sealed class TimingRunRulesTests
 {
     [TestMethod]
+    public void ArmingOptionsReenableWhenArmedFlagClearsAndSupportAnotherRun()
+    {
+        var transitions = new[] { false, true, false, true, false };
+        CollectionAssert.AreEqual(new[] { true, false, true, false, true },
+            transitions.Select(TimingRunRules.CanEditArmingOptions).ToArray());
+    }
+
+    [TestMethod]
     public void NormalCompletionFinishesOnceWithoutInvalidatingTheReport()
     {
         Assert.AreEqual(TimingRunUpdate.Finish,

@@ -160,4 +160,33 @@ public sealed class RhythmGeneratorsTests
         Assert.AreEqual(1024, TempoPrograms.Ladder(1, 2.023, 0.001, 1).Count);
         Check.Throws<ArgumentException>(() => TempoPrograms.Ladder(1, 2.024, 0.001, 1));
     }
+
+    [TestMethod]
+    [DataRow(1d, 99d, 1d, 99)]
+    [DataRow(1d, 100d, 1d, 100)]
+    [DataRow(100d, 1d, -1d, 100)]
+    [DataRow(1d, 99.5d, 1d, 100)]
+    [DataRow(99.5d, 1d, -1d, 100)]
+    public void Ladder_AtAndBelowAggregateBarLimit_ReturnsDocumentValidProgram(
+        double start, double end, double increment, int expectedSteps)
+    {
+        var steps = TempoPrograms.Ladder(start, end, increment, 1000);
+        Assert.AreEqual(expectedSteps, steps.Count);
+        Assert.AreEqual(expectedSteps * 1000L, steps.Sum(step => (long)step.Bars * step.Repeats));
+        Assert.AreEqual(end, steps[^1].StartTempo);
+        var document = Check.Document();
+        document.Program = steps;
+        DocumentValidator.Validate(document);
+    }
+
+    [TestMethod]
+    [DataRow(1d, 101d, 1d)]
+    [DataRow(101d, 1d, -1d)]
+    [DataRow(1d, 100.5d, 1d)]
+    [DataRow(100.5d, 1d, -1d)]
+    public void Ladder_AboveAggregateBarLimitIncludingAppendedEndpoint_Rejects(double start, double end, double increment)
+    {
+        var error = Check.Throws<ArgumentException>(() => TempoPrograms.Ladder(start, end, increment, 1000));
+        StringAssert.Contains(error.Message, "100000");
+    }
 }

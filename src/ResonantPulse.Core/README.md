@@ -210,6 +210,8 @@ localization IDs. `RhythmGenerators.Euclidean/Rudiment/RudimentLanes` provide
 original algorithmic studies. `TempoPrograms.Ladder` produces bounded exact
 decimal steps, including the requested endpoint. These English display names
 are fallback content; translation and musician review remain app/product work.
+Ladders also enforce the validator's shared 100000-bar aggregate limit, including
+an appended off-grid endpoint, rather than returning a document-invalid program.
 
 ## Broader design not represented by this contract
 

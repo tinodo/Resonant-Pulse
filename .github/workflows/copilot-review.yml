@@ -6,22 +6,44 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
+
+concurrency:
+  group: copilot-completion-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  request:
-    if: github.event.pull_request.draft == false
+  completion:
+    name: Copilot review completion
+    if: github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: Request a real GitHub Copilot review
+      - name: Verify native review automation and wait for the exact source review
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_REVIEW_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         shell: bash
         run: |
           set -euo pipefail
+          # Native rules request reviews, including bot PRs, without storing an owner token.
           # No checkout: pull_request_target must never execute untrusted PR code.
-          gh api --method POST "repos/$GH_REPO/pulls/$PR_NUMBER/requested_reviewers" \
-            -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
-          echo "Review requested. This is not an approval and does not prove the review has completed." >> "$GITHUB_STEP_SUMMARY"
+          rules=$(gh api "repos/$GH_REPO/rules/branches/$BASE_REF" -H 'X-GitHub-Api-Version: 2026-03-10')
+          jq -e 'any(.[]; .type == "copilot_code_review" and .parameters.review_on_push == true)' \
+            <<<"$rules" >/dev/null || { echo "::error::Native automatic Copilot review is not enabled for this base branch."; exit 1; }
+          for attempt in $(seq 1 90); do
+            reviews=$(gh api --paginate --slurp "repos/$GH_REPO/pulls/$PR_NUMBER/reviews?per_page=100")
+            review=$(jq -r --arg sha "$HEAD_SHA" \
+              '[.[][] | select(.user.login == "copilot-pull-request-reviewer[bot]" and .commit_id == $sha and (.state == "COMMENTED" or .state == "APPROVED" or .state == "CHANGES_REQUESTED"))] | last | .html_url // empty' <<<"$reviews")
+            if [[ -n "$review" ]]; then
+              echo "Completed Copilot review of $HEAD_SHA: $review" >> "$GITHUB_STEP_SUMMARY"
+              echo "This confirms review completion, not approval or absence of findings. Review conversations must be resolved before merge." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::No completed Copilot review was found for the exact PR head within the timeout."
+          exit 1
