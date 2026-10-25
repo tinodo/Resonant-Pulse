@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$Payload,[string]$Screenshot = 'artifacts\startup.png')
 $ErrorActionPreference = 'Stop'
-$process = Start-Process -FilePath (Join-Path ([IO.Path]::GetFullPath($Payload)) 'ResonantPulse.exe') -PassThru
+$artifactDirectory = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Screenshot))
+$process = Start-Process -FilePath (Join-Path ([IO.Path]::GetFullPath($Payload)) 'ResonantPulse.exe') -PassThru -RedirectStandardOutput (Join-Path $artifactDirectory 'application-stdout.log') -RedirectStandardError (Join-Path $artifactDirectory 'application-stderr.log')
 try {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
@@ -25,7 +26,16 @@ try {
     Write-Output "Native window activated and remained responsive. Title: $($process.MainWindowTitle)"
     Write-Output 'This startup check does not establish audio timing, interaction or accessibility acceptance.'
 } finally {
-    $process.Refresh()
-    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
-    $process.Dispose()
+    try {
+        $log = Join-Path $env:LOCALAPPDATA 'ResonantPulse\Logs\app.log'
+        if (Test-Path -LiteralPath $log) {
+            Copy-Item -LiteralPath $log -Destination (Join-Path $artifactDirectory 'native-app.log')
+        }
+        & wevtutil.exe qe Application '/q:*[System[(EventID=1000 or EventID=1026) and TimeCreated[timediff(@SystemTime) <= 120000]]]' /f:text /c:6 /rd:true | Set-Content (Join-Path $artifactDirectory 'native-events.log')
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'Windows application-event diagnostics could not be collected.' }
+    } finally {
+        $process.Refresh()
+        if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+        $process.Dispose()
+    }
 }

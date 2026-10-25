@@ -16,9 +16,13 @@ The budgets below are explicit defensive limits, **not achieved benchmarks**.
   Supply the audio adapter's absolute render cursor, not a UI timer.
 - `WaveExporter.ExportAsync` writes finite stereo PCM16 WAV and
   `<path>.manifest.json`. It uses `plan.DefaultMasterGain`, never loops, and
-  truncates click tails at `TotalFrames`. WAV and companion are individually
-  atomic, not a two-file transaction; a companion failure explicitly reports
-  that the WAV already exists.
+  truncates click tails at `TotalFrames`. Both outputs are staged and flushed
+  before either target changes. Cancellation is honored before commit; commit
+  and rollback are noncancellable. A failed commit restores prior contents or
+  absence; rollback failure explicitly warns of a potentially mismatched pair
+  and retains original backups for recovery. Cleanup failure distinguishes a
+  completed pair from a failed export. This is not crash-atomic across two
+  files and does not support concurrent writers to the same destinations.
 - `MidiExporter.Preflight` reports PPQ, timing-error bound, errors and notices.
   `ExportAsync` writes SMF type 0 or throws an actionable `ArgumentException`.
 - `DocumentStore.SaveAsync/LoadAsync` implement local schema-one JSON.
@@ -241,8 +245,8 @@ Do not advertise the entire approved product as complete based on this Core.
 6. Every resource limit just below/at/above, including seam density, short
    loops, rational-size bounds, nested/cyclic setlists and unknown sounds.
 7. WAV headers/frame length/sample payload/finite tails, manifest contents,
-   RIFF-size rejection, destination failure, cancellation and partial-companion
-   error. MIDI byte-level parse, PPQ exactness, dotted-quarter tempo conversion,
+   RIFF-size rejection, destination failure, cancellation, manifest-commit
+   failure preservation and WAV-commit rollback. MIDI byte-level parse, PPQ exactness, dotted-quarter tempo conversion,
    meter changes, seeded realization, note pairing, metadata, 1 BPM rejection,
    continuous-ramp/PPQ/tick/rounding preflight errors.
 8. JSON round trips, missing/wrong/future schema, duplicate/unknown fields,

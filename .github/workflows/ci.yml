@@ -21,7 +21,7 @@ concurrency:
 jobs:
   core:
     name: Musical correctness
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,7 +82,12 @@ jobs:
         if: matrix.arch == 'x64' && always()
         with:
           name: native-startup
-          path: artifacts/startup.png
+          path: |
+            artifacts/startup.png
+            artifacts/application-stdout.log
+            artifacts/application-stderr.log
+            artifacts/native-app.log
+            artifacts/native-events.log
           if-no-files-found: warn
       - name: Build unsigned development MSIX
         run: |
@@ -104,4 +109,25 @@ jobs:
         with:
           name: dependency-locks-app
           path: src/ResonantPulse.App/packages.lock.json
+          if-no-files-found: error
+
+  windows-file-integrity:
+    name: Windows file integrity
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Exercise Windows file-lock and export rollback semantics
+        run: dotnet test tests/ResonantPulse.Core.Tests/ResonantPulse.Core.Tests.csproj -c Release --filter FullyQualifiedName~WaveExporterTests --logger "trx;LogFileName=windows-integrity.trx" --results-directory TestResults-Windows
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: windows-file-integrity-results
+          path: TestResults-Windows/
           if-no-files-found: error

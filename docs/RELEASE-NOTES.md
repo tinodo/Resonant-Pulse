@@ -8,5 +8,6 @@ SHA-256 checksum files accompany each download.
 
 This is a preview, not the completed full product or a hardware-certified timing
 instrument. See the repository's docs/DELIVERY.md for current capability evidence,
-known gaps and Store-publication prerequisites. No claimed Store availability,
+docs/CAPABILITIES.md for explicit known gaps, and docs/RELEASING.md for
+Store-publication prerequisites. No claimed Store availability,
 ARM64 hardware result or acoustic accuracy follows from this release.

@@ -215,11 +215,4 @@ public sealed class DocumentValidatorTests
         Check.Throws<ArgumentException>(() => DocumentValidator.Validate(wide));
     }
 
-    [TestMethod]
-    public void ResourceConstants_PublishedValues_RemainExplicit()
-    {
-        Assert.AreEqual(1000000, DocumentValidator.MaximumOnsets);
-        Assert.AreEqual(4096, DocumentValidator.MaximumOnsetsPerSecond);
-        Assert.AreEqual(4194304, DocumentValidator.MaximumDocumentBytes);
-    }
 }

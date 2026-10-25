@@ -49,8 +49,8 @@ public sealed class ScheduleCompilerTests
         // Independent goldens: q=t+t²/8 gives t=sqrt(22)-4 for q=3/4,
         // and t=8/sqrt(3)-4 for q=2/3. Round the corresponding 48 kHz times once.
         Assert.AreEqual(expected, plan.Onsets.First(o => o.LaneIndex == -2).Frame);
-        Assert.AreEqual(plan.FrameAtQuarter(new Rational(n, denominator)), expected);
-        Assert.AreNotEqual((long)Math.Round(plan.FrameAtQuarter(1) * swing), expected);
+        Assert.AreEqual(expected, plan.FrameAtQuarter(new Rational(n, denominator)));
+        Assert.AreNotEqual(expected, (long)Math.Round(plan.FrameAtQuarter(1) * swing));
     }
 
     [TestMethod]

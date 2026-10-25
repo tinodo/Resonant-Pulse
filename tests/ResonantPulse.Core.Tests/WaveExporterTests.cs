@@ -136,4 +136,78 @@ public sealed class WaveExporterTests
         await Check.ThrowsAsync<ArgumentNullException>(() => WaveExporter.ExportAsync(temp.File("null.wav"), null!));
         Assert.AreEqual(0, Directory.GetFiles(temp.Root).Length); temp.NoTemps();
     }
+
+    [TestMethod]
+    public async Task Export_Replacement_CommitsAssociatedWaveAndManifestAndRemovesBackups()
+    {
+        using var temp = new TempDirectory(); string path = temp.File("replace.wav");
+        await WaveExporter.ExportAsync(path, Check.Plan());
+        byte[] original = await File.ReadAllBytesAsync(path);
+        var document = Check.Document(); document.Seed = 913; document.Settings.Tempo = 90;
+        var replacement = Check.Plan(document);
+
+        await WaveExporter.ExportAsync(path, replacement);
+
+        byte[] wave = await File.ReadAllBytesAsync(path);
+        using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".manifest.json"));
+        Assert.AreNotEqual(original.Length, wave.Length);
+        Assert.AreEqual(replacement.TotalFrames, manifest.RootElement.GetProperty("TotalFrames").GetInt64());
+        Assert.AreEqual(913, manifest.RootElement.GetProperty("Seed").GetInt32());
+        Assert.AreEqual(44L + 4 * manifest.RootElement.GetProperty("TotalFrames").GetInt64(), wave.LongLength);
+        Assert.AreEqual((uint)(wave.Length - 44), BinaryPrimitives.ReadUInt32LittleEndian(wave.AsSpan(40)));
+        Assert.AreEqual(2, Directory.GetFiles(temp.Root).Length); temp.NoTemps();
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Export_BlockedManifestCommit_PreservesPriorWaveContentsOrAbsence(bool existingWave)
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Requires Windows delete-sharing enforcement for File.Replace.");
+        using var temp = new TempDirectory(); string path = temp.File("blocked-manifest.wav");
+        string manifestPath = path + ".manifest.json";
+        await WaveExporter.ExportAsync(path, Check.Plan());
+        byte[] originalWave = await File.ReadAllBytesAsync(path);
+        byte[] originalManifest = await File.ReadAllBytesAsync(manifestPath);
+        if (!existingWave) File.Delete(path);
+        var document = Check.Document(); document.Seed = 914; document.Settings.Tempo = 90;
+
+        using (var locked = new FileStream(manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var error = await Check.ThrowsAsync<IOException>(() => WaveExporter.ExportAsync(path, Check.Plan(document)));
+            Assert.IsTrue(error.Message.Contains("commit failed", StringComparison.Ordinal));
+            Assert.IsTrue(error.Message.Contains("restored", StringComparison.Ordinal));
+        }
+
+        if (existingWave) Check.Sequence(originalWave, await File.ReadAllBytesAsync(path));
+        else Assert.IsFalse(File.Exists(path));
+        Check.Sequence(originalManifest, await File.ReadAllBytesAsync(manifestPath));
+        Assert.AreEqual(existingWave ? 2 : 1, Directory.GetFiles(temp.Root).Length); temp.NoTemps();
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Export_BlockedWaveCommit_RollsBackManifestContentsOrAbsence(bool existingManifest)
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Requires Windows delete-sharing enforcement for File.Replace.");
+        using var temp = new TempDirectory(); string path = temp.File("blocked-wave.wav");
+        string manifestPath = path + ".manifest.json";
+        await WaveExporter.ExportAsync(path, Check.Plan());
+        byte[] originalWave = await File.ReadAllBytesAsync(path);
+        byte[] originalManifest = await File.ReadAllBytesAsync(manifestPath);
+        if (!existingManifest) File.Delete(manifestPath);
+        var document = Check.Document(); document.Seed = 915; document.Settings.Tempo = 90;
+
+        using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var error = await Check.ThrowsAsync<IOException>(() => WaveExporter.ExportAsync(path, Check.Plan(document)));
+            Assert.IsTrue(error.Message.Contains("restored", StringComparison.Ordinal));
+        }
+
+        Check.Sequence(originalWave, await File.ReadAllBytesAsync(path));
+        if (existingManifest) Check.Sequence(originalManifest, await File.ReadAllBytesAsync(manifestPath));
+        else Assert.IsFalse(File.Exists(manifestPath));
+        Assert.AreEqual(existingManifest ? 2 : 1, Directory.GetFiles(temp.Root).Length); temp.NoTemps();
+    }
 }
