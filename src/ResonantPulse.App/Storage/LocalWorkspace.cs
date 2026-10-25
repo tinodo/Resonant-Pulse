@@ -76,16 +76,18 @@ public sealed class LocalWorkspace
         string[] paths;
         try
         {
-            // Keep the first limit+1 paths in ordinal order regardless of the
-            // filesystem's enumeration order. Metadata memory is bounded, and
-            // at most limit documents are loaded. The extra path detects overflow.
-            var candidates = new SortedSet<string>(StringComparer.Ordinal);
-            foreach (var path in Directory.EnumerateFiles(LibraryPath, "*.pulse"))
+            paths = await Task.Run(() =>
             {
-                candidates.Add(path);
-                if (candidates.Count > LibraryScanLimit + 1) candidates.Remove(candidates.Max!);
-            }
-            paths = candidates.ToArray();
+                // Directory enumeration is synchronous; keep it off the UI thread.
+                // Retain limit+1 ordinal paths to bound memory and detect overflow.
+                var candidates = new SortedSet<string>(StringComparer.Ordinal);
+                foreach (var path in Directory.EnumerateFiles(LibraryPath, "*.pulse"))
+                {
+                    candidates.Add(path);
+                    if (candidates.Count > LibraryScanLimit + 1) candidates.Remove(candidates.Max!);
+                }
+                return candidates.ToArray();
+            });
         }
         catch (DirectoryNotFoundException) when (!File.Exists(LibraryPath))
         {
