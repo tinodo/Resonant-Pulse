@@ -102,6 +102,19 @@ public sealed class RationalTests
     }
 
     [TestMethod]
+    [DataRow("1.5\n")]
+    [DataRow("1.5\r\n")]
+    [DataRow("1/2\n")]
+    [DataRow("1e2\n")]
+    [DataRow("-1.25\n")]
+    [DataRow("1/-2\n")]
+    public void Parse_TrailingNewlines_AreRejectedByParserAndJsonImport(string text)
+    {
+        Check.Throws<FormatException>(() => Rational.Parse(text));
+        Check.Throws<JsonException>(() => JsonSerializer.Deserialize<Rational>(JsonSerializer.Serialize(text)));
+    }
+
+    [TestMethod]
     public void FromDouble_RoundTripDecimalAndNonfiniteValues_UsesDocumentedContract()
     {
         Assert.AreEqual(new Rational(1, 10), Rational.FromDouble(0.1));

@@ -38,12 +38,12 @@ public readonly struct Rational : IComparable<Rational>, IEquatable<Rational>
         var slash = value.IndexOf('/');
         if (slash >= 0)
         {
-            if (!Regex.IsMatch(value, @"^[+-]?[0-9]+/[+-]?[0-9]+$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking))
+            if (!Regex.IsMatch(value, @"\A[+-]?[0-9]+/[+-]?[0-9]+\z", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking))
                 throw new FormatException("Expected numerator/denominator.");
             return new(BigInteger.Parse(value[..slash], CultureInfo.InvariantCulture),
                 BigInteger.Parse(value[(slash + 1)..], CultureInfo.InvariantCulture));
         }
-        if (!Regex.IsMatch(value, @"^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking))
+        if (!Regex.IsMatch(value, @"\A[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking))
             throw new FormatException("Expected a rational fraction or invariant decimal.");
         var parts = value.Split(new[] { 'e', 'E' });
         if (parts.Length > 2) throw new FormatException("Invalid rational exponent.");

@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using ResonantPulse.App.Audio;
 using ResonantPulse.App.Localization;
 
 namespace ResonantPulse.App;
@@ -43,30 +42,9 @@ public sealed partial class MainWindow
         });
         reduced.Checked += SaveMotion;
         reduced.Unchecked += SaveMotion;
-        var outputs = new ComboBox { Header = Text.Get("Output"), HorizontalAlignment = HorizontalAlignment.Stretch };
-        Identify(outputs, "AudioOutputPicker", Text.Get("Output"));
-        var loadingDevices = false;
-        async Task RefreshOutputsAsync()
-        {
-            loadingDevices = true;
-            try
-            {
-                await this.RefreshOutputsAsync();
-                outputs.ItemsSource = _outputDevices;
-                outputs.SelectedItem = _outputDevices.FirstOrDefault(device => device.Id == _preferences.OutputId);
-            }
-            finally { loadingDevices = false; }
-        }
-        outputs.SelectionChanged += async (_, _) =>
-        {
-            if (loadingDevices || outputs.SelectedItem is not OutputDevice device) return;
-            await GuardAsync(() => SelectOutputAsync(device));
-        };
-        _ = GuardAsync(RefreshOutputsAsync);
         var bars = Number("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
         var panel = Column(Heading(Text.Get("Settings")), Flow(language, theme), reduced,
-            outputs, Copy("OutputPolicy"),
-            ActionButton("RefreshDevices", "RefreshAudioOutputs", RefreshOutputsAsync),
+            Heading(Text.Get("Output")), Copy("OutputPolicy"),
             bars,
             ActionButton("Apply", "SaveExportBars", async () =>
             {

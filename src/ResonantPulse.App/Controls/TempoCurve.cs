@@ -28,8 +28,7 @@ public sealed class TempoCurve : StackPanel
         Children.Add(_range);
         AutomationProperties.SetAutomationId(this, "ResolvedTempoCurve");
         AutomationProperties.SetName(this, Text.Get("TempoChartAxis"));
-        ActualThemeChanged += (_, _) => RefreshBrushes();
-        Loaded += (_, _) => RefreshBrushes();
+        ThemeBrushes.Track(this, RefreshBrushes);
     }
 
     private void RefreshBrushes()
