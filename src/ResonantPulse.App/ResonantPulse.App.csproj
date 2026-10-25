@@ -28,6 +28,11 @@
     <EnableMsixTooling>false</EnableMsixTooling>
     <AppxPackage>false</AppxPackage>
     <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
+    <!-- Keep application resource generation enabled without MSIX generation.
+         Use the supported PRI properties, independently of the CLR namespace. -->
+    <AppxGeneratePriEnabled>true</AppxGeneratePriEnabled>
+    <ProjectPriIndexName>$(AssemblyName)</ProjectPriIndexName>
+    <ProjectPriFileName>$(AssemblyName).pri</ProjectPriFileName>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
@@ -35,4 +40,37 @@
     <Content Include="Assets\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\App.ico" Condition="Exists('Assets\App.ico')" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- The unpackaged MRT/XAML targets generate the project PRI and compiled
+       pages, but their copy-to-build-output items do not all reach .NET Publish.
+       Hosted run 40216884229 published framework PRIs only: no application PRI
+       or XBF, causing LoadComponent(ms-appx:///MainWindow.xaml) to fail.
+       Publish the actual generated artifacts with their SDK-assigned paths;
+       never rename the resource URI or copy source XAML in place of compiled XBF. -->
+  <Target Name="IncludePortableCompiledXamlResources"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(DistributionMode)' == 'Portable'">
+    <Error Condition="'$(ProjectPriFullPath)' == '' or '$(ProjectPriFileName)' == ''"
+           Text="Portable publish requires the generated application PRI. ProjectPriFullPath/ProjectPriFileName were not set by the resource tooling." />
+    <ItemGroup>
+      <_PulseCompiledXamlToPublish Include="@(_ProcessedXamlFilesToCopyLocalWithTargetPath)"
+                                   Condition="'%(_ProcessedXamlFilesToCopyLocalWithTargetPath.Extension)' == '.xbf'" />
+      <_PulseXamlResourcesToPublish Include="$(ProjectPriFullPath)">
+        <TargetPath>$(ProjectPriFileName)</TargetPath>
+      </_PulseXamlResourcesToPublish>
+      <_PulseXamlResourcesToPublish Include="@(_PulseCompiledXamlToPublish)" />
+    </ItemGroup>
+    <Error Condition="'@(_PulseCompiledXamlToPublish)' == ''"
+           Text="Portable publish requires generated compiled XAML pages, but the XAML output group is empty." />
+    <Error Condition="!Exists('%(_PulseXamlResourcesToPublish.Identity)')"
+           Text="Generated XAML resource is missing: %(_PulseXamlResourcesToPublish.Identity)" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_PulseXamlResourcesToPublish)"
+                             Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>%(_PulseXamlResourcesToPublish.TargetPath)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+    <Message Importance="High"
+             Text="Portable compiled XAML: @(_PulseXamlResourcesToPublish->'%(Identity) =&gt; %(TargetPath)', '; ')" />
+  </Target>
 </Project>

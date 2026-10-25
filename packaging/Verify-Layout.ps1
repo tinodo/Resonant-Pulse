@@ -5,6 +5,10 @@ $required = @(
     'ResonantPulse.exe',
     'ResonantPulse.dll',
     'ResonantPulse.runtimeconfig.json',
+    'ResonantPulse.pri',
+    'App.xbf',
+    'MainWindow.xbf',
+    'Themes\Resonant.xbf',
     'Microsoft.UI.Xaml.dll',
     'coreclr.dll'
 )
