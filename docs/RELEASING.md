@@ -29,8 +29,9 @@ Dependabot checks NuGet and GitHub Actions weekly. The repository's active
 `Automatic Copilot review` ruleset requests real reviews for main-targeting PRs,
 including new pushes. `copilot-review.yml` verifies that native rule and waits
 for the real `copilot-pull-request-reviewer[bot]` review of the exact PR head.
-It uses read-only permissions and never checks out or executes PR code under
-`pull_request_target`; no owner token is stored merely to review Dependabot PRs.
+It uses the ordinary `pull_request` event with read-only permissions and never
+checks out or executes PR code; no owner token is stored merely to review
+Dependabot PRs.
 A missing review or timeout fails visibly. Copilot availability/entitlement is
 account-dependent. Completion is not approval or an assertion of zero findings;
 review conversations must still be resolved before merge.

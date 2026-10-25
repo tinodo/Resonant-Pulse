@@ -9,6 +9,56 @@ namespace ResonantPulse.Core.Tests;
 public sealed class WaveExporterTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Export_ConcurrentSameDestination_CommitsOneMatchingPairWithoutLosingSuccessfulRequests(bool existing)
+    {
+        using var temp = new TempDirectory();
+        string path = temp.File("shared.wav");
+        if (existing) await WaveExporter.ExportAsync(path, Check.Plan());
+        var plans = Enumerable.Range(1, 8).Select(index =>
+        {
+            var document = Check.Document();
+            document.Seed = 1000 + index;
+            document.Settings.Tempo = 80 + index * 5;
+            document.Settings.MasterGain = 0.1f + index * 0.05f;
+            return Check.Plan(document);
+        }).ToArray();
+        var start = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = plans.Select(async plan =>
+        {
+            await start.Task;
+            await WaveExporter.ExportAsync(path, plan);
+        }).ToArray();
+
+        start.SetResult(true);
+        await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(30));
+
+        using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".manifest.json"));
+        var winner = plans.Single(plan => plan.Seed == manifest.RootElement.GetProperty("Seed").GetInt32());
+        string expectedPath = temp.File("expected.wav");
+        await WaveExporter.ExportAsync(expectedPath, winner);
+        Check.Sequence(await File.ReadAllBytesAsync(expectedPath), await File.ReadAllBytesAsync(path));
+        Assert.AreEqual(await File.ReadAllTextAsync(expectedPath + ".manifest.json"),
+            await File.ReadAllTextAsync(path + ".manifest.json"));
+        Assert.IsTrue(pending.All(task => task.IsCompletedSuccessfully));
+        Assert.AreEqual(4, Directory.GetFiles(temp.Root).Length);
+        temp.NoTemps();
+    }
+
+    [TestMethod]
+    public async Task Export_RejectedRequest_ReleasesQueueForFollowingExport()
+    {
+        using var temp = new TempDirectory();
+        await Check.ThrowsAsync<ArgumentException>(() => WaveExporter.ExportAsync(temp.File("invalid:stream"), Check.Plan()));
+        string path = temp.File("after-rejection.wav");
+        await WaveExporter.ExportAsync(path, Check.Plan()).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(File.Exists(path));
+        Assert.IsTrue(File.Exists(path + ".manifest.json"));
+        temp.NoTemps();
+    }
+
+    [TestMethod]
     public async Task Export_HeaderAndLengths_EncodeFiniteStereoPcm16()
     {
         using var temp = new TempDirectory(); var p = Check.Plan();
@@ -209,5 +259,11 @@ public sealed class WaveExporterTests
         if (existingManifest) Check.Sequence(originalManifest, await File.ReadAllBytesAsync(manifestPath));
         else Assert.IsFalse(File.Exists(manifestPath));
         Assert.AreEqual(existingManifest ? 2 : 1, Directory.GetFiles(temp.Root).Length); temp.NoTemps();
+
+        await WaveExporter.ExportAsync(path, Check.Plan(document)).WaitAsync(TimeSpan.FromSeconds(10));
+        using var recovered = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
+        Assert.AreEqual(915, recovered.RootElement.GetProperty("Seed").GetInt32());
+        Assert.IsTrue(File.Exists(path));
+        temp.NoTemps();
     }
 }

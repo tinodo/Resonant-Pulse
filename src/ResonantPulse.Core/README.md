@@ -21,8 +21,11 @@ The budgets below are explicit defensive limits, **not achieved benchmarks**.
   and rollback are noncancellable. A failed commit restores prior contents or
   absence; rollback failure explicitly warns of a potentially mismatched pair
   and retains original backups for recovery. Cleanup failure distinguishes a
-  completed pair from a failed export. This is not crash-atomic across two
-  files and does not support concurrent writers to the same destinations.
+  completed pair from a failed export. Calls through this API queue one at a
+  time, including rendering, commit, rollback and cleanup; cancellation while
+  queued does not acquire the gate. This bounds export concurrency even for
+  different destinations. This is not crash-atomic across two files and does
+  not coordinate external processes modifying the destinations.
 - `MidiExporter.Preflight` reports PPQ, timing-error bound, errors and notices.
   `ExportAsync` writes SMF type 0 or throws an actionable `ArgumentException`.
 - `DocumentStore.SaveAsync/LoadAsync` implement local schema-one JSON.

@@ -8,11 +8,11 @@ or a successful compile as the complete workstation.
 |---|---|---|
 | Requirements/competitive research | Complete design baseline | design/metronome-design.md and design/metronome-review.md |
 | Architecture/contracts | Implementing | IMPLEMENTATION-CONTRACT.md |
-| Musical engine | Hosted regression suite and Windows rollback tests passed; ladder aggregate-bound regressions added | Run 40220367874 at ba58e75: Linux 173 executed/passed of 177 cases; four Windows-specific cases covered by the separate Windows file-integrity job; latest changes require fresh gates |
-| App semantic regressions | Twenty actual-source cases passed; rapid-return/control-reset/overflow regressions added | Run 40220367874: 20/20 passed; additional corrections must pass before merge |
+| Musical engine | Hosted regression suite and Windows rollback tests passed; concurrent-export regressions added | Run 40221892523 at 463c14a: Linux 182 executed/passed of 186 cases; four Windows-specific cases covered by the separate Windows file-integrity job; latest changes require fresh gates |
+| App semantic regressions | Twenty-five actual-source cases passed; setlist concurrency correction in progress | Run 40221892523: 25/25 passed; additional corrections must pass before merge |
 | Native application | x64/ARM64 compilation and real x64 native startup passed | Run 40218751867 at a46ba31: dark first launch, complete native frame within a 1024x720 work area, workspace initialized stopped without playback/capture |
 | CI/download/MSIX | Hosted CI, native startup and real development-package install/activation/identity/uninstall passed; public download not yet published | Run 40219994193 at d1a983f; release requires fresh gates on protected main |
-| Dependabot/Copilot | Dependency review and CodeQL passed; native automatic review enabled; three actual reviews completed | First twelve findings fixed and confirmed resolved; latest asynchronous-edit, control-reset, overflow and aggregate-budget fixes require fresh validation |
+| Dependabot/Copilot | Dependency review and CodeQL passed; native automatic review exercised; four actual reviews completed | Prior sixteen findings addressed; latest review identified WAV export and setlist selection concurrency corrections requiring fresh gates |
 | Physical-device/accessibility validation | Not established | Requires actual installed app/device results |
 | Store identity | Supplied and configured | packaging/StoreIdentity.json; owner-provided Partner Center screenshot, 25 October 2026 |
 | Store first publication | Not submitted; Partner Center certification and authorization still required | RELEASING.md |

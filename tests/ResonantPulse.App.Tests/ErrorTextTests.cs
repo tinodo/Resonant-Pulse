@@ -65,7 +65,7 @@ public sealed class ErrorTextTests
         var previousCulture = CultureInfo.CurrentCulture;
         var previousUiCulture = CultureInfo.CurrentUICulture;
         var keys = new[] { "TimingPendingEdits", "TimingTargetChanged", "LibraryPartial", "LibraryFailedPaths",
-            "LibraryLimited", "LibraryOverflow" };
+            "LibraryLimited", "LibraryOverflow", "StageBusy" };
         var translations = keys.ToDictionary(key => key, _ => new HashSet<string>());
         try
         {
@@ -81,6 +81,7 @@ public sealed class ErrorTextTests
                 var paths = Path.Combine("Library", "corrupt.pulse");
                 StringAssert.Contains(Text.Format("LibraryFailedPaths", 1, paths), paths);
                 StringAssert.Contains(Text.Format("LibraryOverflow", 1000), "1000");
+                Assert.AreNotEqual(Text.Get("Locked"), Text.Get("StageBusy"));
                 Assert.AreEqual(Text.Get("TimingPendingEdits"),
                     ErrorText.Explain(new InvalidOperationException(Text.Get("TimingPendingEdits"))));
             }

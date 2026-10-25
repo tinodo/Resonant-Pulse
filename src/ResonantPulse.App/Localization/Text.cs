@@ -234,6 +234,7 @@ public static class Text
         Add("Lock", "Lock editing", "Bewerken vergrendelen", "Bearbeitung sperren", "Verrouiller les modifications", "Bloquear edición");
         Add("Unlock", "Unlock editing", "Bewerken ontgrendelen", "Bearbeitung entsperren", "Déverrouiller les modifications", "Desbloquear edición");
         Add("Locked", "Editing locked", "Bewerken vergrendeld", "Bearbeitung gesperrt", "Modifications verrouillées", "Edición bloqueada");
+        Add("StageBusy", "A Stage operation is in progress. Wait for it to finish, then try again.", "Er wordt een podiumactie uitgevoerd. Wacht tot deze klaar is en probeer het opnieuw.", "Eine Bühnenaktion läuft. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es erneut.", "Une opération de scène est en cours. Attendez sa fin, puis réessayez.", "Hay una operación de escenario en curso. Espere a que termine y vuelva a intentarlo.");
         Add("AlwaysOnTop", "Always on top", "Altijd bovenaan", "Immer im Vordergrund", "Toujours au premier plan", "Siempre visible");
         Add("Search", "Search local library", "Lokale bibliotheek zoeken", "Lokale Bibliothek durchsuchen", "Rechercher dans la bibliothèque locale", "Buscar en biblioteca local");
         Add("SaveLibrary", "Save revision to library", "Versie in bibliotheek opslaan", "Fassung in Bibliothek speichern", "Enregistrer la version en bibliothèque", "Guardar versión en biblioteca");

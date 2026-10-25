@@ -7,14 +7,24 @@ namespace ResonantPulse.Core;
 /// <summary>Finite stereo 16-bit PCM RIFF export. Uses document master gain and the exact seeded audible schedule, without looping.</summary>
 public static class WaveExporter
 {
+    private static readonly SemaphoreSlim Exports = new(1, 1);
+
     /// <summary>
     /// Prepares both files before committing. Ordinary commit failures roll back prior replacements.
-    /// Cancellation is honored before commit, not during commit/rollback. This is not crash-atomic
-    /// across two files; callers must not concurrently export to or modify the same destinations.
+    /// Calls through this API are serialized through rendering, commit, rollback and cleanup.
+    /// Cancellation is honored while queued and before commit, not during commit/rollback.
+    /// This is not crash-atomic across two files; external writers must not modify the destinations.
     /// </summary>
     public static async Task ExportAsync(string path, RenderPlan plan, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        await Exports.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await ExportCoreAsync(path, plan, cancellationToken).ConfigureAwait(false); }
+        finally { Exports.Release(); }
+    }
+
+    private static async Task ExportCoreAsync(string path, RenderPlan plan, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         long byteCount = checked(plan.TotalFrames * 4);
         if (byteCount > uint.MaxValue - 36)

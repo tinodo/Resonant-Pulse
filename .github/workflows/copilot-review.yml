@@ -1,7 +1,7 @@
 name: Copilot review
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           # Native rules request reviews, including bot PRs, without storing an owner token.
-          # No checkout: pull_request_target must never execute untrusted PR code.
+          # No checkout or PR code execution; only read-only review metadata.
           rules=$(gh api "repos/$GH_REPO/rules/branches/$BASE_REF" -H 'X-GitHub-Api-Version: 2026-03-10')
           jq -e 'any(.[]; .type == "copilot_code_review" and .parameters.review_on_push == true)' \
             <<<"$rules" >/dev/null || { echo "::error::Native automatic Copilot review is not enabled for this base branch."; exit 1; }
