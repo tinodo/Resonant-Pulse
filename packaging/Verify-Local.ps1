@@ -18,6 +18,15 @@ $ErrorActionPreference = 'Stop'
 $Exe = [IO.Path]::GetFullPath($Exe)
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
 if (-not (Test-Path -LiteralPath $Exe)) { throw "Build the app first; not found: $Exe" }
+# A build from before RESONANT_PULSE_HOME existed (preview.5 and older) ignores it and would open, and could play, the real
+# projects and settings of whoever runs this script. Refuse to start any build that cannot honour the scratch folder.
+$assembly = [IO.Path]::ChangeExtension($Exe, '.dll')
+if (-not (Test-Path -LiteralPath $assembly)) { throw "Cannot confirm that this build keeps its data in a scratch folder: $assembly was not found." }
+$latin1 = [Text.Encoding]::GetEncoding(28591)
+$marker = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('RESONANT_PULSE_HOME'))
+if (-not $latin1.GetString([IO.File]::ReadAllBytes($assembly)).Contains($marker)) {
+    throw "Refusing to run ${Exe}: it does not read RESONANT_PULSE_HOME, so it would use the real data folder. Build the current source."
+}
 $null = New-Item -ItemType Directory -Force -Path $OutputPath
 if (-not $Visible -and -not $InsidePrivateDesktop) {
     $log = Join-Path $OutputPath 'verify-local.log'

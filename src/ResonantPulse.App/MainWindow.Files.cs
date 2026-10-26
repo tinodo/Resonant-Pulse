@@ -39,7 +39,7 @@ public sealed partial class MainWindow
                     if (!await ConfirmAsync(Text.Get("Replace"))) return;
                     await ReplaceDocumentAsync(new PulseDocument { Name = Text.Get("OpenPractice") });
                 })),
-            Copy("EmptyLibrary"), Copy("ExportNotice"),
+            Copy("ExportNotice"),
             CommandFlow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false)),
                 ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true))), BuildPresets());
         _ = GuardAsync(RefreshLibraryAsync);
@@ -78,6 +78,11 @@ public sealed partial class MainWindow
             Identify(row, $"LibraryProject{_libraryList.Items.Count}", item.Name);
             _libraryList.Items.Add(row);
         }
+        // With nothing saved the list shrinks to its hint instead of leaving a blank block above the buttons.
+        var empty = _libraryList.Items.Count == 0;
+        _libraryList.MinHeight = empty ? 0 : 140;
+        _libraryList.Height = empty ? double.NaN : 300;
+        _libraryList.Footer = _library.Count == 0 ? Copy("EmptyLibrary") : null;
     }
 
     private async Task<string?> PickSavePathAsync(string extension, string description)

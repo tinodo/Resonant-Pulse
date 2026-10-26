@@ -34,6 +34,14 @@
     <ProjectPriIndexName>$(AssemblyName)</ProjectPriIndexName>
     <ProjectPriFileName>$(AssemblyName).pri</ProjectPriFileName>
   </PropertyGroup>
+  <!-- Local visual verification only (see MainWindow.UiTest.cs): -p:UiTest=true compiles in a hook that lets an
+       out-of-process UI Automation driver ask the app to render its own XAML tree to a PNG. Never set in CI or releases. -->
+  <PropertyGroup Condition="'$(UiTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);UITEST</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(UiTest)' != 'true'">
+    <Compile Remove="MainWindow.UiTest.cs" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <ProjectReference Include="..\ResonantPulse.Core\ResonantPulse.Core.csproj" />

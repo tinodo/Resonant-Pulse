@@ -16,9 +16,6 @@ namespace ResonantPulse.App;
 
 public sealed partial class MainWindow
 {
-    // Width reserved on both sides of the instrument when the secondary rail is docked, so the
-    // instrument stays exactly centred.
-    private const double RailReserve = 272;
     private BeatStrip? _beatStrip;
     private Button? _tempoEdit;
     private string _tempoEditName = "";
@@ -74,11 +71,78 @@ public sealed partial class MainWindow
         };
         var hero = new Grid();
         hero.Children.Add(dial);
-        var railDocked = false;
+
+        // Page tools. They act on the session being played (practice limits, saving and opening it, help), so they belong on
+        // this page rather than in Settings, but stay secondary to the instrument: one quiet strip in the corner under the
+        // Settings item, in the same full-contrast text.
+        var practice = BuildPracticePanel();
+        var project = BuildProjectPanel();
+        var help = BuildHelpPanel();
+        var rail = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top
+        };
+        Identify(rail, "PlaySettingsStrip", Text.Get("PlayTools"));
+        var railLabels = new List<TextBlock>();
+        foreach (var (panel, key, id, glyph, hintKey) in new[]
+        {
+            (practice, "PracticeTab", "PracticeTimer", "\uE916", "PracticeTimer"),
+            (project, "ProjectTab", "ProjectOptions", "\uE8B7", "ProjectOptions"),
+            (help, "HelpTab", "PlayHelp", "\uE897", "Help")
+        })
+        {
+            var button = new Button { Flyout = panel.Flyout, Style = ResonantStyle("ToolButtonStyle") };
+            LabelButton(button, key, glyph);
+            if (button.Content is StackPanel { Children: [_, TextBlock label] }) railLabels.Add(label);
+            Identify(button, id, Text.Get(key));
+            // The tooltip carries the full name, which matters most when only the icon is shown.
+            ToolTipService.SetToolTip(button, Text.Get(hintKey));
+            rail.Children.Add(button);
+        }
+        var railInRow = false;
+        var railLabelsShown = true;
+        double railLabelledWidth = 0, railIconsWidth = 0;
+        double MeasureRail(bool labels)
+        {
+            foreach (var label in railLabels) label.Visibility = labels ? Visibility.Visible : Visibility.Collapsed;
+            rail.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            return rail.DesiredSize.Width - rail.Margin.Left - rail.Margin.Right;
+        }
+        void PlaceRail()
+        {
+            if (hero.ActualWidth <= 0 || hero.ActualHeight <= 0) return;
+            if (railLabelledWidth <= 0)
+            {
+                railLabelledWidth = MeasureRail(true);
+                railIconsWidth = MeasureRail(false);
+            }
+            // The room the dial would have if the strip took none of it. Taking a row of its own shrinks the hero, so that
+            // height is added back; otherwise the answer could flip every time the strip moved.
+            var room = hero.ActualHeight + (railInRow ? Math.Max(PlayLayout.StripHeight, rail.ActualHeight) : 0);
+            var plan = PlayLayout.Choose(hero.ActualWidth, room, railLabelledWidth, railIconsWidth);
+            foreach (var label in railLabels) label.Visibility = plan.ShowLabels ? Visibility.Visible : Visibility.Collapsed;
+            railLabelsShown = plan.ShowLabels;
+            railInRow = plan.Placement == RailPlacement.Row;
+            Grid.SetRow(rail, railInRow ? 0 : 1);
+            // The buttons' own padding hangs outside the page edge, so the last label (or icon) ends exactly where the
+            // Settings item's text ends.
+            rail.Margin = new Thickness(0, 0, plan.ShowLabels ? -12 : -14, 0);
+        }
+        // The widths are measured once per page, so a change of Windows text size (which resizes the labels but not the
+        // page) would leave them stale. The strip's own width then no longer matches the measurement for its current
+        // mode: measure again and place it again.
+        rail.SizeChanged += (_, args) =>
+        {
+            if (!PlayLayout.StripWidthIsStale(railLabelsShown ? railLabelledWidth : railIconsWidth, args.NewSize.Width)) return;
+            railLabelledWidth = railIconsWidth = 0;
+            PlaceRail();
+        };
+
         void SizeInstrument()
         {
-            var width = hero.ActualWidth - (railDocked ? RailReserve : 0);
-            var size = Math.Clamp(Math.Min(width, hero.ActualHeight), 0, 560);
+            PlaceRail();
+            var size = PlayLayout.DialSize(hero.ActualWidth, hero.ActualHeight);
             dial.Width = dial.Height = size;
             var scale = size / 440d;
             // The readout and unit label sit at fixed canvas coordinates inside the dial.
@@ -129,7 +193,9 @@ public sealed partial class MainWindow
         tempoCluster.Children.Add(tap);
         tempoCluster.Children.Add(faster);
         Identify(tempoCluster, "PlayQuickControls", Text.Get("Tempo"));
+        var unitNotice = !followsProgram && MeterPresets.UnitNeedsFix(settings) ? BuildUnitNotice(settings) : null;
         var tempoArea = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        if (unitNotice is not null) tempoArea.Children.Add(unitNotice);
         tempoArea.Children.Add(tempoCluster);
         if (followsProgram)
         {
@@ -151,7 +217,6 @@ public sealed partial class MainWindow
         var restoringSound = false;
         sound.Header = null;
         sound.Width = 152;
-        sound.Height = 44;
         sound.SelectionChanged += async (_, _) =>
         {
             if (restoringSound) return;
@@ -246,68 +311,44 @@ public sealed partial class MainWindow
         }
         ArrangeContext(false);
 
-        // Secondary entry points: quiet, icon-led, never competing with the instrument.
-        var practice = BuildPracticePanel();
-        var project = BuildProjectPanel();
-        var help = BuildHelpPanel();
-        var rail = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        var railButtons = new List<Button>();
-        foreach (var (panel, key, id, glyph) in new[]
-        {
-            (practice, "PracticeTab", "PracticeTimer", "\uE916"), (project, "ProjectTab", "ProjectOptions", "\uE8B7"),
-            (help, "HelpTab", "PlayHelp", "\uE897")
-        })
-        {
-            var button = new Button
-            {
-                Flyout = panel.Flyout, Style = ResonantStyle("GhostButtonStyle"), MinWidth = 108,
-                HorizontalContentAlignment = HorizontalAlignment.Left
-            };
-            LabelButton(button, key, glyph);
-            Identify(button, id, Text.Get(key));
-            ToolTipService.SetToolTip(button, Text.Get(key));
-            rail.Children.Add(button);
-            railButtons.Add(button);
-        }
-        var railScroll = new ScrollViewer
-        {
-            Content = rail, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
-        };
-        Identify(railScroll, "PlaySettingsStrip", Text.Get("Settings"));
-
         var page = new Grid { RowSpacing = 10 };
+        // The notice only appears when the dial keeps a usable size. The decision is made from measured heights, so enlarged
+        // Windows text (taller rows, a taller notice) is accounted for, and it is repeated whenever one of them changes.
+        // Nothing measured here depends on the notice being shown (the notice is measured on its own), so it cannot flip.
+        void PlaceNotice()
+        {
+            if (unitNotice is null || !unitNotice.IsOpen || page.ActualWidth <= 0 || page.ActualHeight <= 0 ||
+                context.ActualHeight <= 0) return;
+            var width = Math.Min(640, page.ActualWidth);
+            unitNotice.Width = width;
+            unitNotice.Visibility = Visibility.Visible;
+            unitNotice.Measure(new Windows.Foundation.Size(width, double.PositiveInfinity));
+            var noticeRow = unitNotice.DesiredSize.Height + tempoArea.Spacing;
+            // The strip's own row is not counted here: whether it needs one depends on the room left once the notice is
+            // shown, and NoticeFits works that out from the strip's measured widths.
+            var otherRows = tempoCluster.ActualHeight + context.ActualHeight + 3 * page.RowSpacing;
+            unitNotice.Visibility = PlayLayout.NoticeFits(page.ActualWidth, page.ActualHeight, otherRows, noticeRow,
+                railLabelledWidth, railIconsWidth, Math.Max(PlayLayout.StripHeight, rail.ActualHeight))
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
         page.SizeChanged += (_, args) =>
         {
-            var width = args.NewSize.Width;
-            railDocked = width >= 620;
-            rail.Orientation = railDocked ? Orientation.Vertical : Orientation.Horizontal;
-            rail.Spacing = railDocked ? 4 : 8;
-            railScroll.Width = railDocked ? 124 : double.NaN;
-            railScroll.HorizontalAlignment = railDocked ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
-            railScroll.VerticalAlignment = railDocked ? VerticalAlignment.Center : VerticalAlignment.Stretch;
-            railScroll.HorizontalScrollMode = railDocked ? ScrollMode.Disabled : ScrollMode.Enabled;
-            railScroll.HorizontalScrollBarVisibility = railDocked ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-            railScroll.VerticalScrollMode = railDocked ? ScrollMode.Enabled : ScrollMode.Disabled;
-            railScroll.VerticalScrollBarVisibility = railDocked ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
-            Grid.SetRow(railScroll, railDocked ? 1 : 0);
-            // On very narrow windows the quiet entry points shrink to their icons (names stay in tooltips and for screen readers).
-            foreach (var railButton in railButtons)
-            {
-                if (railButton.Content is StackPanel { Children: [_, TextBlock label] })
-                    label.Visibility = width < 420 ? Visibility.Collapsed : Visibility.Visible;
-                railButton.MinWidth = width < 420 ? 44 : 108;
-            }
-            ArrangeContext(width < 620);
+            ArrangeContext(args.NewSize.Width < 620);
+            PlaceNotice();
             SizeInstrument();
         };
+        context.SizeChanged += (_, _) => PlaceNotice();
+        tempoCluster.SizeChanged += (_, _) => PlaceNotice();
+        rail.SizeChanged += (_, _) => PlaceNotice();
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        // The strip comes first so keyboard order follows the screen: tools, instrument, tempo, then the settings below.
+        Grid.SetRow(rail, 1);
+        page.Children.Add(rail);
         Grid.SetRow(hero, 1);
         page.Children.Add(hero);
-        page.Children.Add(railScroll);
         Grid.SetRow(tempoArea, 2);
         page.Children.Add(tempoArea);
         Grid.SetRow(context, 3);
@@ -493,22 +534,56 @@ public sealed partial class MainWindow
 
     private static StackPanel TimeSignatureGlyph(int beats, int denominator, double size)
     {
-        var glyph = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // Tight line bounds trim each numeral to its cap height and baseline, so the pair is centred by what is drawn. The
+        // default bounds add empty space below the digits, which made them ride high in their chip.
+        var glyph = new StackPanel
+        {
+            Spacing = size * 0.16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+        };
         foreach (var value in new[] { beats, denominator })
             glyph.Children.Add(new TextBlock
             {
                 Text = value.ToString(CultureInfo.InvariantCulture), FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Bahnschrift"),
-                FontWeight = FontWeights.SemiBold, FontSize = size, LineHeight = size * 0.95,
-                LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center, Style = ResonantStyle("BodyStyle")
+                FontWeight = FontWeights.SemiBold, FontSize = size, TextLineBounds = TextLineBounds.Tight,
+                TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+                Style = ResonantStyle("BodyStyle")
             });
         return glyph;
+    }
+
+    /// <summary>
+    /// Shown when the saved BPM unit does not divide the bar evenly (an older or imported project), because the clicks then
+    /// drift against the dial. One click applies the unit that matches the written beats. It is kept short (the reason is
+    /// in its tooltip and help text), only appears while the dial keeps a usable size (<see cref="PlayLayout.NoticeFits"/>)
+    /// and can be dismissed for this view.
+    /// </summary>
+    private InfoBar BuildUnitNotice(PulseSettings settings)
+    {
+        var fix = new Button { Content = Text.Format("UnitMismatchFix", PulseInstrument.NoteUnit(4d / settings.BeatDenominator)) };
+        Identify(fix, "UnitMismatchFix", (string)fix.Content);
+        fix.Click += async (_, _) => await GuardAsync(() =>
+        {
+            var current = _document.Settings;
+            return ApplyMeterPresetAsync(new MeterPreset(current.BeatsPerBar, current.BeatDenominator, current.Groups));
+        });
+        var title = Text.Get("UnitMismatchTitle");
+        var reason = Text.Format("UnitMismatchMessage", PulseInstrument.NoteUnit(settings.BeatUnitQuarters),
+            settings.BeatsPerBar, settings.BeatDenominator);
+        var notice = new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Title = title, ActionButton = fix,
+            MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Identify(notice, "UnitMismatchNotice", title);
+        AutomationProperties.SetHelpText(notice, reason);
+        ToolTipService.SetToolTip(notice, reason);
+        return notice;
     }
 
     private Button BuildMeterPicker(OptionPanel rhythm)
     {
         var settings = _document.Settings;
-        var chip = new Button { Style = ResonantStyle("ChipButtonStyle"), Width = 96, Height = 64, Padding = new Thickness(0) };
+        var chip = new Button { Style = ResonantStyle("ChipButtonStyle"), MinWidth = 96, MinHeight = 64, Padding = new Thickness(0) };
         var face = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,
@@ -535,7 +610,7 @@ public sealed partial class MainWindow
             var preset = MeterPresets.All[index];
             var cell = new Button
             {
-                Style = ResonantStyle("ChipButtonStyle"), Width = 68, Height = 68, Padding = new Thickness(0),
+                Style = ResonantStyle("ChipButtonStyle"), MinWidth = 68, MinHeight = 68, Padding = new Thickness(0),
                 Content = TimeSignatureGlyph(preset.Beats, preset.Denominator, 22)
             };
             Identify(cell, $"MeterPreset{preset.Beats}_{preset.Denominator}", $"{preset.Beats}/{preset.Denominator}");

@@ -154,8 +154,9 @@ public static class Text
         Add("Paused", "Paused", "Gepauzeerd", "Pausiert", "En pause", "En pausa");
         Add("Playing", "Playing", "Speelt", "Läuft", "En cours", "En reproducción");
         Add("PendingPause", "Pausing · queued audio may drain", "Pauzeren · gebufferde audio kan uitlopen", "Pause folgt · gepufferter Ton kann nachlaufen", "Pause en cours · fin du tampon audio", "Pausa pendiente · puede sonar el búfer");
-        Add("Mute", "Mute click", "Klik dempen", "Klick stummschalten", "Couper le clic", "Silenciar clic");
-        Add("Unmute", "Unmute click", "Klik aanzetten", "Klick einschalten", "Rétablir le clic", "Activar clic");
+        // The sound can be changed, so the button never says "click".
+        Add("Mute", "Mute", "Dempen", "Stummschalten", "Couper le son", "Silenciar");
+        Add("Unmute", "Unmute", "Dempen opheffen", "Ton an", "Rétablir le son", "Activar sonido");
         Add("Muted", "Muted · time continues", "Gedempt · tijd loopt door", "Stumm · Zeit läuft weiter", "Muet · le temps continue", "Silenciado · el tiempo continúa");
         Add("Volume", "Volume", "Volume", "Lautstärke", "Volume", "Volumen");
         Add("Output", "Output device", "Uitvoerapparaat", "Ausgabegerät", "Périphérique de sortie", "Dispositivo de salida");
@@ -279,9 +280,12 @@ public static class Text
         Add("ExportMidi", "Export MIDI", "MIDI exporteren", "MIDI exportieren", "Exporter MIDI", "Exportar MIDI");
         Add("RhythmTab", "Rhythm", "Ritme", "Rhythmus", "Rythme", "Ritmo");
         Add("TempoTab", "Tempo", "Tempo", "Tempo", "Tempo", "Tempo");
-        Add("PracticeTab", "Practice", "Oefenen", "Üben", "Pratique", "Práctica");
+        // A short name for the practice timer and auto-stop panel. It must not repeat the Train page's name: that was
+        // identical in Dutch and German and nearly so in French and Spanish, which put two "Oefenen" on one screen.
+        Add("PracticeTab", "Timer", "Timer", "Timer", "Minuteur", "Temporizador");
         Add("ProjectTab", "Project", "Project", "Projekt", "Projet", "Proyecto");
         Add("HelpTab", "Help", "Help", "Hilfe", "Aide", "Ayuda");
+        Add("PlayTools", "Tools", "Hulpmiddelen", "Werkzeuge", "Outils", "Herramientas");
         Add("PulseNumber", "Pulse {0}", "Puls {0}", "Puls {0}", "Pulsation {0}", "Pulso {0}");
         Add("SoundSessionChanged", "Playback was restarted or stopped while applying this change. Try the change again.", "Het afspelen is opnieuw gestart of gestopt tijdens deze wijziging. Probeer de wijziging opnieuw.", "Die Wiedergabe wurde während der Änderung neu gestartet oder gestoppt. Änderung erneut versuchen.", "La lecture a redémarré ou s’est arrêtée pendant la modification. Réessayez la modification.", "La reproducción se reinició o detuvo durante el cambio. Vuelva a intentar el cambio.");
         Add("CloseOptions", "Done", "Gereed", "Fertig", "Terminé", "Listo");
@@ -327,6 +331,9 @@ public static class Text
         Add("BeatStrengthCaption", "Beat strength · tap a beat to change it", "Telsterkte · tik op een tel om te wijzigen", "Betonung · Zählzeit antippen zum Ändern", "Force des temps · touchez un temps pour la changer", "Intensidad · toque un pulso para cambiarla");
         Add("ResetStrengths", "Reset beat strength", "Telsterkte herstellen", "Betonung zurücksetzen", "Réinitialiser la force des temps", "Restablecer la intensidad");
         Add("ProgramControlsNote", "This project plays a program: tempo and time signature follow its sections in Studio.", "Dit project speelt een programma: tempo en maatsoort volgen de onderdelen in Studio.", "Dieses Projekt spielt ein Programm: Tempo und Taktart folgen den Abschnitten im Studio.", "Ce projet joue un programme : le tempo et la mesure suivent ses sections dans Studio.", "Este proyecto reproduce un programa: el tempo y el compás siguen sus secciones en Estudio.");
+        Add("UnitMismatchTitle", "Clicks and circle are out of step", "Tikken en cirkel lopen niet gelijk", "Klicks und Kreis laufen nicht im Gleichschritt", "Les clics et le cercle sont décalés", "Los clics y el círculo están desfasados");
+        Add("UnitMismatchMessage", "A bar of {1}/{2} is not a whole number of “{0}” clicks, so the clicks drift against the circle.", "Een maat van {1}/{2} bestaat niet uit een geheel aantal “{0}”-tikken, dus de tikken lopen uit de pas met de cirkel.", "Ein {1}/{2}-Takt besteht nicht aus einer ganzen Zahl von „{0}“-Klicks, darum laufen die Klicks dem Kreis davon.", "Une mesure à {1}/{2} ne contient pas un nombre entier de clics à la « {0} », donc les clics dérivent par rapport au cercle.", "Un compás de {1}/{2} no contiene un número entero de clics de «{0}», así que los clics se desfasan respecto al círculo.");
+        Add("UnitMismatchFix", "Click every “{0}”", "Tik per “{0}”", "Klick pro „{0}“", "Cliquer à la « {0} »", "Clic por «{0}»");
         Add("BeatName", "Beat {0}, {1}", "Tel {0}, {1}", "Zählzeit {0}, {1}", "Temps {0}, {1}", "Pulso {0}, {1}");
         Add("LevelStrong", "Strong", "Sterk", "Stark", "Fort", "Fuerte");
         Add("LevelNormal", "Medium", "Gemiddeld", "Mittel", "Moyen", "Medio");

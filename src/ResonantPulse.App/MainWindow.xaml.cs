@@ -56,6 +56,9 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(nint window);
 
+    /// <summary>Implemented only in local verification builds (MainWindow.UiTest.cs, -p:UiTest=true).</summary>
+    partial void InstallUiTestHook();
+
     public MainWindow()
     {
         Diagnostics.Write("MainWindow XAML initialization beginning");
@@ -178,13 +181,14 @@ public sealed partial class MainWindow : Window
         });
         _refresh.Tick += (_, _) => RefreshSnapshot();
         InstallPowerHook(hwnd);
+        InstallUiTestHook();
         Closed += (_, _) =>
         {
             _isClosed = true;
             _refresh.Stop();
             RemovePowerHook(hwnd);
             _transport.Dispose();
-            Diagnostics.Write("Native window closed");
+            Diagnostics.Write($"Native window closed: {DescribeClose()}");
         };
     }
 
@@ -435,7 +439,8 @@ public sealed partial class MainWindow : Window
         AudioOptionsTitle.Text = Text.Get("AudioOptions");
         ToolTipService.SetToolTip(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
         AutomationProperties.SetHelpText(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
-        OutputPicker.Header = Text.Get("Output");
+        OutputPicker.Header = null;
+        OutputCaption.Text = Text.Get("Output");
         OutputPicker.PlaceholderText = Text.Get("ChooseOutput");
         Identify(OutputPicker, "AudioOutputPicker", Text.Get("Output"));
         AutomationProperties.SetName(OutputButton, Text.Get("RefreshDevices"));

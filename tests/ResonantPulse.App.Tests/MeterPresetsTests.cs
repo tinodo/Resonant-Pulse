@@ -147,6 +147,50 @@ public sealed class MeterPresetsTests
     }
 
     [TestMethod]
+    public void OnlyAUnitThatDoesNotDivideTheBarNeedsAFix()
+    {
+        // The saved state behind "the clicks do not match the circle": 8/8 counted in dotted halves (3 quarters).
+        Assert.IsTrue(MeterPresets.UnitNeedsFix(new PulseSettings { BeatsPerBar = 8, BeatDenominator = 8, BeatUnitQuarters = 3 }));
+        Assert.IsTrue(MeterPresets.UnitNeedsFix(new PulseSettings { BeatsPerBar = 3, BeatDenominator = 4, BeatUnitQuarters = 2 }));
+        Assert.IsFalse(MeterPresets.UnitNeedsFix(new PulseSettings { BeatsPerBar = 6, BeatDenominator = 8, BeatUnitQuarters = 1.5 }));
+        Assert.IsFalse(MeterPresets.UnitNeedsFix(new PulseSettings()));
+        foreach (var preset in MeterPresets.All)
+        {
+            var settings = new PulseSettings();
+            MeterPresets.Apply(settings, preset.Beats, preset.Denominator, preset.Groups);
+            Assert.IsFalse(MeterPresets.UnitNeedsFix(settings), $"{preset.Beats}/{preset.Denominator}");
+        }
+    }
+
+    [TestMethod]
+    public void TheFixRealignsClicksWithTheBarAndKeepsTheClickRate()
+    {
+        const double Tempo = 75;
+        var document = new PulseDocument
+        {
+            Settings = { BeatsPerBar = 8, BeatDenominator = 8, BeatUnitQuarters = 3, Tempo = Tempo, CountInBars = 0 }
+        };
+        var settings = document.Settings;
+        var beforeFix = ScheduleCompiler.Compile(document, Rate, 4, false).Onsets;
+        var clickGap = beforeFix[1].Frame - beforeFix[0].Frame;
+        Assert.AreEqual((long)(60.0 / Tempo * Rate), clickGap, "one BPM unit per click");
+
+        // What the banner's button does: apply the current written meter again.
+        MeterPresets.Apply(settings, settings.BeatsPerBar, settings.BeatDenominator, settings.Groups);
+
+        Assert.IsFalse(MeterPresets.UnitNeedsFix(settings));
+        Assert.AreEqual(Tempo, settings.Tempo, "the BPM number is kept");
+        Assert.AreEqual(8, MeterPresets.PulsesPerBar(settings));
+        var plan = ScheduleCompiler.Compile(document, Rate, 2, false);
+        var barFrames = (long)Math.Round(8 * 60.0 / Tempo * Rate);
+        var firstBar = plan.Onsets.Where(onset => onset.Frame < barFrames).ToArray();
+        Assert.AreEqual(8, firstBar.Length, "eight clicks fill the bar");
+        Assert.AreEqual(Accent.Strong, firstBar[0].Accent);
+        Assert.AreEqual(clickGap, plan.Onsets[1].Frame - plan.Onsets[0].Frame, "the audible click rate does not change");
+        Assert.AreEqual(barFrames * 2, plan.TotalFrames);
+    }
+
+    [TestMethod]
     public void TempoReadsAsAWholeNumberUnlessItIsGenuinelyFractional()
     {
         var english = CultureInfo.GetCultureInfo("en");

@@ -16,12 +16,21 @@ public sealed partial class MainWindow
     private UIElement BuildStage()
     {
         _stageOperationControls.Clear();
-        _stageTempo = Heading("");
+        var tempo = Heading("");
+        var meter = Body("");
+        var position = Body("");
+        // A stage display is one centred composition: the readouts line up with the dial beneath them.
+        foreach (var readout in new[] { tempo, meter, position })
+        {
+            readout.HorizontalAlignment = HorizontalAlignment.Center;
+            readout.TextAlignment = TextAlignment.Center;
+        }
+        _stageTempo = tempo;
         _stageTempo.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Bahnschrift");
         _stageTempo.FontSize = 96;
-        _stageMeter = Body("");
+        _stageMeter = meter;
         _stageMeter.FontSize = 28;
-        _position = Body("");
+        _position = position;
         _instrument = new PulseInstrument { MaxHeight = 320 };
         var panel = Column(Heading(_document.Name), _stageTempo, _stageMeter, _position, _instrument);
         panel.Children.Add(CommandFlow(StageControl(ActionButton(_isLocked ? "Unlock" : "Lock", "StageLock", () => RunStageOperationAsync(() =>

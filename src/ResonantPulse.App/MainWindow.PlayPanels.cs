@@ -12,6 +12,9 @@ public sealed partial class MainWindow
 {
     private sealed record OptionPanel(Flyout Flyout);
 
+    /// <summary>Width of each footer button; Cancel and Done always share it.</summary>
+    internal const double FooterButtonWidth = 120;
+
     /// <summary>
     /// One consistent panel: title, optional help, scrolling fields, then [Cancel] [Done] side by side.
     /// Done applies and closes; Cancel (or clicking away) discards. Fields are refilled from the document
@@ -29,18 +32,27 @@ public sealed partial class MainWindow
         scroll.Padding = new Thickness(0, 0, 12, 0);
         var error = new TextBlock { Style = ResonantStyle("ErrorTextStyle"), Visibility = Visibility.Collapsed };
         Identify(error, id + "Error", Text.Get("Error"));
-        var done = new Button { Style = ResonantStyle("AccentButtonStyle"), MinWidth = 104 };
+        // [Cancel] [Done] are one pair: equal fixed-width cells, and each button stretches to the cell, so they are the
+        // same size however either one's style or label changes.
+        var done = new Button
+        {
+            Style = ResonantStyle("PrimaryButtonStyle"),
+            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch
+        };
         LabelButton(done, "CloseOptions");
         Identify(done, id + "Done", Text.Get("CloseOptions"));
-        var footer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        var footer = new Grid { ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         Button? cancel = null;
         if (apply is not null)
         {
-            cancel = new Button { MinWidth = 104 };
+            cancel = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
             LabelButton(cancel, "Cancel");
             Identify(cancel, id + "Cancel", Text.Get("Cancel"));
+            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(FooterButtonWidth) });
             footer.Children.Add(cancel);
         }
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(FooterButtonWidth) });
+        Grid.SetColumn(done, footer.ColumnDefinitions.Count - 1);
         footer.Children.Add(done);
 
         var panel = new Grid { RowSpacing = 12 };

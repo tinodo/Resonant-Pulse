@@ -142,7 +142,7 @@ function Test-InstrumentHierarchy {
     return @{width=$dial.Width;height=$dial.Height;centerError=$centerError;value=$value}
 }
 function Save-PlayScreenshot([string]$name) {
-    if (-not $takeScreenshots) { return }
+    if (-not $takeScreenshots) { return $null }
     Add-Type -AssemblyName System.Drawing
     $rect = (Get-CurrentWindow).Current.BoundingRectangle
     $bitmap = [Drawing.Bitmap]::new([int]$rect.Width, [int]$rect.Height)
@@ -152,7 +152,92 @@ function Save-PlayScreenshot([string]$name) {
         $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
         $image = Join-Path (Split-Path -Parent $ReportPath) $name
         $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
+        return $image
     } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
+# Layout rules a person notices at a glance. Each one failed in a shipped preview, so each is now a gate.
+function Test-SameSize([string]$what, $first, $second, [double]$tolerance = 2) {
+    if ([Math]::Abs($first.Width - $second.Width) -gt $tolerance -or [Math]::Abs($first.Height - $second.Height) -gt $tolerance) {
+        throw "$what are not the same size: $first and $second"
+    }
+}
+function Test-OneLine([string]$what, $first, $second, [double]$tolerance = 2) {
+    if ([Math]::Abs(($first.Y + $first.Height / 2) - ($second.Y + $second.Height / 2)) -gt $tolerance) {
+        throw "$what are not centred on one line: $first and $second"
+    }
+}
+function Test-Pair([string]$firstId, [string]$secondId, [switch]$HeightOnly) {
+    $first = (Find-Control $firstId).Current.BoundingRectangle
+    $second = (Find-Control $secondId).Current.BoundingRectangle
+    if ($HeightOnly) {
+        if ([Math]::Abs($first.Height - $second.Height) -gt 2) {
+            throw "$firstId and $secondId are not the same height: $first and $second"
+        }
+    } else { Test-SameSize "$firstId and $secondId" $first $second }
+    Test-OneLine "$firstId and $secondId" $first $second
+}
+# The time-signature digits must sit at the vertical centre of their chip. The pixels are measured because the control
+# tree cannot see where text is drawn; if the capture holds no digits at all the check is skipped, not failed.
+function Test-NumeralCentering([string]$image) {
+    if (-not $image -or -not (Test-Path -LiteralPath $image)) { return $null }
+    $chip = (Find-Control 'QuickMeter').Current.BoundingRectangle
+    $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+    $bitmap = [Drawing.Bitmap]::new($image)
+    try {
+        # Only the middle of the chip is read: that keeps the rounded corners out, and a small vertical margin keeps the
+        # top and bottom border lines out. What is left is the digits and the chevron.
+        $margin = [int][Math]::Ceiling(4 * $scale)
+        $left = [int]($chip.X - $windowRect.X + $chip.Width * 0.2)
+        $top = [int]($chip.Y - $windowRect.Y) + $margin
+        $width = [int]($chip.Width * 0.6)
+        $height = [int]$chip.Height - 2 * $margin
+        if ($left -lt 0 -or $top -lt 0 -or $left + $width -gt $bitmap.Width -or $top + $height -gt $bitmap.Height) { return $null }
+        $background = $bitmap.GetPixel($left, $top)
+        $first = [int]::MaxValue; $last = -1
+        for ($y = $top; $y -lt $top + $height; $y++) {
+            for ($x = $left; $x -lt $left + $width; $x++) {
+                $pixel = $bitmap.GetPixel($x, $y)
+                $difference = [Math]::Abs($pixel.R - $background.R) + [Math]::Abs($pixel.G - $background.G) + [Math]::Abs($pixel.B - $background.B)
+                if ($difference -gt 120) { if ($y -lt $first) { $first = $y }; if ($y -gt $last) { $last = $y } }
+            }
+        }
+        if ($last -lt 0) { return $null }
+        $inkCentre = ($first + $last) / 2
+        $chipCentre = ($chip.Y - $windowRect.Y) + $chip.Height / 2
+        $offset = [Math]::Abs($inkCentre - $chipCentre)
+        if ($offset -gt 2 * $scale) {
+            throw "The time-signature digits are not vertically centred in their chip: ink centre $inkCentre, chip centre $chipCentre ($offset px off)."
+        }
+        return [Math]::Round($offset, 1)
+    } finally { $bitmap.Dispose() }
+}
+# Practice, Project and Help: one row, one height, clear of the dial's ring, and level with the Settings item at the right.
+function Test-PlayTools {
+    $names = 'PracticeTimer', 'ProjectOptions', 'PlayHelp'
+    $rects = $names | ForEach-Object { (Find-Control $_).Current.BoundingRectangle }
+    foreach ($index in 1..2) {
+        if ([Math]::Abs($rects[0].Height - $rects[$index].Height) -gt 2) {
+            throw "$($names[0]) and $($names[$index]) are not the same height: $($rects[0]) and $($rects[$index])"
+        }
+        Test-OneLine "$($names[0]) and $($names[$index])" $rects[0] $rects[$index]
+    }
+    # The ring is a circle inside the dial's square: centred 200 of 440 down, its outermost tick 191 from the centre.
+    $dial = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    $centreX = $dial.X + $dial.Width / 2
+    $centreY = $dial.Y + $dial.Height * 200 / 440
+    $radius = $dial.Height * 191 / 440
+    for ($index = 0; $index -lt 3; $index++) {
+        $rect = $rects[$index]
+        $dx = [Math]::Max([Math]::Max($rect.Left - $centreX, $centreX - $rect.Right), 0)
+        $dy = [Math]::Max([Math]::Max($rect.Top - $centreY, $centreY - $rect.Bottom), 0)
+        if ([Math]::Sqrt($dx * $dx + $dy * $dy) -lt $radius) { throw "$($names[$index]) covers the metronome's ring: $rect over dial $dial" }
+    }
+    $settings = (Find-Control 'DestinationSettings').Current.BoundingRectangle
+    $labelled = $rects[2].Width -gt 56 * $scale
+    if ($labelled -and [Math]::Abs($rects[2].Right - $settings.Right) -gt 3 * $scale) {
+        throw "Help does not line up with the Settings item at the right edge: $($rects[2]) and $settings"
+    }
+    return @{ labelled = $labelled; buttonHeight = $rects[0].Height }
 }
 function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     $limit = [DateTime]::UtcNow.AddSeconds(65)
@@ -267,12 +352,13 @@ foreach ($duplicate in 'RhythmOptions', 'TempoOptions') {
 $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
 if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
 $instrumentEvidence = Test-InstrumentHierarchy
+$toolsEvidence = Test-PlayTools
 $resizeEvidence = @()
 foreach ($size in @(@(800, 600), @(1000, 720))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 500
     $currentBounds = (Get-CurrentWindow).Current.BoundingRectangle
-    Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
+    $screenshot = Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
     foreach ($id in $primary) {
         $element = Find-Control $id
         $rect = $element.Current.BoundingRectangle
@@ -282,7 +368,10 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
         }
     }
     $composition = Test-InstrumentHierarchy
-    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true;instrument=$composition}
+    $tools = Test-PlayTools
+    $numeralOffset = Test-NumeralCentering $screenshot
+    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true;instrument=$composition;
+        tools=$tools;numeralOffsetPixels=$numeralOffset}
 }
 # Live-looking tempo: the readout answers immediately, Cancel discards, Done applies.
 Resize-To 800 600
@@ -349,7 +438,7 @@ Invoke-Control 'RhythmOptionsDone'
 Wait-Absent 'RhythmOptionsDone'
 $lastPulse = Find-Control 'MainAccent63'
 Start-Sleep -Milliseconds 500
-Save-PlayScreenshot 'play-many-pulses.png'
+$null = Save-PlayScreenshot 'play-many-pulses.png'
 $manyPulseInstrument = $null
 $hierarchy = Test-InstrumentHierarchy
 $manyPulseInstrument = $hierarchy
@@ -366,7 +455,7 @@ foreach ($size in @(@(400, 720), @(320, 900))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 500
     $currentBounds = (Get-CurrentWindow).Current.BoundingRectangle
-    Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
+    $null = Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
     foreach ($id in 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions', 'TempoDown', 'TapTempo', 'TempoUp', 'QuickMeter') {
         $element = Find-Control $id
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
@@ -417,6 +506,17 @@ foreach ($panel in $panels) {
     if ($panel.open[0] -ne 'AudioOptions' -and $panel.close -like '*Cancel') {
         try { $null = Find-Control ($panel.close -replace 'Cancel$', 'Done') }
         catch { throw "Panel has no Done beside Cancel: $($panel.close)" }
+        # Cancel and Done are one pair: the same size, on one line.
+        Test-Pair $panel.close ($panel.close -replace 'Cancel$', 'Done')
+    }
+    if ($panel.open[0] -eq 'AudioOptions') {
+        # The device list and its refresh button share one height and one centre line.
+        Test-Pair 'AudioOutputPicker' 'RefreshAudioOutputs' -HeightOnly
+    }
+    $footer = if ($panel.close -like '*Cancel') { $panel.close -replace 'Cancel$', 'Done' } else { $panel.close }
+    if ($footer -like '*Done' -or $footer -like '*Close') {
+        $doneHeight = (Find-Control $footer).Current.BoundingRectangle.Height
+        if ($doneHeight -lt 43 * $scale) { throw "The closing button is shorter than its neighbours ($doneHeight px): $footer" }
     }
     if (-not $sendKeys) {
         Invoke-Control $panel.close
@@ -579,7 +679,7 @@ if (-not $playAudio) {
     }
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
-  resize=$resizeEvidence;instrument=$instrumentEvidence;manyPulseInstrument=$manyPulseInstrument;
+  resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
