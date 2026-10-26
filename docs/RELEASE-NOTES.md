@@ -2,10 +2,13 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
-The Play screen now keeps **Rhythm**, **Tempo**, **Practice**, **Project** and
-**Help** commands above the instrument area. Each opens a bounded, scrollable
-panel. Short windows use a compact tempo layout, pulse buttons have consistent
-alignment, and Start/Stop no longer stretch across the window.
+The metronome is now the large, centered primary surface on Play, with tempo
+inside the cyan/magenta dial. It fills the available performance area rather
+than shrinking into a small preview beside a larger numeric input.
+**Rhythm**, **Tempo**, **Practice**, **Project** and **Help** open bounded panels.
+Precise numeric tempo editing lives in **Tempo**; -1, tap, +1, meter, sound and
+pulse strengths stay beneath the instrument. **Audio** on the compact transport
+opens output-device and volume controls without occupying the performance area.
 
 The **Sound** selector and individual pulse strengths apply during playback
 without restarting the clock. Existing click tails finish in their original

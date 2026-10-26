@@ -16,11 +16,13 @@ namespace ResonantPulse.App.Controls;
 /// side effects. Native text and accent buttons provide accessible equivalents.</summary>
 public sealed class PulseInstrument : Grid
 {
-    private readonly Canvas _dial = new() { Width = 440, Height = 420 };
-    private readonly Canvas _horizon = new() { Width = 440, Height = 76 };
-    private readonly Ellipse _ring = new() { Width = 340, Height = 340, StrokeThickness = 2 };
+    private readonly Canvas _dial = new() { Width = 440, Height = 400 };
+    private readonly Canvas _horizon = new() { Width = 440, Height = 40 };
+    private readonly Ellipse _halo = new() { Width = 340, Height = 340, StrokeThickness = 18, Opacity = 0.1 };
+    private readonly Ellipse _ring = new() { Width = 340, Height = 340, StrokeThickness = 2.5 };
     private readonly Ellipse _inner = new() { Width = 284, Height = 284, StrokeThickness = 1 };
     private readonly Ellipse _phase = new() { Width = 14, Height = 14 };
+    private readonly Ellipse _phaseHalo = new() { Width = 28, Height = 28, Opacity = 0.2 };
     private readonly TextBlock _tempo = new()
     {
         Width = 300, FontSize = 78, TextAlignment = TextAlignment.Center,
@@ -29,8 +31,8 @@ public sealed class PulseInstrument : Grid
     private readonly TextBlock _unit = new() { Width = 360, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, FontSize = 18 };
     private readonly List<Shape> _ticks = [];
     private readonly List<Shape> _onsets = [];
-    private readonly Line _playhead = new() { X1 = 100, X2 = 100, Y1 = 5, Y2 = 70, StrokeThickness = 2 };
-    private readonly Line _baseline = new() { X1 = 8, X2 = 432, Y1 = 38, Y2 = 38, StrokeThickness = 1 };
+    private readonly Line _playhead = new() { X1 = 100, X2 = 100, Y1 = 3, Y2 = 37, StrokeThickness = 2 };
+    private readonly Line _baseline = new() { X1 = 8, X2 = 432, Y1 = 20, Y2 = 20, StrokeThickness = 1 };
     private int _beatCount;
     private int[] _groups = [];
     private PulseSettings? _settings;
@@ -60,11 +62,14 @@ public sealed class PulseInstrument : Grid
         var column = new StackPanel();
         column.Children.Add(_dial);
         column.Children.Add(_horizon);
-        Children.Add(new Viewbox { Child = column, Stretch = Stretch.Uniform, MaxHeight = 500 });
+        Children.Add(new Viewbox { Child = column, Stretch = Stretch.Uniform });
+        _dial.Children.Add(_halo);
+        Canvas.SetLeft(_halo, 50); Canvas.SetTop(_halo, 30);
         _dial.Children.Add(_ring);
         Canvas.SetLeft(_ring, 50); Canvas.SetTop(_ring, 30);
         _dial.Children.Add(_inner);
         Canvas.SetLeft(_inner, 78); Canvas.SetTop(_inner, 58);
+        _dial.Children.Add(_phaseHalo);
         _dial.Children.Add(_phase);
         _dial.Children.Add(_tempo); Canvas.SetLeft(_tempo, 70); Canvas.SetTop(_tempo, 142);
         _dial.Children.Add(_unit); Canvas.SetLeft(_unit, 40); Canvas.SetTop(_unit, 246);
@@ -84,9 +89,10 @@ public sealed class PulseInstrument : Grid
 
     public void RefreshTheme()
     {
-        _ring.Stroke = Brush("MarkerBrush");
+        _halo.Stroke = _ring.Stroke = Brush("PulseBrush");
         _inner.Stroke = Brush("LaneBrush");
         _phase.Fill = Brush("PulseBrush");
+        _phaseHalo.Fill = Brush("PulseBrush");
         _tempo.Foreground = Brush("TextBrush");
         _unit.Foreground = Brush("PulseBrush");
         _playhead.Stroke = Brush("TextBrush");
@@ -130,8 +136,10 @@ public sealed class PulseInstrument : Grid
         _tempo.Text = blind ? Text.Get("Silent") : tempo.ToString("0.0", Text.Culture);
         _unit.Text = blind ? "" : $"BPM · {NoteUnit(settings.BeatUnitQuarters)}";
         _phase.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
+        _phaseHalo.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
         _horizon.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
         _ring.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
+        _halo.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
         _inner.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
         foreach (var tick in _ticks) tick.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
         if (blind) return;
@@ -141,6 +149,8 @@ public sealed class PulseInstrument : Grid
         var angle = phase * 2 * Math.PI - Math.PI / 2;
         Canvas.SetLeft(_phase, 213 + 170 * Math.Cos(angle));
         Canvas.SetTop(_phase, 193 + 170 * Math.Sin(angle));
+        Canvas.SetLeft(_phaseHalo, 206 + 170 * Math.Cos(angle));
+        Canvas.SetTop(_phaseHalo, 186 + 170 * Math.Sin(angle));
         foreach (var mark in _onsets) mark.Visibility = Visibility.Collapsed;
         if (plan is null || reduced) return;
         var start = localFrame - (long)(plan.SampleRate * 0.75);
@@ -161,7 +171,7 @@ public sealed class PulseInstrument : Grid
             mark.Width = onset.LaneIndex >= 0 ? 8 : onset.LaneIndex == -2 ? 4 : 6;
             mark.Fill = Brush(onset.Accent == Accent.Strong ? "AccentBrush" : onset.LaneIndex >= 0 ? "LaneBrush" : "PulseBrush");
             Canvas.SetLeft(mark, 100 + (double)(onset.Frame - localFrame) / plan.SampleRate * 126);
-            Canvas.SetTop(mark, 38 - mark.Height / 2);
+            Canvas.SetTop(mark, 20 - mark.Height / 2);
         }
     }
 

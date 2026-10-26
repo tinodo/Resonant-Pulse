@@ -35,6 +35,32 @@ function Invoke-Control([string]$id) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Native control remained disabled: $id"
 }
+function Test-InstrumentHierarchy {
+    $currentBounds = $window.Current.BoundingRectangle
+    $dial = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    $sound = (Find-Control 'MainSound').Current.BoundingRectangle
+    $centerError = [Math]::Abs(($dial.X + $dial.Width / 2) - ($currentBounds.X + $currentBounds.Width / 2))
+    if ($dial.Width -lt 220 -or $dial.Height -lt 220 -or
+        $dial.Width -lt $sound.Width * 1.35 -or $centerError -gt 4 -or
+        -not $currentBounds.Contains($dial)) {
+        throw "The metronome is not the large, centered primary surface: dial=$dial, center error=$centerError"
+    }
+    $value = (Find-Control 'PhaseInstrument').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
+    if ($value -notlike '120.0*BPM*') { throw "The main metronome does not present the tempo: $value" }
+    return @{width=$dial.Width;height=$dial.Height;centerError=$centerError;value=$value}
+}
+function Save-PlayScreenshot([string]$name) {
+    Add-Type -AssemblyName System.Drawing
+    $rect = $window.Current.BoundingRectangle
+    $bitmap = [Drawing.Bitmap]::new([int]$rect.Width, [int]$rect.Height)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $origin = [Drawing.Point]::new([Math]::Max(0, [int]$rect.X), [Math]::Max(0, [int]$rect.Y))
+        $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
+        $image = Join-Path (Split-Path -Parent $ReportPath) $name
+        $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
 function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     $limit = [DateTime]::UtcNow.AddSeconds(65)
     do {
@@ -89,8 +115,8 @@ do {
 if ($status.Current.Name -notlike 'Stopped*') { throw 'First-use initialization did not reach Stopped.' }
 $bounds = $window.Current.BoundingRectangle
 $controls = @()
-foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0', 'RhythmOptions',
-    'TempoOptions', 'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOutputPicker', 'TransportStartPause', 'MasterGain')) {
+foreach ($id in @('PhaseInstrument', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0', 'RhythmOptions',
+    'TempoOptions', 'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'EmergencyMute')) {
     $element = Find-Control $id
     $rect = $element.Current.BoundingRectangle
     if ($element.Current.IsOffscreen -or $rect.IsEmpty -or -not $bounds.Contains($rect)) {
@@ -101,23 +127,16 @@ foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0',
 }
 $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
 if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
+$instrumentEvidence = Test-InstrumentHierarchy
 $resizeEvidence = @()
 $transform = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
 foreach ($size in @(@(800, 600), @(1000, 720))) {
     $transform.Resize([double]$size[0], [double]$size[1])
     Start-Sleep -Milliseconds 500
     $currentBounds = $window.Current.BoundingRectangle
-    Add-Type -AssemblyName System.Drawing
-    $bitmap = [Drawing.Bitmap]::new([int]$currentBounds.Width, [int]$currentBounds.Height)
-    $graphics = [Drawing.Graphics]::FromImage($bitmap)
-    try {
-        $origin = [Drawing.Point]::new([Math]::Max(0, [int]$currentBounds.X), [Math]::Max(0, [int]$currentBounds.Y))
-        $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
-        $image = Join-Path (Split-Path -Parent $ReportPath) "play-$($size[0])x$($size[1]).png"
-        $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
-    } finally { $graphics.Dispose(); $bitmap.Dispose() }
-    foreach ($id in @('Tempo','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
-        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','MasterGain')) {
+    Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
+    foreach ($id in @('PhaseInstrument','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
+        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','AudioOptions')) {
         $element = Find-Control $id
         $rect = $element.Current.BoundingRectangle
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($rect) -or
@@ -125,15 +144,72 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
             throw "Primary control is hidden at $($size[0])x$($size[1]): $id ($rect)"
         }
     }
-    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true}
+    $composition = Test-InstrumentHierarchy
+    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true;instrument=$composition}
+}
+$transform.Resize(800, 600)
+Invoke-Control 'RhythmOptions'
+$originalGroups = (Find-Control 'MeterGroups').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
+Set-PracticeNumber 'MeterBeats' 64
+(Find-Control 'MeterGroups').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('')
+Invoke-Control 'ApplyPlaySettings'
+$lastPulse = Find-Control 'MainAccent63'
+Start-Sleep -Milliseconds 500
+Save-PlayScreenshot 'play-many-pulses.png'
+$manyPulseInstrument = Test-InstrumentHierarchy
+if ((Find-Control 'PlayScrollHint').Current.IsOffscreen) { throw 'Long pulse strip has no visible overflow cue.' }
+(Find-Control 'PulseAccentStrip').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).SetScrollPercent(-1, 100)
+Start-Sleep -Milliseconds 200
+$lastPulse = Find-Control 'MainAccent63'
+if ($lastPulse.Current.IsOffscreen -or $lastPulse.Current.BoundingRectangle.Height -lt 50) {
+    throw 'The last pulse is not fully reachable in the bounded strip.'
+}
+Invoke-Control 'RhythmOptions'
+Set-PracticeNumber 'MeterBeats' 4
+(Find-Control 'MeterGroups').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($originalGroups)
+Invoke-Control 'ApplyPlaySettings'
+$deadline = [DateTime]::UtcNow.AddSeconds(10)
+while ((Find-Control 'QuickMeter').Current.Name -notlike '*4/4*' -and [DateTime]::UtcNow -lt $deadline) {
+    Start-Sleep -Milliseconds 100
+}
+if ((Find-Control 'QuickMeter').Current.Name -notlike '*4/4*') { throw 'Meter did not restore after long-strip verification.' }
+foreach ($size in @(@(400, 720), @(320, 900))) {
+    $transform.Resize([double]$size[0], [double]$size[1])
+    Start-Sleep -Milliseconds 500
+    $currentBounds = $window.Current.BoundingRectangle
+    Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
+    foreach ($id in 'TransportStartPause','TransportStop','EmergencyMute','AudioOptions') {
+        $element = Find-Control $id
+        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
+            throw "Transport command is inaccessible at $($size[0])x$($size[1]): $id"
+        }
+    }
+    $quick = Find-Control 'PlayQuickControls'
+    [object]$quickPattern = $null
+    if ($quick.TryGetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern, [ref]$quickPattern) -and
+        $quickPattern.Current.VerticallyScrollable) { $quickPattern.SetScrollPercent(-1, 100) }
+    Start-Sleep -Milliseconds 200
+    $soundControl = Find-Control 'MainSound'
+    if ($soundControl.Current.IsOffscreen -or -not $currentBounds.Contains($soundControl.Current.BoundingRectangle) -or
+        $soundControl.Current.BoundingRectangle.Height -lt 44) {
+        throw "Sound selector is not fully reachable at $($size[0])x$($size[1])."
+    }
 }
 $transform.Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 500
 foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
-    @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'))) {
+    @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'),
+    @('AudioOptions','AudioOutputPicker'))) {
     Invoke-Control $option[0]
     $element = Find-Control $option[1]
     if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
+    if ($option[0] -eq 'TempoOptions') {
+        $tempoInput = Find-Control 'Tempo'
+        if ($tempoInput.Current.IsOffscreen) { throw 'Precise tempo input is not accessible in Tempo.' }
+    }
+    if ($option[0] -eq 'AudioOptions' -and (Find-Control 'MasterGain').Current.IsOffscreen) {
+        throw 'Volume is not accessible in Audio.'
+    }
     Add-Type -AssemblyName System.Windows.Forms
     $close = Find-Control ($option[0] + 'Close')
     $close.SetFocus()
@@ -149,8 +225,10 @@ foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUn
     if ((Find-Control 'EmergencyMute').Current.Name -ne $muteName) { throw "Ctrl+M did not restore mute state: $($option[0])" }
     Invoke-Control ($option[0] + 'Close')
 }
+Invoke-Control 'AudioOptions'
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
+Invoke-Control 'AudioOptionsClose'
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
@@ -261,7 +339,8 @@ if ($selection.Count -eq 0) {
     }
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
-  resize=$resizeEvidence;liveSound=$liveSound;popupShortcuts='ctrl-m-in-all-five-panels';
+  resize=$resizeEvidence;instrument=$instrumentEvidence;manyPulseInstrument=$manyPulseInstrument;
+  liveSound=$liveSound;popupShortcuts='ctrl-m-in-all-six-panels';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 Write-Output "First-use controls are visible; playback result: $playback"

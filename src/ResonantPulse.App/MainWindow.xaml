@@ -17,36 +17,49 @@
     </NavigationView>
     <InfoBar x:Name="Notice" Grid.Row="1" IsOpen="False" IsClosable="True"
              Margin="16,4" AutomationProperties.AutomationId="StatusNotice" />
-    <Grid x:Name="TransportPanel" Grid.Row="2" Padding="20,12" Background="{ThemeResource RaisedBrush}" RowSpacing="8">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
-      <Grid ColumnSpacing="8">
+    <Grid x:Name="TransportPanel" Grid.Row="2" Padding="20,12" Background="{ThemeResource RaisedBrush}">
+      <Grid x:Name="TransportCommands" ColumnSpacing="8">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" MinWidth="112" MaxWidth="168" MinHeight="44"
                 AutomationProperties.AutomationId="TransportStartPause" HorizontalAlignment="Left" IsEnabled="False" />
-        <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" AutomationProperties.AutomationId="TransportStop" />
+        <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" HorizontalAlignment="Left" AutomationProperties.AutomationId="TransportStop" />
         <Button x:Name="MuteButton" Grid.Column="2" MinWidth="100" MaxWidth="180" HorizontalAlignment="Left"
                 AutomationProperties.AutomationId="EmergencyMute" />
-      </Grid>
-      <TextBlock x:Name="TransportStatus" Grid.Row="1" TextWrapping="Wrap"
-                 AutomationProperties.AutomationId="TransportStatus" Foreground="{ThemeResource MutedBrush}" />
-      <Grid x:Name="OutputRow" Grid.Row="2" ColumnSpacing="12" RowSpacing="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
-        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-        <Grid x:Name="OutputControls" ColumnSpacing="8">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-          <ComboBox x:Name="OutputPicker" HorizontalAlignment="Stretch" VerticalAlignment="Top"
-                    AutomationProperties.AutomationId="AudioOutputPicker" />
-          <Button x:Name="OutputButton" Grid.Column="1" VerticalAlignment="Bottom" MinWidth="44"
-                  AutomationProperties.AutomationId="RefreshAudioOutputs">
-            <FontIcon Glyph="&#xE72C;" />
-          </Button>
-        </Grid>
-        <Slider x:Name="MasterGain" Grid.Column="1" Minimum="0" Maximum="1" StepFrequency="0.01" Value="0.5"
-                VerticalAlignment="Top" AutomationProperties.AutomationId="MasterGain" />
+        <TextBlock x:Name="TransportStatus" Grid.Column="3" TextWrapping="Wrap" VerticalAlignment="Center"
+                   Margin="8,0" AutomationProperties.AutomationId="TransportStatus" Foreground="{ThemeResource MutedBrush}" />
+        <Button x:Name="AudioOptionsButton" Grid.Column="4" MinWidth="88" HorizontalAlignment="Left"
+                AutomationProperties.AutomationId="AudioOptions">
+          <Button.Flyout>
+            <Flyout x:Name="AudioOptionsFlyout">
+              <Grid x:Name="AudioOptionsPanel" Width="440" RowSpacing="12">
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <Button x:Name="AudioOptionsClose" HorizontalAlignment="Right" AutomationProperties.AutomationId="AudioOptionsClose" />
+                <ScrollViewer x:Name="AudioOptionsScroll" Grid.Row="1"
+                              HorizontalScrollBarVisibility="Disabled" HorizontalScrollMode="Disabled">
+                  <Grid x:Name="OutputRow" ColumnSpacing="12" RowSpacing="8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid x:Name="OutputControls" ColumnSpacing="8">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                      <ComboBox x:Name="OutputPicker" HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                                AutomationProperties.AutomationId="AudioOutputPicker" />
+                      <Button x:Name="OutputButton" Grid.Column="1" VerticalAlignment="Bottom" MinWidth="44"
+                              AutomationProperties.AutomationId="RefreshAudioOutputs">
+                        <FontIcon Glyph="&#xE72C;" />
+                      </Button>
+                    </Grid>
+                    <Slider x:Name="MasterGain" Grid.Column="1" Minimum="0" Maximum="1" StepFrequency="0.01" Value="0.5"
+                            VerticalAlignment="Top" AutomationProperties.AutomationId="MasterGain" />
+                  </Grid>
+                </ScrollViewer>
+              </Grid>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
       </Grid>
     </Grid>
   </Grid>

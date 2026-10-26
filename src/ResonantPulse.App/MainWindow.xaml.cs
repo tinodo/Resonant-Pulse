@@ -96,7 +96,41 @@ public sealed partial class MainWindow : Window
             RefreshSnapshot();
         };
         MuteButton.Click += (_, _) => { _transport.IsMuted = !_transport.IsMuted; RefreshSnapshot(); };
+        TransportPanel.SizeChanged += (_, args) =>
+        {
+            var compact = args.NewSize.Width < 520;
+            var narrow = args.NewSize.Width < 700;
+            var columns = compact ? 2 : 5;
+            if (TransportCommands.ColumnDefinitions.Count != columns)
+            {
+                TransportCommands.ColumnDefinitions.Clear();
+                for (int column = 0; column < columns; column++)
+                    TransportCommands.ColumnDefinitions.Add(new ColumnDefinition
+                    {
+                        Width = compact || column == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
+                    });
+            }
+            var statusRow = compact ? 2 : narrow ? 1 : 0;
+            if (TransportCommands.RowDefinitions.Count != statusRow + 1)
+            {
+                TransportCommands.RowDefinitions.Clear();
+                for (int row = 0; row <= statusRow; row++)
+                    TransportCommands.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+            Grid.SetColumn(MuteButton, compact ? 0 : 2);
+            Grid.SetRow(MuteButton, compact ? 1 : 0);
+            Grid.SetColumn(AudioOptionsButton, compact ? 1 : 4);
+            Grid.SetRow(AudioOptionsButton, compact ? 1 : 0);
+            Grid.SetColumn(TransportStatus, narrow ? 0 : 3);
+            Grid.SetColumnSpan(TransportStatus, compact ? 2 : narrow ? 5 : 1);
+            Grid.SetRow(TransportStatus, statusRow);
+            TransportCommands.RowSpacing = narrow ? 8 : 0;
+        };
         OutputButton.Click += async (_, _) => await GuardAsync(RefreshOutputsAsync);
+        AudioOptionsClose.Click += (_, _) => AudioOptionsFlyout.Hide();
+        AudioOptionsPanel.KeyDown += OnKeyDown;
+        AudioOptionsFlyout.Opening += (_, _) => SizeOptionsFlyout(AudioOptionsFlyout, AudioOptionsPanel, AudioOptionsScroll);
+        AudioOptionsFlyout.Opened += (_, _) => OutputPicker.Focus(FocusState.Programmatic);
         OutputPicker.SelectionChanged += async (_, _) =>
         {
             if (!_isRefreshingOutputs && OutputPicker.SelectedItem is OutputDevice device)
@@ -363,6 +397,10 @@ public sealed partial class MainWindow : Window
     private void LocalizeTransport()
     {
         LabelButton(StopButton, "Stop");
+        LabelButton(AudioOptionsButton, "AudioOptions");
+        LabelButton(AudioOptionsClose, "CloseOptions");
+        ToolTipService.SetToolTip(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
+        AutomationProperties.SetHelpText(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
         OutputPicker.Header = Text.Get("Output");
         OutputPicker.PlaceholderText = Text.Get("ChooseOutput");
         Identify(OutputPicker, "AudioOutputPicker", Text.Get("Output"));

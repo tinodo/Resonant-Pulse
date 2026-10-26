@@ -22,10 +22,12 @@ keyboard analysis is not microphone calibration, MIDI file export is not live
 MIDI clock, a static concept is not an app screenshot, and a development MSIX is
 not a signed Store release.
 
-The urgent Play repair moves every settings-group entry into the fixed page
-header, reduces the instrument to a bounded preview, aligns meter/sound fields
-and stops stretching Start. Bounded flyouts expose advanced controls without
-requiring a taller screen; any remaining page overflow has a persistent cue.
+Play makes the large, centered metronome and integrated BPM readout the primary
+surface. Its square geometry scales to the available performance area. Numeric
+tempo entry and audio setup are secondary panels, not competing large forms.
+The secondary settings rail (a scrolling horizontal strip at narrow widths),
+compact transport and inline tap/meter/sound controls remain accessible.
+Long pulse grids have their own bounded scroll strip and inline overflow cue.
 Sound/pulse-only edits prepare immutable replacement plans off the callback,
 publish at a subsequent audio quantum and preserve prior attack tails. They
 retain the current cursor, loop, count-in, program and stop boundaries.
@@ -40,7 +42,8 @@ downloads identify the delivered source. Preview.3 predates this repair.
 First use resolves the Windows default render endpoint, rather than taking the
 first enumerated device. The selection is then remembered. Losing a saved device
 never routes playback elsewhere automatically. Start is unavailable until an
-enumerated output is selected, and the output picker is on the transport surface.
+enumerated output is selected. The transport's Audio button exposes output and
+volume; unavailable-output guidance remains visible without opening that panel.
 The hosted native check verifies essential controls are visible and exercises
 Start/Stop only when the runner has an output; its report explicitly records
 `not-run-no-output` otherwise. This is not physical speaker acceptance.

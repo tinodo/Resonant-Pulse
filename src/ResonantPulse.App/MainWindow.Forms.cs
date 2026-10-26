@@ -36,8 +36,7 @@ public sealed partial class MainWindow
         var lastColumns = 0;
         void Arrange(double width)
         {
-            var columns = Math.Clamp((int)Math.Floor((Math.Max(0, width) + 12) /
-                (minimumWidth * Math.Sqrt(scale) + 12)), 1, Math.Max(1, children.Length));
+            var columns = FlowColumns(width, minimumWidth, scale, children.Length);
             if (columns == lastColumns) return;
             lastColumns = columns;
             panel.ColumnDefinitions.Clear();
@@ -59,6 +58,10 @@ public sealed partial class MainWindow
         panel.SizeChanged += (_, args) => Arrange(args.NewSize.Width);
         return panel;
     }
+
+    private static int FlowColumns(double width, double minimumWidth, double textScale, int count) =>
+        Math.Clamp((int)Math.Floor((Math.Max(0, width) + 12) /
+            (minimumWidth * Math.Sqrt(textScale) + 12)), 1, Math.Max(1, count));
 
     private static StackPanel Commands(params UIElement[] children)
     {
