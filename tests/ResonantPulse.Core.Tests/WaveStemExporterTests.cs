@@ -243,8 +243,12 @@ public sealed class WaveStemExporterTests
         {
             var document = Check.LaneDocument();
             document.Seed = seed;
+            document.Settings.Tempo = 80 + seed * 20;
+            document.Settings.MasterGain = 0.1f + seed * 0.1f;
+            document.Lanes[0].Pan = -1 + seed * 0.4f;
             return Check.Plan(document);
         }).ToArray();
+        Assert.AreEqual(plans.Length, plans.Select(plan => plan.TotalFrames).Distinct().Count());
         await Task.WhenAll(plans.Select(plan =>
             WaveStemExporter.ExportAsync(path, plan, ["Seed " + plan.Seed]))).WaitAsync(TimeSpan.FromSeconds(30));
         using var zip = ZipFile.OpenRead(path);
