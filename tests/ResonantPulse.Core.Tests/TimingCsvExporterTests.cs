@@ -70,6 +70,24 @@ public sealed class TimingCsvExporterTests
     }
 
     [TestMethod]
+    public async Task Export_DuplicateTimesRetainDistinctIndicesAndNegativeOffsets()
+    {
+        using var temp = new TempDirectory();
+        var session = new TimingSession(Context(), [2, 1, 1, 4], [1, 1, 1.99], 0.1);
+        string path = temp.File("duplicates.csv");
+        await TimingCsvExporter.ExportAsync(path, session);
+        var rows = await ReadAsync(path);
+        var matches = rows.Where(row => row[0] == "match").ToArray();
+        Check.Sequence(new[] { "1", "2", "0" }, matches.Select(row => row[1]));
+        Check.Sequence(new[] { "0", "1", "2" }, matches.Select(row => row[2]));
+        Assert.IsTrue(double.Parse(matches[2][5], CultureInfo.InvariantCulture) < 0);
+        Assert.AreEqual(session.Report.Matches[2].OffsetMilliseconds,
+            double.Parse(matches[2][5], CultureInfo.InvariantCulture));
+        Assert.AreEqual("3", rows.Single(row => row[0] == "miss")[1]);
+        Assert.AreEqual(0, rows.Count(row => row[0] == "extra"));
+    }
+
+    [TestMethod]
     [DataRow("=SUM(1,2)")]
     [DataRow("+1+2")]
     [DataRow("-1+2")]
@@ -146,6 +164,7 @@ public sealed class TimingCsvExporterTests
         Check.Throws<ArgumentException>(() => new TimingSession(Context(), [], [5], 0.1));
         Check.Throws<ArgumentException>(() => new TimingSession(Context(), [], [], double.NaN));
         Check.Throws<ArgumentException>(() => new TimingSession(Context(), new double[2000], new double[2000], 0.1));
+        Check.Throws<ArgumentException>(() => new TimingSession(Context(), new double[100001], [], 0.1));
         Check.Throws<ArgumentNullException>(() => new TimingSession(null!, [], [], 0.1));
         Check.Throws<ArgumentNullException>(() => new TimingSession(Context(), null!, [], 0.1));
         Check.Throws<ArgumentException>(() => new TimingSession(Context(), [0, 1e-320, 2e-320, 3e-320], [1, 1.01, 1.02, 1.03], 2));
@@ -163,6 +182,21 @@ public sealed class TimingCsvExporterTests
             TimingCsvExporter.ExportAsync(path, new TimingSession(Context(), [], [], 0.1), new CancellationToken(true)));
         if (existing) Assert.AreEqual("retained", await File.ReadAllTextAsync(path));
         else Assert.IsFalse(File.Exists(path));
+        temp.NoTemps();
+    }
+
+    [TestMethod]
+    public async Task Export_InvalidDestinationsAndNullSessionRetainExistingFiles()
+    {
+        using var temp = new TempDirectory();
+        string retained = temp.File("retained.csv");
+        await File.WriteAllTextAsync(retained, "retained");
+        var session = new TimingSession(Context(), [], [], 0.1);
+        foreach (string path in new[] { "", "relative.csv", temp.File("wildcard?.csv"), temp.Root })
+            await Check.ThrowsAsync<ArgumentException>(() => TimingCsvExporter.ExportAsync(path, session));
+        await Check.ThrowsAsync<ArgumentNullException>(() => TimingCsvExporter.ExportAsync(retained, null!));
+        Assert.AreEqual("retained", await File.ReadAllTextAsync(retained));
+        Assert.AreEqual(1, Directory.GetFiles(temp.Root).Length);
         temp.NoTemps();
     }
 
