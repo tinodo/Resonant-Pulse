@@ -8,7 +8,7 @@ evidence separately.
 | Family | Implemented source | Not yet delivered or established |
 |---|---|---|
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
-| Play and transport | Native pulse instrument, tempo/meter controls, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; prepared live main-sound and per-pulse accent updates | Safe-boundary structural edits; calibrated audible position; tap-in and free-running/no-bar mode. Structural tempo/rhythm edits require Stop + Start. Full visual/usability acceptance remains outstanding |
+| Play and transport | Native pulse instrument with an exact-tempo editor, live -/TAP/+, sheet-music time-signature picker with a custom builder, beat-strength strip, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; live sound, beat-strength, tempo, meter, tempo-unit, subdivision, swing, group and gap-bar edits spliced at the next pulse | Acoustic/hardware confirmation of live splices (no audio has been played by the automated checks); structural edits during a finite program (they need Stop + Start); calibrated audible position; tap-in and free-running/no-bar mode. Full visual/usability acceptance remains outstanding |
 | Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
 | Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
@@ -22,22 +22,32 @@ keyboard analysis is not microphone calibration, MIDI file export is not live
 MIDI clock, a static concept is not an app screenshot, and a development MSIX is
 not a signed Store release.
 
-Play makes the large, centered metronome and integrated BPM readout the primary
-surface. Its square geometry scales to the available performance area. Numeric
-tempo entry and audio setup are secondary panels, not competing large forms.
-The secondary settings rail (a scrolling horizontal strip at narrow widths),
-compact transport and inline tap/meter/sound controls remain accessible.
-Long pulse grids have their own bounded scroll strip and inline overflow cue.
-Sound/pulse-only edits prepare immutable replacement plans off the callback,
-publish at a subsequent audio quantum and preserve prior attack tails. They
-retain the current cursor, loop, count-in, program and stop boundaries.
-Explicit pulse edits take precedence over automatic grouping emphasis only for
-edited slots; unedited boundaries retain their phase across bars. Per-slot
-`ManualAccentIndices` and the explicit All Normal override are saved in projects.
-Count-in still uses its own cue accents; structural tempo/rhythm edits still
-require Stop + Start. Revision-specific source, native and review evidence is
-recorded in [PR 14](https://github.com/tinodo/Resonant-Pulse/pull/14); release
-downloads identify the delivered source. Preview.3 predates this repair.
+Play makes the large, centered metronome and its BPM readout the primary
+surface; its square geometry scales to the available area. The readout opens an
+exact tempo editor; -, TAP and + sit beneath it, with the sheet-music
+time-signature picker, the beat-strength strip and the sound selector below.
+Practice, Project and Help are a quiet rail (a horizontal strip at narrow
+widths). Long strips scroll within their own bounded area with an overflow cue.
+Every panel has Cancel and Done side by side; Done applies.
+
+Live edits prepare immutable replacement revisions off the audio callback.
+Sound and beat-strength changes switch at the next audio quantum on the same
+musical clock (also during a finite program) and preserve prior attack tails.
+Tempo, meter, tempo unit, subdivision, swing, groups and gap bars are spliced in
+at the first primary pulse at or after the render cursor: the bar position
+continues when meter, unit and loop length are unchanged, and otherwise restarts
+at beat 1 without replaying the count-in. Earlier clicks keep ringing under the
+new revision; the wall-clock practice timer keeps its absolute stop frame, while
+beat and bar limits are counted from the restart. Only the newest unapplied
+request survives, so rapid taps coalesce. A finite program keeps its own clock:
+Play replaces its tempo and meter controls with an explanation, and structural
+changes made elsewhere need Stop + Start. Explicit pulse edits take precedence
+over automatic grouping emphasis only for edited slots; per-slot
+`ManualAccentIndices` and the explicit All Normal override are saved in
+projects. Count-in still uses its own cue accents and applies at the next Start.
+The splice arithmetic is covered by offline tests that compare rendered samples;
+no listening or hardware-latency acceptance is claimed. Releases up to
+0.1.0-preview.5 need Stop + Start for tempo and meter edits.
 
 First use resolves the Windows default render endpoint, rather than taking the
 first enumerated device. The selection is then remembered. Losing a saved device

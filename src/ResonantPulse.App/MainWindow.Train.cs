@@ -47,7 +47,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < targetDocument.Lanes.Count; index++)
             targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), targetDocument.Lanes[index].Name));
         var target = SelectChoices("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
-        var tolerance = Number("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
+        var tolerance = NumberInt("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
         var includeSilent = Check("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
         _timingTarget = target;
         _timingToleranceInput = tolerance;
@@ -140,32 +140,12 @@ public sealed partial class MainWindow
         if (!_isTimingArmed || _timingRevision is null) return;
         var revision = _timingRevision;
         SetTimingArmed(false);
+        // The run's frames are absolute device frames; the revision converts them to its own timeline.
         var endFrame = TimingRunRules.EndFrame(_timingStartFrame,
             Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds, revision.Initial.SampleRate,
-            revision.EndFrame, completedFrame);
+            revision.EndFrameAbsolute, completedFrame);
         var seconds = (double)(endFrame - _timingStartFrame) / revision.Initial.SampleRate;
-        var expected = new List<double>();
-        void Append(RenderPlan plan, long origin, long excludeBefore)
-        {
-            foreach (var onset in plan.Targets)
-            {
-                if (onset.LaneIndex != _timingLane || onset.Accent == Accent.Silent || (!_includeSilentTargets && !onset.Audible)) continue;
-                var frame = origin + onset.Frame;
-                if (frame < Math.Max(_timingStartFrame, excludeBefore) || frame >= endFrame) continue;
-                expected.Add((double)(frame - _timingStartFrame) / plan.SampleRate);
-            }
-        }
-        Append(revision.Initial, 0, revision.CountInFrames);
-        if (!revision.IsFinite)
-        {
-            var firstCycle = Math.Max(0, (_timingStartFrame - revision.Initial.TotalFrames) / revision.Body.TotalFrames);
-            for (var cycle = firstCycle; ; cycle++)
-            {
-                var origin = revision.Initial.TotalFrames + cycle * revision.Body.TotalFrames;
-                if (origin >= endFrame) break;
-                Append(revision.Body, origin, origin);
-            }
-        }
+        var expected = revision.TargetSeconds(_timingLane, _includeSilentTargets, _timingStartFrame, endFrame);
         var report = TimingAnalyzer.Analyze(expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
         _lastTimingReport = report.Matched == 0
             ? Text.Format("TimingNoMatches", report.Missed, report.Extra)

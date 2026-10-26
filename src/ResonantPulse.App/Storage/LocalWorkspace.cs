@@ -25,8 +25,17 @@ public sealed class LocalWorkspace
     private readonly SemaphoreSlim _writes = new(1);
     private readonly string _root;
 
-    public LocalWorkspace() : this(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ResonantPulse")) { }
+    /// <summary>Optional private data folder (recovery, preferences, library, logs) for isolated test runs.</summary>
+    internal const string DataFolderVariable = "RESONANT_PULSE_HOME";
+
+    internal static string DefaultRoot()
+    {
+        var overridden = Environment.GetEnvironmentVariable(DataFolderVariable);
+        return string.IsNullOrWhiteSpace(overridden) ? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ResonantPulse") : overridden;
+    }
+
+    public LocalWorkspace() : this(DefaultRoot()) { }
 
     internal LocalWorkspace(string root) => _root = Path.GetFullPath(root);
     public string RecoveryPath => Path.Combine(_root, "recovery.pulse");

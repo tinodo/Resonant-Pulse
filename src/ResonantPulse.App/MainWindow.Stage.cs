@@ -19,9 +19,11 @@ public sealed partial class MainWindow
         _stageTempo = Heading("");
         _stageTempo.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Bahnschrift");
         _stageTempo.FontSize = 96;
+        _stageMeter = Body("");
+        _stageMeter.FontSize = 28;
         _position = Body("");
         _instrument = new PulseInstrument { MaxHeight = 320 };
-        var panel = Column(Heading(_document.Name), _stageTempo, _position, _instrument);
+        var panel = Column(Heading(_document.Name), _stageTempo, _stageMeter, _position, _instrument);
         panel.Children.Add(CommandFlow(StageControl(ActionButton(_isLocked ? "Unlock" : "Lock", "StageLock", () => RunStageOperationAsync(() =>
         {
             _isLocked = !_isLocked;

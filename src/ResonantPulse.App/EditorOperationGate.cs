@@ -8,7 +8,9 @@ internal enum EditorChangeKind
     MasterGainOnly,
     GlobalTempoOnly,
     PracticeTimerOnly,
-    SoundAndAccentsOnly
+    SoundAndAccentsOnly,
+    /// <summary>Play-page meter, tempo unit, groups and feel; Studio drafts are invalidated but playback may follow live.</summary>
+    PlayStructure
 }
 
 internal static class EditorRevisionPolicy

@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly Stack<PulseDocument> _redo = new();
     private readonly TapTempoEstimator _tap = new();
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private readonly DispatcherTimer _noticeTimer = new() { Interval = TimeSpan.FromSeconds(6) };
     private Preferences _preferences = new();
     private PulseDocument _document = new();
     private string _view = "Play";
@@ -43,6 +44,7 @@ public sealed partial class MainWindow : Window
     private PulseInstrument? _instrument;
     private TextBlock? _position;
     private TextBlock? _stageTempo;
+    private TextBlock? _stageMeter;
     private TextBlock? _programStatus;
     private ProgressBar? _progress;
     private TextBlock? _timingStatus;
@@ -60,6 +62,14 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Diagnostics.Write("MainWindow XAML initialization completed");
         Title = "Resonant Pulse";
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(DragTitleBar);
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "App.ico");
+        if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
+        AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        Root.SizeChanged += (_, _) => UpdateTitleBarInset();
+        _noticeTimer.Tick += (_, _) => { _noticeTimer.Stop(); if (Notice.Severity == InfoBarSeverity.Informational) Notice.IsOpen = false; };
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);
         var scale = dpi == 0 ? 1 : dpi / 96.0;
@@ -151,7 +161,7 @@ public sealed partial class MainWindow : Window
                     false, editorChange: EditorChangeKind.MasterGainOnly));
         };
         Root.KeyDown += OnKeyDown;
-        Root.ActualThemeChanged += (_, _) => RefreshInstrumentTheme();
+        Root.ActualThemeChanged += (_, _) => { RefreshInstrumentTheme(); ApplyCaptionTheme(); };
         Root.Loaded += async (_, _) =>
         {
             if (_isReady) return;
@@ -195,8 +205,8 @@ public sealed partial class MainWindow : Window
             {
                 var recovered = await DocumentStore.LoadAsync(_workspace.RecoveryPath);
                 await ValidateAsync(recovered);
+                // Your last settings simply come back; a metronome should not announce that. Failures still report below.
                 _document = recovered;
-                ShowNotice("Recovered");
             }
             catch (Exception exception) { ShowError(exception); }
         }
@@ -213,9 +223,13 @@ public sealed partial class MainWindow : Window
     private void RebuildNavigation()
     {
         Navigation.MenuItems.Clear();
+        var icons = new Dictionary<string, string>
+        {
+            ["Play"] = "\uE768", ["Studio"] = "\uE9E9", ["Train"] = "\uEC4A", ["Stage"] = "\uE7F4", ["Library"] = "\uE8F1"
+        };
         foreach (var key in new[] { "Play", "Studio", "Train", "Stage", "Library" })
         {
-            var item = new NavigationViewItem { Content = Text.Get(key), Tag = key };
+            var item = new NavigationViewItem { Content = Text.Get(key), Tag = key, Icon = new FontIcon { Glyph = icons[key] } };
             Identify(item, "Destination" + key, Text.Get(key));
             Navigation.MenuItems.Add(item);
         }
@@ -237,8 +251,11 @@ public sealed partial class MainWindow : Window
     private void BuildPage()
     {
         _instrument = null;
+        _beatStrip = null;
+        _tempoEdit = null;
         _position = null;
         _stageTempo = null;
+        _stageMeter = null;
         _programStatus = null;
         _progress = null;
         _timingStatus = null;
@@ -299,8 +316,19 @@ public sealed partial class MainWindow : Window
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
             await ValidateAsync(revised);
-            if (editorChange == EditorChangeKind.SoundAndAccentsOnly)
-                await _transport.UpdateSoundAsync(revised.Settings);
+            // Live-eligible edits follow the running transport (sound at the next quantum, tempo/meter/feel at the
+            // next pulse). This happens before the document is replaced so a failed update changes nothing.
+            var live = LiveEditOutcome.NotPlaying;
+            var countInChanged = false;
+            if (LiveEditPolicy.IsLive(editorChange))
+            {
+                // Stop (or a restart) during the off-thread compile only means the edit has nothing to follow:
+                // it is still a valid document change, so keep it instead of reporting an error.
+                try { live = await _transport.UpdateLiveAsync(revised.Settings); }
+                catch (LiveSessionChangedException) { live = LiveEditOutcome.NotPlaying; }
+                countInChanged = _transport.Snapshot().Revision is { } audible &&
+                    audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
+            }
             _undo.Push(_document);
             if (_undo.Count > 64)
             {
@@ -312,10 +340,11 @@ public sealed partial class MainWindow : Window
             _document = revised;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
-            if (editorChange != EditorChangeKind.SoundAndAccentsOnly && affectsPlayback &&
-                _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
+            if (LiveEditPolicy.LeavesPendingEdit(editorChange, affectsPlayback,
+                    _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted,
+                    live, countInChanged))
                 _hasPendingEdits = true;
-            // Edits are pending until Stop + Start. The immutable active
+            // Edits that cannot follow live are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.
             published();
             await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
@@ -383,11 +412,15 @@ public sealed partial class MainWindow : Window
         Notice.Title = Text.Get(key);
         Notice.Message = "";
         Notice.IsOpen = true;
+        // Informational notices (restored session, saved) fade away; errors stay until dismissed.
+        _noticeTimer.Stop();
+        _noticeTimer.Start();
     }
 
     private void ShowError(Exception exception, string key = "Error")
     {
         Diagnostics.Write(key, exception);
+        _noticeTimer.Stop();
         Notice.Severity = InfoBarSeverity.Error;
         Notice.Title = Text.Get(key);
         Notice.Message = $"{ErrorText.Explain(exception)}\n{Text.Format("ErrorDiagnostics", Diagnostics.LogPath)}";
@@ -396,9 +429,10 @@ public sealed partial class MainWindow : Window
 
     private void LocalizeTransport()
     {
-        LabelButton(StopButton, "Stop");
-        LabelButton(AudioOptionsButton, "AudioOptions");
+        LabelButton(StopButton, "Stop", "\uE71A");
+        LabelButton(AudioOptionsButton, "AudioOptions", "\uE7F5");
         LabelButton(AudioOptionsClose, "CloseOptions");
+        AudioOptionsTitle.Text = Text.Get("AudioOptions");
         ToolTipService.SetToolTip(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
         AutomationProperties.SetHelpText(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
         OutputPicker.Header = Text.Get("Output");
@@ -412,16 +446,50 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(Navigation, Text.Get("Destinations"));
     }
 
-    private static void LabelButton(Button button, string key)
+    private static void LabelButton(Button button, string key, string? glyph = null)
     {
-        button.Content = new TextBlock { Text = Text.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
+        UIElement content = new TextBlock
+        {
+            Text = Text.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        if (glyph is not null)
+        {
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 8,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            };
+            row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
+            row.Children.Add(content);
+            content = row;
+        }
+        button.Content = content;
         AutomationProperties.SetName(button, Text.Get(key));
     }
 
-    private void ApplyTheme() => Root.RequestedTheme = _preferences.Theme switch
+    private void ApplyTheme()
     {
-        "Dark" => ElementTheme.Dark, "Light" => ElementTheme.Light, _ => ElementTheme.Default
-    };
+        Root.RequestedTheme = _preferences.Theme switch
+        {
+            "Dark" => ElementTheme.Dark, "Light" => ElementTheme.Light, _ => ElementTheme.Default
+        };
+        ApplyCaptionTheme();
+    }
+
+    private void UpdateTitleBarInset()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var scale = GetDpiForWindow(hwnd) / 96.0;
+        CaptionInset.Width = new GridLength(AppWindow.TitleBar.RightInset / Math.Max(1.0, scale));
+    }
+
+    private void ApplyCaptionTheme()
+    {
+        var foreground = Root.ActualTheme == ElementTheme.Light ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+        AppWindow.TitleBar.ButtonForegroundColor = foreground;
+        AppWindow.TitleBar.ButtonInactiveForegroundColor = foreground;
+    }
 
     private static void Identify(DependencyObject control, string id, string name)
     {

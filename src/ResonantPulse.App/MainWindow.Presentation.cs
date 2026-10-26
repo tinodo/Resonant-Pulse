@@ -33,8 +33,32 @@ public sealed partial class MainWindow
             Groups = meterBeats == settings.BeatsPerBar && meterDenominator == settings.BeatDenominator ? settings.Groups : []
         };
         var phase = position is null ? 0 : (position.BeatIndex + position.BeatPhase) / meterBeats;
-        var tempo = position?.Tempo ?? settings.Tempo;
+        // The readout shows what the player asked for while nothing plays a program; otherwise the audible tempo, so a
+        // running program (or a running open-ended revision) is not misreported after a Studio edit changes the document.
+        var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoRequested,
+            _document.Settings.Tempo, position?.Tempo, settings.Tempo);
         _instrument?.Present(shownSettings, tempo, phase, plan, frame, blind, _preferences.IsReducedMotion);
+        if (_tempoEdit is { } tempoEdit)
+        {
+            var tempoName = Text.Format("TempoEditName", PulseInstrument.FormatTempo(tempo));
+            if (tempoName != _tempoEditName)
+            {
+                _tempoEditName = tempoName;
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tempoEdit, tempoName);
+            }
+        }
+        if (_beatStrip is { } strip)
+        {
+            var pulse = -1;
+            // The strip edits the document's own bar; a program section in another meter has no matching cell to light.
+            var stripMeterMatches = meterBeats == _document.Settings.BeatsPerBar && meterDenominator == _document.Settings.BeatDenominator;
+            if (stripMeterMatches && position is not null && !blind && snapshot.State is TransportState.Playing or TransportState.Paused)
+            {
+                var withinBar = (position.BeatIndex + position.BeatPhase) * 4d / meterDenominator;
+                pulse = (int)Math.Floor(withinBar / Math.Max(1d / 64, settings.BeatUnitQuarters) + 1e-6);
+            }
+            strip.Highlight(pulse >= strip.Count ? -1 : pulse);
+        }
         if (_tempoCurve is { } curve)
         {
             EnsureTempoPreview();
@@ -74,17 +98,19 @@ public sealed partial class MainWindow
         if (_stageTempo is not null)
         {
             _stageTempo.FontSize = Math.Clamp(Root.ActualWidth / 8, 32, 96);
-            _stageTempo.Text = blind ? Text.Get("Silent") : $"{tempo.ToString("0.0", Text.Culture)}\n{PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}";
+            _stageTempo.Text = blind ? Text.Get("Silent") : PulseInstrument.FormatTempo(tempo);
+            if (_stageMeter is not null)
+                _stageMeter.Text = blind ? "" : $"BPM · {PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}";
         }
         TransportStatus.Text = $"{state} · {(blind ? Text.Get("Silent") : detail)}" +
             (snapshot.IsMuted ? $" · {Text.Get("Muted")}" : "") +
             (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : !HasSelectedOutput ? $"\n{Text.Get("ChooseOutput")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemStatus(TransportStatus,
-            $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])}");
-        if (!blind && snapshot.Revision is { HasPracticeLimit: true, EndFrame: { } endFrame } timed)
+            $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])};tempo={settings.Tempo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)};meter={meterBeats}/{meterDenominator}");
+        if (!blind && snapshot.Revision is { HasPracticeLimit: true } timed &&
+            timed.FramesRemainingAt(snapshot.ProcessedFrame) is { } remaining)
         {
-            var remaining = Math.Max(0, endFrame - Math.Max(snapshot.ProcessedFrame, timed.CountInFrames));
             var duration = TimeSpan.FromSeconds(Math.Ceiling((double)remaining / timed.Initial.SampleRate));
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }
@@ -93,13 +119,13 @@ public sealed partial class MainWindow
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
         {
-            LabelButton(StartButton, startKey);
+            LabelButton(StartButton, startKey, startKey == "Pause" ? "\uE769" : "\uE768");
             _lastStartLabel = Text.Get(startKey);
         }
         var muteKey = snapshot.IsMuted ? "Unmute" : "Mute";
         if (_lastMuteLabel != Text.Get(muteKey))
         {
-            LabelButton(MuteButton, muteKey);
+            LabelButton(MuteButton, muteKey, snapshot.IsMuted ? "\uE767" : "\uE74F");
             _lastMuteLabel = Text.Get(muteKey);
         }
         if (_programStatus is not null)

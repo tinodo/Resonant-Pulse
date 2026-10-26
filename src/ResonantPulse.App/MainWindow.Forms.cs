@@ -106,7 +106,8 @@ public sealed partial class MainWindow
     private Button ActionButton(string key, string id, Action action) =>
         ActionButton(key, id, () => { action(); return Task.CompletedTask; });
 
-    private static NumberBox Number(string key, string id, double value, double minimum, double maximum, double increment = 1)
+    private static NumberBox Number(string key, string id, double value, double minimum, double maximum, double increment = 1,
+        int fractionDigits = 1)
     {
         var input = new NumberBox
         {
@@ -118,14 +119,28 @@ public sealed partial class MainWindow
             LargeChange = increment * 10,
             NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter([Text.Culture.Name], "US")
             {
-                IntegerDigits = 1, FractionDigits = 1, IsGrouped = false,
+                IntegerDigits = 1, FractionDigits = fractionDigits, IsGrouped = false,
                 NumberRounder = new Windows.Globalization.NumberFormatting.SignificantDigitsNumberRounder { SignificantDigits = 12 }
             },
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };
         Identify(input, id, Text.Get(key));
+        return input;
+    }
+
+    private static NumberBox NumberInt(string key, string id, double value, double minimum, double maximum, double increment = 1)
+    {
+        var input = Number(key, id, value, minimum, maximum, increment);
+        input.NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter([Text.Culture.Name], "US")
+        {
+            IntegerDigits = 1, FractionDigits = 0, IsGrouped = false,
+            NumberRounder = new Windows.Globalization.NumberFormatting.IncrementNumberRounder
+            {
+                Increment = 1, RoundingAlgorithm = Windows.Globalization.NumberFormatting.RoundingAlgorithm.RoundHalfUp
+            }
+        };
         return input;
     }
 

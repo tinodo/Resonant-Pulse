@@ -89,8 +89,11 @@ public static class AtomicFile
             throw new ArgumentException("Use a fully qualified local filesystem path, not a network, device, URI or wildcard path.", nameof(path));
         string full = Path.GetFullPath(path);
         string name = Path.GetFileName(full);
+        // Windows normalizes trailing dots and spaces away in GetFullPath, so also judge the name as it was written.
+        string written = Path.GetFileName(path);
         if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            name.EndsWith(' ') || name.EndsWith('.') || full.AsSpan(Path.GetPathRoot(full)!.Length).Contains(':'))
+            name.EndsWith(' ') || name.EndsWith('.') || written.EndsWith(' ') || written.EndsWith('.') ||
+            full.AsSpan(Path.GetPathRoot(full)!.Length).Contains(':'))
             throw new ArgumentException("Choose a valid file name without alternate data streams or trailing dots/spaces.", nameof(path));
         string? directory = Path.GetDirectoryName(full);
         if (directory is null || !Directory.Exists(directory)) throw new DirectoryNotFoundException("The selected local destination directory does not exist.");
@@ -119,13 +122,15 @@ public static class AtomicFile
                     File.Move(temp, full, overwrite: true);
                     break;
                 }
-                catch (Exception exception) when (attempt < 6 && OperatingSystem.IsWindows() &&
+                catch (Exception exception) when (attempt < 9 && OperatingSystem.IsWindows() &&
                     exception is IOException or UnauthorizedAccessException &&
                     (exception.HResult & 0xFFFF) is 5 or 32 or 33)
                 {
-                    // Windows can briefly deny replacement while another rename
-                    // or reader closes. Permanent failures still propagate.
-                    await Task.Delay(10 << attempt, token).ConfigureAwait(false);
+                    // Windows can briefly deny replacement while another rename or reader closes. Back off with
+                    // jitter: writers that collided must not retry in lockstep (a 15.6 ms system timer tick would
+                    // wake them all together and make them collide again). Permanent failures still propagate.
+                    var delay = Math.Min(10 << attempt, 200);
+                    await Task.Delay(delay + Random.Shared.Next(delay), token).ConfigureAwait(false);
                 }
             }
         }

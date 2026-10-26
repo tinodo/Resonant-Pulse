@@ -31,29 +31,38 @@ and API authorization remain required; update automation is separately guarded.
 
 ## Development and verification
 
-Play centers the large cyan/magenta metronome and its integrated BPM readout.
-The dial fills the remaining performance area; it is not a thumbnail next to a
-tempo form. Rhythm, Tempo, Practice, Project and Help open bounded panels.
-Precise numeric tempo entry is in Tempo; tap, +/-1, meter, sound and pulse
-strengths remain below the dial. Audio on the compact transport opens output
-and volume settings. Long pulse grids scroll within their own bounded strip.
-Main click sound and pulse accents (including Silent) now publish prepared
-audio revisions during playback without restarting the musical clock. Existing
-click tails finish in their original sound. A manual pulse choice overrides
-automatic group emphasis only for that pulse slot; unedited group boundaries
-keep their original emphasis, including across dotted-unit bars. The written
-groups are preserved. Count-in retains
-its own cue accents. Other tempo/rhythm edits still require Stop + Start.
-This repair is not in preview.3; use a release built from the repaired source.
-Revision-specific evidence is recorded in [PR 14](https://github.com/tinodo/Resonant-Pulse/pull/14).
-Hosted checks without an audio endpoint do not establish hardware/listening acceptance.
+Play centers the large cyan/magenta metronome and its BPM readout. Click the
+number to type an exact tempo; use -, **TAP** and + under the dial (hold - or +
+to repeat, Ctrl for steps of ten); choose a sheet-music time signature (2/4,
+3/4, 4/4, 6/8 and more, with **Custom...** for the full builder); click a beat
+bar to change its strength; pick the click sound. Practice, Project and Help
+open compact panels in which **Done** applies and **Cancel** discards.
 
-Use the pinned .NET SDK and a Windows build agent. This repository's owner uses
-a shared local machine: builds/tests run in GitHub Actions, not locally.
+A running metronome follows every Play control without stopping. Sound and beat
+strengths switch at the next audio quantum. Tempo, time signature, tempo unit,
+subdivision, swing, groups and gap bars are spliced in at the next beat: the bar
+carries on when the meter is unchanged and restarts at beat 1 when it changes,
+and the tails of earlier clicks finish in their original sound. Count-in and
+practice limits apply at the next Start. A project with a Studio/Train program
+keeps the program's own tempo and meter (Play says so instead of editing an
+unused value); sound and beat strengths still follow it live. Hosted checks
+without an audio endpoint, and the unit tests that compare rendered samples,
+do not establish hardware or listening acceptance.
+
+Use the pinned .NET SDK on Windows. The owner has authorized local builds and
+tests on the development PC; keep them serialized, silent and isolated. A test
+instance must set `RESONANT_PULSE_HOME` to a scratch folder so real projects and
+settings are never touched. After building, `packaging\Verify-Local.ps1` runs
+the native first-use checks against your own build on a private desktop: no
+window appears, nothing is played, no screen is copied and no keystroke can reach
+another window. `packaging\Verify-FirstUse.ps1` is the underlying verifier;
+outside GitHub Actions it plays no audio, copies no screen and sends no keys
+unless asked (`-RunAudio`, `-Screenshots`, `-Keyboard`). GitHub Actions remains the
+authoritative gate.
 
 ```powershell
-# These commands are intended for CI or an isolated developer machine.
 dotnet test tests\ResonantPulse.Core.Tests\ResonantPulse.Core.Tests.csproj -c Release
+dotnet test tests\ResonantPulse.App.Tests\ResonantPulse.App.Tests.csproj -c Release
 .\packaging\Generate-Assets.ps1
 dotnet publish src\ResonantPulse.App\ResonantPulse.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:DistributionMode=Portable --self-contained true
 ```

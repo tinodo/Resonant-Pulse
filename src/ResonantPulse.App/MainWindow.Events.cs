@@ -109,10 +109,10 @@ public sealed partial class MainWindow
 
     private UIElement BuildGenerator()
     {
-        var attacks = Number("Pulses", "EuclideanAttacks", 5, 0, 256);
-        var steps = Number("GridSteps", "EuclideanSteps", 8, 1, 256);
+        var attacks = NumberInt("Pulses", "EuclideanAttacks", 5, 0, 256);
+        var steps = NumberInt("GridSteps", "EuclideanSteps", 8, 1, 256);
         var cycle = Number("Cycle", "EuclideanCycle", 4, 0.125, 256, 0.125);
-        var rotation = Number("Rotation", "EuclideanRotation", 0, -256, 256);
+        var rotation = NumberInt("Rotation", "EuclideanRotation", 0, -256, 256);
         return Column(Heading(Text.Get("Euclidean")), Flow(attacks, steps, cycle, rotation),
             EditorActionButton("AddLane", "GenerateEuclidean", async () =>
             {
