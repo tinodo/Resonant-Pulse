@@ -31,6 +31,28 @@ and API authorization remain required; update automation is separately guarded.
 
 ## Development and verification
 
+### Stem export in development
+
+The next preview's Library includes **Export WAV stems (ZIP)**. It creates
+`main.wav` (main pulses, subdivisions and count-in), one numbered stereo PCM16
+WAV per authored lane, and `manifest.json` in one locally selected archive.
+Import every track at the same DAW origin: all retain frame zero and the same
+finite length, including leading count-in silence on lane tracks. Lane names
+are metadata, never archive paths.
+
+Exports preserve the compiled seed/probability realization, lane mute/solo,
+gaps, pan, lane gain and document master gain. Suppressed lanes remain silent
+tracks. Program length or the configured export-bar count determines duration;
+live practice limits do not shorten it. Independent 16-bit rounding and peak
+protection mean re-summing need not reproduce the mixed WAV bit-for-bit.
+The confirmation shows track count and uncompressed audio size before choosing
+a destination. Each WAV is subject to RIFF's 4 GiB limit; RF64 is not supported.
+The archive uses .NET's supported
+[ZipArchive API](https://learn.microsoft.com/dotnet/api/system.io.compression.ziparchive?view=net-10.0).
+This source feature is not included in published preview.3.
+
+### CI
+
 Use the pinned .NET SDK and a Windows build agent. This repository's owner uses
 a shared local machine: builds/tests run in GitHub Actions, not locally.
 

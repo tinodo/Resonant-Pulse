@@ -9,6 +9,35 @@ namespace ResonantPulse.App.Tests;
 public sealed class TextTests
 {
     [TestMethod]
+    public void StemExportGuidanceAndSizeConfirmationExistInEverySupportedLanguage()
+    {
+        var previous = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                foreach (var key in new[] { "ExportStems", "StemExportHint", "StemExportConfirm", "StemExportBusy" })
+                {
+                    Assert.AreNotEqual(key, Text.Get(key), $"{language}: {key}");
+                    Assert.IsFalse(string.IsNullOrWhiteSpace(Text.Get(key)), $"{language}: {key}");
+                }
+                var confirmation = Text.Format("StemExportConfirm", 3, 12.5);
+                StringAssert.Contains(confirmation, 12.5.ToString("N1", Text.Culture));
+                Assert.IsFalse(confirmation.Contains('{'));
+            }
+        }
+        finally
+        {
+            Text.Select(previous);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void QuickStartAndMusicalReferenceExistInEverySupportedLanguage()
     {
         var previous = Text.Language;

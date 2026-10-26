@@ -196,12 +196,14 @@ public sealed partial class MainWindow
         _isDialogOpen = true;
         try
         {
+            var content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap };
+            Identify(content, "ConfirmationMessage", message);
             var dialog = new ContentDialog
             {
                 XamlRoot = Root.XamlRoot,
                 RequestedTheme = Root.RequestedTheme,
                 Title = Text.Get(primary),
-                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                Content = content,
                 PrimaryButtonText = Text.Get(primary),
                 CloseButtonText = Text.Get("Cancel"),
                 DefaultButton = ContentDialogButton.Close

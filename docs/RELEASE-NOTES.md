@@ -2,6 +2,14 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
+Library now offers **Export WAV stems (ZIP)**: one main/subdivision/count-in
+track, one track per authored lane, and a manifest in one atomic local archive.
+Every stereo PCM16 track shares origin and length. Lane mute/solo, seeded
+probability, gaps, pan and gain are preserved; suppressed lanes stay silent.
+The confirmation shows uncompressed size. Per-track rounding/peak protection
+means re-summing is not guaranteed bit-identical to mixed WAV. This feature is
+in development, not in published preview.3.
+
 Help is now a discoverable navigation destination with a five-language quick
 start and musical reference. It explains output selection, count-in,
 pause/mute/stop, edit boundaries, program tempos, practice limits, note units

@@ -9,6 +9,8 @@ namespace ResonantPulse.App;
 
 public sealed partial class MainWindow
 {
+    private bool _isExportingStems;
+
     private UIElement BuildLibrary()
     {
         _search = Input("Search", "LibrarySearch", "");
@@ -19,6 +21,8 @@ public sealed partial class MainWindow
             SelectionMode = ListViewSelectionMode.Single
         };
         Identify(_libraryList, "LibraryProjects", Text.Get("Library"));
+        var stemHint = Copy("StemExportHint");
+        Identify(stemHint, "StemExportHint", stemHint.Text);
         var panel = Column(Heading(Text.Get("Library")), _search, _libraryList,
             CommandFlow(
                 ActionButton("Load", "LoadLibraryProject", async () =>
@@ -41,7 +45,9 @@ public sealed partial class MainWindow
                 })),
             Copy("EmptyLibrary"), Copy("ExportNotice"),
             CommandFlow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false)),
-                ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true))), BuildPresets());
+                ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true)),
+                ActionButton("ExportStems", "ExportWavStems", ExportStemsAsync)),
+            stemHint, BuildPresets());
         _ = GuardAsync(RefreshLibraryAsync);
         return Scroll(panel);
     }
@@ -191,5 +197,29 @@ public sealed partial class MainWindow
             ShowNotice("Saved");
         }
         finally { RefreshSnapshot(); }
+    }
+
+    private async Task ExportStemsAsync()
+    {
+        if (_isExportingStems) throw new InvalidOperationException(Text.Get("StemExportBusy"));
+        _isExportingStems = true;
+        try
+        {
+            var snapshot = LocalWorkspace.Clone(_document);
+            int bars = _preferences.ExportBars;
+            string[] names = snapshot.Lanes.Select(lane => lane.Name).ToArray();
+            var prepared = await Task.Run(() =>
+            {
+                var plan = ScheduleCompiler.Compile(snapshot, 48000, bars, true);
+                return (Plan: plan, Bytes: WaveStemExporter.GetUncompressedAudioBytes(plan));
+            });
+            if (!await ConfirmAsync(Text.Format("StemExportConfirm", names.Length + 1,
+                prepared.Bytes / (1024d * 1024)))) return;
+            string? path = await PickSavePathAsync(".zip", Text.Get("ExportStems"));
+            if (path is null) return;
+            await Task.Run(() => WaveStemExporter.ExportAsync(path, prepared.Plan, names));
+            ShowNotice("Saved");
+        }
+        finally { _isExportingStems = false; RefreshSnapshot(); }
     }
 }

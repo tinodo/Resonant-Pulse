@@ -287,8 +287,53 @@ if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
     throw 'Returning from Help unexpectedly changed stopped transport.'
 }
 Wait-TapStatus 'idle'
+(Find-Control 'DestinationLibrary').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+foreach ($id in @('ExportWavStems', 'StemExportHint')) {
+    if ([string]::IsNullOrWhiteSpace((Find-Control $id).Current.Name)) {
+        throw "Stem export control did not expose its accessible text: $id"
+    }
+}
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Visiting stem export controls unexpectedly changed stopped transport.'
+}
+Invoke-Control 'ExportWavStems'
+$confirmation = Find-Control 'ConfirmationDialog'
+$message = (Find-Control 'ConfirmationMessage').Current.Name
+if ($message -notlike 'Export 1 aligned stereo WAV tracks?*MiB*') {
+    throw "Stem export preflight did not expose its actual track count and size: $message"
+}
+$cancelCondition = [Windows.Automation.AndCondition]::new(
+    [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button),
+    [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::NameProperty, 'Cancel'))
+$cancel = $confirmation.FindFirst([Windows.Automation.TreeScope]::Descendants, $cancelCondition)
+if ($null -eq $cancel) { throw 'Stem export confirmation did not expose its Cancel action.' }
+$cancel.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+$dialogCondition = [Windows.Automation.PropertyCondition]::new(
+    [Windows.Automation.AutomationElement]::AutomationIdProperty, 'ConfirmationDialog')
+$dialogDeadline = [DateTime]::UtcNow.AddSeconds(5)
+do {
+    $currentWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+    $remaining = $currentWindow.FindFirst([Windows.Automation.TreeScope]::Descendants, $dialogCondition)
+    if ($null -eq $remaining -or $remaining.Current.IsOffscreen) { break }
+    Start-Sleep -Milliseconds 100
+} while ([DateTime]::UtcNow -lt $dialogDeadline)
+if ($null -ne $remaining -and -not $remaining.Current.IsOffscreen) {
+    throw 'Cancelling stem preflight did not dismiss the confirmation.'
+}
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Cancelling stem export preflight unexpectedly changed stopped transport.'
+}
+(Find-Control 'DestinationPlay').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+$null = Find-Control 'Tempo'
+Wait-TapStatus 'idle'
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Returning from stem export controls unexpectedly changed stopped transport.'
+}
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;tapIn=$tapIn;
   help='read-only-help-navigation-no-automatic-start';
+  stems='size-confirmation-cancelled-without-playback';
   tempoGuide='initial-overlapping-markings-exposed';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

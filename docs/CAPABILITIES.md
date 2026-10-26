@@ -12,7 +12,7 @@ evidence separately.
 | Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
 | Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
-| Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
+| Library and files | Local projects/preferences/recovery, WAV and checked MIDI export; aligned stereo PCM16 stem ZIP and manifest in development | Public stem delivery and DAW/file-picker acceptance; media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
 | Distribution | Published GitHub preview 0.1.0-preview.3 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
@@ -181,3 +181,32 @@ no open issues, while retaining the prerequisite native/human acceptance caveat.
 The main-only review-completion gate correctly skipped this stacked base and
 must pass afresh after retargeting. This is hosted Help navigation evidence,
 not real-output, full accessibility/visual acceptance or public delivery.
+
+Aligned stem export is being implemented on the next stacked branch, not
+delivered in preview.3. A single local atomic ZIP contains main/subdivision
+audio, every authored lane and a manifest; every WAV shares frame zero and
+the full finite duration. Count-in is audible only in main. Original lane
+indices and compiled audible decisions are retained, including probability,
+mute/solo, pan, gain and gap masks. Silent authored lanes remain represented,
+even when there are no performer targets. The existing mixed-WAV and stem
+paths share the same streaming PCM16 writer.
+The UI confirms track count/uncompressed size before choosing a ZIP. Per-track
+peak protection and PCM16 rounding do not promise bit-identical recombination.
+Source `5e65447` passed hosted
+[run 40266107491](https://github.com/tinodo/Resonant-Pulse/actions/runs/40266107491):
+236 Core passes of 241 cases (five Windows-only skips), 150 App passes,
+34 Windows export-integrity passes, eight Windows workspace passes and
+x64/ARM64 build/package gates. Existing mixed-WAV tests still pass through
+the extracted writer. The first Windows run exposed an overly narrow test
+expectation: sharing denial can be IOException or UnauthorizedAccessException.
+The regression now requires the actual denial codes, retained destination,
+temporary cleanup and successful retry after unlocking.
+Copilot identified indistinguishable concurrent audio fixtures; requests now
+vary tempo, gain and pan and must have distinct durations. Review 5647171396
+on `5e65447` reports no open issues, not human/prerequisite acceptance.
+CodeQL 40266107475 passed. The hosted native report records
+`stems=size-confirmation-cancelled-without-playback`, Help navigation and
+tempo-guide exposure; audio/count/tap-in explicitly report `not-run-no-output`.
+The main-only completion gate correctly skipped this stacked base and must
+pass after integration. Actual file-picker/DAW behavior, acoustic/accessibility
+acceptance and public delivery remain unestablished.
