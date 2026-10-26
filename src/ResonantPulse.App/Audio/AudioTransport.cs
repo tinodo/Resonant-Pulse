@@ -19,7 +19,11 @@ public enum TransportState { Stopped, Playing, Paused, Faulted, Completed }
 
 public sealed record TransportSnapshot(
     TransportState State, long RenderFrame, long ProcessedFrame,
-    long MusicalFrame, RenderPlan? Plan, PlaybackRevision? Revision, bool IsMuted);
+    long MusicalFrame, RenderPlan? Plan, PlaybackRevision? Revision, bool IsMuted)
+{
+    public long PositionFrame => PlaybackDeadline.PositionFrame(ProcessedFrame, Revision?.EndFrame,
+        State == TransportState.Completed);
+}
 
 /// <summary>Immutable, prepared off the real-time callback. No UI document is
 /// shared with the renderer. Initial count-in is never repeated by the loop.</summary>
@@ -30,6 +34,7 @@ public sealed class PlaybackRevision
     public RenderPlan Body { get; }
     public bool IsFinite => Document.Program.Count > 0;
     public long CountInFrames => Initial.CountInFrames;
+    public long? EndFrame { get; }
 
     public PlaybackRevision(PulseDocument source, int sampleRate)
     {
@@ -39,6 +44,8 @@ public sealed class PlaybackRevision
         Body = ScheduleCompiler.Compile(Document, sampleRate, bars, false);
         if (Initial.TotalFrames <= 0 || Body.TotalFrames <= 0)
             throw new ArgumentException("The compiled rhythm has no duration.");
+        EndFrame = PlaybackDeadline.Resolve(sampleRate, CountInFrames, Document.Settings.PracticeSeconds,
+            IsFinite ? Initial.TotalFrames : null);
         // Warm any lazily initialized renderer caches here, never in QuantumStarted.
         Span<float> warmup = stackalloc float[2];
         PcmRenderer.Fill(warmup, Initial, 0, 2, 0, false, false);
@@ -230,15 +237,17 @@ public sealed class AudioTransport : IDisposable
             ReportFault(new InvalidOperationException(Text.Get("AudioError")));
         var revision = _revision;
         var processed = Interlocked.Read(ref _processedFrame);
-        var musical = processed;
+        var state = State;
+        var presented = PlaybackDeadline.PositionFrame(processed, revision?.EndFrame, state == TransportState.Completed);
+        var musical = presented;
         RenderPlan? plan = revision?.Initial;
-        if (revision is not null && processed >= revision.Initial.TotalFrames)
+        if (revision is not null && presented >= revision.Initial.TotalFrames)
         {
             plan = revision.Body;
             musical = revision.IsFinite ? plan.TotalFrames :
-                (processed - revision.Initial.TotalFrames) % plan.TotalFrames;
+                (presented - revision.Initial.TotalFrames) % plan.TotalFrames;
         }
-        return new(State, Interlocked.Read(ref _renderFrame), processed, musical, plan, revision, IsMuted);
+        return new(state, Interlocked.Read(ref _renderFrame), processed, musical, plan, revision, IsMuted);
     }
 
     private void OnQuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
@@ -295,10 +304,15 @@ public sealed class AudioTransport : IDisposable
                         var plan = initial ? revision.Initial : revision.Body;
                         var local = initial ? absolute : (absolute - revision.Initial.TotalFrames) % plan.TotalFrames;
                         var count = (int)Math.Min(Math.Min(frameCount - written, plan.TotalFrames - local), 32768);
+                        count = PlaybackDeadline.RenderCount(absolute, count, revision.EndFrame);
+                        if (count == 0) break;
                         // Looping body uses renderer's seam-tail mixing. Initial
                         // finite intro is rendered once, never recurring count-in.
                         var renderAt = initial ? local : absolute - revision.Initial.TotalFrames + plan.TotalFrames;
                         PcmRenderer.Fill(samples.Slice(written * 2, count * 2), plan, renderAt, 2, Gain, IsMuted, !initial);
+                        if (revision.Document.Settings.PracticeSeconds > 0 && revision.EndFrame is { } end)
+                            PlaybackDeadline.FadeAtEnd(samples.Slice(written * 2, count * 2), absolute,
+                                plan.SampleRate, end);
                         written += count;
                     }
                     buffer.Length = byteCount;
@@ -319,8 +333,8 @@ public sealed class AudioTransport : IDisposable
             if (revision is not null && ReferenceEquals(sender, _input))
             {
                 var end = (long)Math.Round(((args.Frame.RelativeTime ?? TimeSpan.Zero) + (args.Frame.Duration ?? TimeSpan.Zero)).TotalSeconds * revision.Initial.SampleRate);
-                Interlocked.Exchange(ref _processedFrame, end);
-                if (revision.IsFinite && end >= revision.Initial.TotalFrames && State == TransportState.Playing)
+                Interlocked.Exchange(ref _processedFrame, revision.EndFrame is { } limit ? Math.Min(end, limit) : end);
+                if (revision.EndFrame is { } deadline && end >= deadline && State == TransportState.Playing)
                 {
                     Volatile.Write(ref _state, (int)TransportState.Completed);
                     // The UI observes Completed and stops the graph, not an audio

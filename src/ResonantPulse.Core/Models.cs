@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ResonantPulse.Core;
 
 public enum Accent { Silent = 0, Soft = 1, Normal = 2, Strong = 3 }
@@ -12,6 +14,9 @@ public sealed record PulseSettings
     public int Subdivision { get; set; } = 1;
     public double Swing { get; set; } = 0.5;
     public int CountInBars { get; set; } = 1;
+    /// <summary>Live practice duration after count-in; zero disables the timer. Pauses do not consume audio frames.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int PracticeSeconds { get; set; }
     public Accent[] Accents { get; set; } = [Accent.Strong, Accent.Normal, Accent.Normal, Accent.Normal];
     public int AudibleBars { get; set; }
     public int SilentBars { get; set; }

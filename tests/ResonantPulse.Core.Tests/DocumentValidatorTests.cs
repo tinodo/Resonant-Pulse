@@ -52,6 +52,20 @@ public sealed class DocumentValidatorTests
     }
 
     [TestMethod]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(86400, true)]
+    [DataRow(-1, false)]
+    [DataRow(86401, false)]
+    public void Validate_PracticeDuration_EnforcesBounds(int seconds, bool supported)
+    {
+        var document = Fixture();
+        document.Settings.PracticeSeconds = seconds;
+        if (supported) DocumentValidator.Validate(document);
+        else Check.Throws<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
+
+    [TestMethod]
     public void Validate_TempoMeterUnitSubdivisionAndSwing_EnforcesBounds()
     {
         Range((d, x) => d.Settings.Tempo = x, 1, 1000);
