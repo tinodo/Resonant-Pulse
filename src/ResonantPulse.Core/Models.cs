@@ -17,6 +17,12 @@ public sealed record PulseSettings
     /// <summary>Live practice duration after count-in; zero disables the timer. Pauses do not consume audio frames.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int PracticeSeconds { get; set; }
+    /// <summary>Live stop after written denominator-unit beats, excluding count-in; zero disables.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int PracticeBeats { get; set; }
+    /// <summary>Live stop after complete authored bars, excluding count-in; zero disables.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int PracticeBars { get; set; }
     public Accent[] Accents { get; set; } = [Accent.Strong, Accent.Normal, Accent.Normal, Accent.Normal];
     public int AudibleBars { get; set; }
     public int SilentBars { get; set; }

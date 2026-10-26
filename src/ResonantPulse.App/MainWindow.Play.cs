@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using ResonantPulse.App.Controls;
 using ResonantPulse.App.Localization;
@@ -180,17 +181,39 @@ public sealed partial class MainWindow
                 CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync)))
         };
         var practiceSeconds = Number("PracticeSeconds", "PracticeSeconds", settings.PracticeSeconds, 0, 86400);
+        var practiceBeats = Number("PracticeBeats", "PracticeBeats", settings.PracticeBeats, 0, 6_400_000);
+        var practiceBars = Number("PracticeBars", "PracticeBars", settings.PracticeBars, 0, 100_000);
+        var practiceFeedback = Body(Text.Format("PracticeLimitsSaved",
+            settings.PracticeSeconds, settings.PracticeBeats, settings.PracticeBars));
+        Identify(practiceFeedback, "PracticeLimitsStatus", practiceFeedback.Text);
+        long practiceCommitVersion = 0;
+        AutomationProperties.SetItemStatus(practiceFeedback, "0");
         var practice = new Expander
         {
             Header = Text.Get("PracticeTimer"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Content = Column(practiceSeconds, Copy("PracticeTimerHint"),
+            Content = Column(practiceSeconds, practiceBeats, practiceBars, Copy("PracticeTimerHint"), Copy("CountedStopHint"),
+                practiceFeedback,
                 ActionButton("Apply", "ApplyPracticeTimer", async () =>
                 {
                     var seconds = Integer(practiceSeconds);
-                    await CommitAsync(doc => doc.Settings.PracticeSeconds = seconds,
+                    var beatsToPlay = Integer(practiceBeats);
+                    var barsToPlay = Integer(practiceBars);
+                    var edited = false;
+                    await CommitAsync(doc =>
+                    {
+                        doc.Settings.PracticeSeconds = seconds;
+                        doc.Settings.PracticeBeats = beatsToPlay;
+                        doc.Settings.PracticeBars = barsToPlay;
+                        edited = true;
+                    },
                         editorChange: EditorChangeKind.PracticeTimerOnly);
+                    if (!edited) return; // A locked document reports its notice without publishing.
+                    practiceFeedback.Text = Text.Format("PracticeLimitsSaved", seconds, beatsToPlay, barsToPlay);
+                    AutomationProperties.SetName(practiceFeedback, practiceFeedback.Text);
+                    AutomationProperties.SetItemStatus(practiceFeedback,
+                        FormattableString.Invariant($"{++practiceCommitVersion}:{seconds}:{beatsToPlay}:{barsToPlay}"));
                 }))
         };
         Identify(practice, "PracticeTimer", Text.Get("PracticeTimer"));

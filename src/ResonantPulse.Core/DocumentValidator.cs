@@ -33,6 +33,8 @@ public static class DocumentValidator
             "Swing requires paired, even subdivisions. Keep odd tuplets straight or author exact lane events.");
         Require(s.CountInBars is >= 0 and <= 32, "Count-in must be 0..32 bars.");
         Require(s.PracticeSeconds is >= 0 and <= 86400, "Practice duration must be 0..86400 seconds.");
+        Require(s.PracticeBeats is >= 0 and <= 6_400_000, "Practice beats must be 0..6400000.");
+        Require(s.PracticeBars is >= 0 and <= 100_000, "Practice bars must be 0..100000.");
         Pattern(s.Accents, 256, "Main accents");
         Require(s.Groups is not null && s.Groups.Length <= 64, "Groups must be an array of at most 64 entries.");
         Require(s.Groups.Length == 0 || (s.Groups.All(x => x > 0 && x <= 64) && s.Groups.Sum() == s.BeatsPerBar),

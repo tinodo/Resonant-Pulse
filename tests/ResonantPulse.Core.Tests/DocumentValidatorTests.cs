@@ -66,6 +66,34 @@ public sealed class DocumentValidatorTests
     }
 
     [TestMethod]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(100000, true)]
+    [DataRow(-1, false)]
+    [DataRow(100001, false)]
+    public void Validate_PracticeBars_EnforcesBounds(int bars, bool supported)
+    {
+        var document = Fixture();
+        document.Settings.PracticeBars = bars;
+        if (supported) DocumentValidator.Validate(document);
+        else Check.Throws<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
+
+    [TestMethod]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(6400000, true)]
+    [DataRow(-1, false)]
+    [DataRow(6400001, false)]
+    public void Validate_PracticeBeats_EnforcesBounds(int beats, bool supported)
+    {
+        var document = Fixture();
+        document.Settings.PracticeBeats = beats;
+        if (supported) DocumentValidator.Validate(document);
+        else Check.Throws<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
+
+    [TestMethod]
     public void Validate_TempoMeterUnitSubdivisionAndSwing_EnforcesBounds()
     {
         Range((d, x) => d.Settings.Tempo = x, 1, 1000);

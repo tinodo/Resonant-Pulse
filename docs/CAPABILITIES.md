@@ -75,3 +75,32 @@ That released binary preserved three practice seconds during count-in, completed
 at zero and held its position, then stopped. Test settings were removed and saved
 preferences restored exactly before leaving the new release open and stopped.
 No Store submission or acoustic/full-product acceptance is implied.
+
+Beat/bar stopping is being extended in source: written meter beats and complete
+authored bars, independent of audible clicks and BPM units. Enabled seconds,
+beats, bars and finite-program limits compete; the earliest wins. This extension
+is not in preview.2 and is not yet a public counted-stop release.
+
+Source `e0f1443` passed hosted run 40251307317: 224 Core passes with four
+platform skips and 98 App passes; Windows x64/ARM64/native-package gates passed.
+Its x64 candidate was exercised on the real saved output: four beats won over
+eight seconds and two bars, a 17-bar stop crossed the actual 16-bar loop seam
+and froze on bar 17/beat 4 at 00:36 including count-in, and a paused 16-beat run
+resumed to completion at 00:10. Original preview.2 and preferences were restored.
+The native first-use verifier now repeats these scenarios when an output exists,
+and reports `practiceStops=not-run-no-output` otherwise. This is not acoustic or
+full-product acceptance.
+The exact verifier also passed on the real-output PC. Its read-only searches
+reacquire the window and wait for temporarily rebuilt peers, and commands wait
+for enabled controls. Actions are not blindly retried.
+Subsequent review found that enabled controls alone do not establish completion
+of asynchronous Apply. The verifier now waits for a fresh success generation
+containing the requested three values, exposed only after publication and
+recovery saving return successfully. The same surface visibly confirms saved
+limits in all five languages; failed or locked edits do not report success.
+Synchronization source `0e4676a` passed all eight required gates, including
+hosted run 40253517046. Its identical-tree x64 candidate `403c6e6` passed the
+exact repository verifier on the real saved output, including all three counted
+scenarios and acknowledgment of the final reset. Original preview.2 was reopened
+stopped after exact preference restoration. Review 5646381643 reported no open
+issues; it was a commented automated review, not human/full-product acceptance.
