@@ -8,14 +8,14 @@ evidence separately.
 | Family | Implemented source | Not yet delivered or established |
 |---|---|---|
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
-| Play and transport | Native pulse instrument, tempo/meter controls, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and a compact Play screen with expandable advanced controls; hosted first-use checks and local Start/advancing-position observation | Safe-boundary live edits; calibrated audible position; tap-in, free-running/no-bar mode and additional stop conditions. Current edits require Stop + Start. Full visual/usability acceptance remains outstanding |
+| Play and transport | Native pulse instrument, tempo/meter controls, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment | Safe-boundary live edits; calibrated audible position; tap-in and free-running/no-bar mode. Current edits require Stop + Start. Full visual/usability acceptance remains outstanding |
 | Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
 | Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.2 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.3 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -79,7 +79,7 @@ No Store submission or acoustic/full-product acceptance is implied.
 Beat/bar stopping is being extended in source: written meter beats and complete
 authored bars, independent of audible clicks and BPM units. Enabled seconds,
 beats, bars and finite-program limits compete; the earliest wins. This extension
-is not in preview.2 and is not yet a public counted-stop release.
+is not in preview.2; preview.3 below delivers it.
 
 Source `e0f1443` passed hosted run 40251307317: 224 Core passes with four
 platform skips and 98 App passes; Windows x64/ARM64/native-package gates passed.
@@ -104,3 +104,17 @@ exact repository verifier on the real saved output, including all three counted
 scenarios and acknowledgment of the final reset. Original preview.2 was reopened
 stopped after exact preference restoration. Review 5646381643 reported no open
 issues; it was a commented automated review, not human/full-product acceptance.
+
+[Preview 0.1.0-preview.3](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.3)
+delivers counted stops from protected main `165785f`. Main build 40254604426
+and CodeQL 40254604425 passed; release 40254973052 passed fresh hosted tests
+(224 Core passes of 228 cases, four platform skips, and 98 App passes),
+Windows x64/ARM64 builds and x64 native/package checks. Hosted audio scenarios
+explicitly reported `not-run-no-output`.
+The actual public x64 ZIP checksum and embedded source/version/run were checked.
+On the real saved output, the exact verifier passed first Start/position advance,
+competing limits, the 17-bar loop seam, counted pause/resume and acknowledged
+final reset. Original preferences were restored byte-for-byte, diagnostic
+recovery removed, and preview.3 reopened responsive and stopped with limits off.
+The per-user Start menu shortcut targets preview.3. This does not establish
+acoustic accuracy, full-product acceptance or Store publication.
