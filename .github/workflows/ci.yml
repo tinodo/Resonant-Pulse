@@ -91,6 +91,8 @@ jobs:
           name: native-startup
           path: |
             artifacts/startup.png
+            artifacts/play-800x600.png
+            artifacts/play-1000x720.png
             artifacts/application-stdout.log
             artifacts/application-stderr.log
             artifacts/native-app.log

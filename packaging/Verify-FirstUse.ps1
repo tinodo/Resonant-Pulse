@@ -96,7 +96,8 @@ foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0',
     if ($element.Current.IsOffscreen -or $rect.IsEmpty -or -not $bounds.Contains($rect)) {
         throw "Primary control is not visible in the first-use window: $id ($rect)"
     }
-    $controls += @{id=$id;name=$element.Current.Name;visible=$true}
+    if ($id -like 'MainAccent*' -and $rect.Height -lt 50) { throw "Pulse control is clipped: $id ($rect)" }
+    $controls += @{id=$id;name=$element.Current.Name;visible=$true;width=$rect.Width;height=$rect.Height}
 }
 $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
 if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
@@ -109,7 +110,9 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
     foreach ($id in @('Tempo','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
         'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','MasterGain')) {
         $element = Find-Control $id
-        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
+        $rect = $element.Current.BoundingRectangle
+        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($rect) -or
+            ($id -like 'MainAccent*' -and $rect.Height -lt 50)) {
             throw "Primary control is hidden at $($size[0])x$($size[1]): $id"
         }
     }

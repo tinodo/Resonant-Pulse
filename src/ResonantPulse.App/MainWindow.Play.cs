@@ -281,13 +281,10 @@ public sealed partial class MainWindow
             var cueSpace = cue.Visibility == Visibility.Visible ? cue.ActualHeight + 8 : 0;
             cue.Visibility = scroll.ScrollableHeight > cueSpace + 1 ? Visibility.Visible : Visibility.Collapsed;
         };
-        var heading = Heading(Text.Get("Metronome"));
-        heading.FontSize = 24;
         var shortcuts = WrapControls(115, rhythmOptions, tempoOptions, practice, project, help);
         shortcuts.Width = 760;
         shortcuts.HorizontalAlignment = HorizontalAlignment.Left;
         var header = new StackPanel { Spacing = 8 };
-        header.Children.Add(heading);
         header.Children.Add(shortcuts);
         header.Children.Add(cue);
         var page = new Grid { RowSpacing = 12 };
@@ -296,7 +293,6 @@ public sealed partial class MainWindow
             shortcuts.Width = Math.Min(760, Math.Max(0, args.NewSize.Width));
             heroCard.Width = Math.Min(560, Math.Max(0, args.NewSize.Width - 16));
             var compact = Root.ActualHeight < 650 && args.NewSize.Width >= 600;
-            heading.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             instrument.Width = instrument.Height = compact ? 64 : 128;
             controls.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
             controls.MaxWidth = compact ? 420 : 300;
