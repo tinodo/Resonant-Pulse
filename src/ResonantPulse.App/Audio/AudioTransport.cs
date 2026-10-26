@@ -16,12 +16,29 @@ namespace ResonantPulse.App.Audio;
 
 public enum TransportState { Stopped, Playing, Paused, Faulted, Completed }
 
+/// <summary>
+/// A consistent view of the transport. Two timelines are involved (see <see cref="PlaybackRevision"/>):
+/// <c>RenderFrame</c> and <c>ProcessedFrame</c> are ABSOLUTE device frames (they never rewind and are unaffected by
+/// live edits; elapsed time = ProcessedFrame / sample rate). <c>Revision</c> is the revision that is AUDIBLE at
+/// <c>ProcessedFrame</c> (the previous one until a queued splice has actually been heard), and <c>Plan</c>,
+/// <c>MusicalFrame</c> and <c>PositionFrame</c> are always expressed in that revision's OWN timeline, so
+/// <c>Plan.PositionAtFrame(MusicalFrame)</c> and the Initial/Body loop arithmetic on <c>PositionFrame</c> need no
+/// correction. Whenever a revision's own frames meet <c>ProcessedFrame</c> or <c>RenderFrame</c>, add
+/// <see cref="Shift"/> to the absolute value (<see cref="OwnProcessedFrame"/>).
+/// </summary>
 public sealed record TransportSnapshot(
     TransportState State, long RenderFrame, long ProcessedFrame,
     long MusicalFrame, RenderPlan? Plan, PlaybackRevision? Revision, bool IsMuted)
 {
-    public long PositionFrame => PlaybackDeadline.PositionFrame(ProcessedFrame, Revision?.EndFrame,
-        State == TransportState.Completed);
+    /// <summary>Own frame = absolute frame + Shift for <see cref="Revision"/>; zero without one.</summary>
+    public long Shift => Revision?.Shift ?? 0;
+
+    /// <summary><see cref="ProcessedFrame"/> in the own timeline of <see cref="Revision"/>.</summary>
+    public long OwnProcessedFrame => ProcessedFrame + Shift;
+
+    /// <summary>The processed position in the own timeline of <see cref="Revision"/>, held at the last rendered frame once Completed.</summary>
+    public long PositionFrame => Math.Max(0, PlaybackDeadline.PositionFrame(OwnProcessedFrame, Revision?.EndFrame,
+        State == TransportState.Completed));
 }
 
 /// <summary>
@@ -29,6 +46,8 @@ public sealed record TransportSnapshot(
 /// scheduling; the UI only reads snapshots. ProcessedFrame is graph completion,
 /// NOT a calibrated acoustic presentation position. Stop uses graph flush
 /// semantics, Pause retains the next-render cursor; downstream audio can drain.
+/// Live edits (<see cref="UpdateLiveAsync"/>) are prepared off the callback and applied inside it: sound/accents at
+/// the next quantum, everything else spliced in at the next pulse boundary, sample accurately and without a gap.
 /// </summary>
 public sealed class AudioTransport : IDisposable
 {
@@ -38,10 +57,10 @@ public sealed class AudioTransport : IDisposable
     private AudioGraph? _graph;
     private AudioFrameInputNode? _input;
     private AudioDeviceOutputNode? _output;
-    private PlaybackRevision? _revision;
-    private PlaybackRevision? _pendingSound;
-    private PlaybackRevision? _previousSound;
-    private long _soundSwitchFrame;
+    private LiveTimeline? _timeline;
+    private readonly LiveEditQueue _live = new();
+    // The document the transport converges to (latest accepted live request); guarded by _lifecycle.
+    private PulseDocument? _liveTarget;
     private readonly float[] _tailMix = new float[32768 * 2];
     private long _renderFrame;
     private long _processedFrame;
@@ -71,25 +90,52 @@ public sealed class AudioTransport : IDisposable
     public static string DefaultOutputId() =>
         MediaDevice.GetDefaultAudioRenderId(AudioDeviceRole.Default);
 
-    public async Task UpdateSoundAsync(PulseSettings requested)
+    /// <summary>
+    /// Applies the live-eligible settings (Tempo, meter, BPM unit, subdivision, swing, groups, accents, sound, gap bars,
+    /// blind gaps) of <paramref name="requested"/>, which must carry the COMPLETE live settings of the editor, to the
+    /// running revision without restarting. Count-in, practice limits, master gain and the document structure
+    /// (lanes, program) stay as started. Sound/accent-only changes switch at the next audio quantum on the same
+    /// musical clock (also for finite programs, exactly like the former sound-only update); anything
+    /// else is spliced in at the next primary pulse (see <c>LiveSplice</c>) with the bar position continued when the bar
+    /// structure is unchanged, otherwise restarted at bar 1 beat 1. A finite program cannot follow structural
+    /// settings: they return <see cref="LiveEditOutcome.RequiresRestart"/> (the sound part of that request is still applied).
+    /// Only the newest unapplied request survives. Pause keeps a queued request; Stop discards it.
+    /// Validation/compile errors of the merged document propagate.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The session was stopped or replaced while the request was prepared.</exception>
+    public async Task<LiveEditOutcome> UpdateLiveAsync(PulseSettings requested)
     {
+        ArgumentNullException.ThrowIfNull(requested);
         await _lifecycle.WaitAsync();
         try
         {
-            var active = Volatile.Read(ref _revision);
-            if (active is null || State is TransportState.Stopped or TransportState.Completed) return;
+            var active = Volatile.Read(ref _timeline)?.Active;
+            if (active is null || State is TransportState.Stopped or TransportState.Completed or TransportState.Faulted)
+                return LiveEditOutcome.NotPlaying;
             var session = Volatile.Read(ref _soundSessionGeneration);
-            var captured = LiveSoundEdits.Apply(active.Document, requested);
-            var prepared = await Task.Run(() => new PlaybackRevision(captured, active.Initial.SampleRate));
+            var decision = LiveSettingsEdits.Decide(active, _liveTarget, requested);
+            if (!decision.Publish) return decision.Outcome;
+            var merged = decision.Merged;
+            var rate = active.SampleRate;
+            var prepared = await Task.Run(() => new PlaybackRevision(merged, rate));
             if (session != Volatile.Read(ref _soundSessionGeneration) || _isDisposed)
                 throw new InvalidOperationException(Text.Get("SoundSessionChanged"));
-            if (prepared.Initial.TotalFrames != active.Initial.TotalFrames ||
-                prepared.Body.TotalFrames != active.Body.TotalFrames || prepared.EndFrame != active.EndFrame)
+            if (LiveSettingsEdits.Classify(active.Document.Settings, merged.Settings) != LiveChange.Structural &&
+                !active.HasSameClock(prepared))
                 throw new InvalidOperationException("A live sound edit must preserve the musical clock and stop boundary.");
-            Volatile.Write(ref _pendingSound, prepared);
+            _live.Post(prepared);
+            _liveTarget = merged;
+            return decision.Outcome;
         }
         finally { _lifecycle.Release(); }
     }
+
+    /// <summary>
+    /// Source-compatible entry point for the former sound/accent-only update. It now simply forwards to
+    /// <see cref="UpdateLiveAsync"/> (so structural settings carried by <paramref name="requested"/> are applied live
+    /// too, except during a finite program, where only the sound part follows exactly as before); the outcome is ignored.
+    /// </summary>
+    public async Task UpdateSoundAsync(PulseSettings requested) => await UpdateLiveAsync(requested);
 
     public async Task StartAsync(PulseDocument document, string outputId)
     {
@@ -111,12 +157,12 @@ public sealed class AudioTransport : IDisposable
                 _graph.Start();
                 return;
             }
+            var timeline = Volatile.Read(ref _timeline);
             var retained = State is TransportState.Paused or TransportState.Faulted
-                ? _revision : null;
+                ? timeline : null;
             if (retained is null) Interlocked.Increment(ref _soundSessionGeneration);
-            var retainedState = retained is null ? null : new RetainedPlayback(retained,
-                Volatile.Read(ref _previousSound), Volatile.Read(ref _pendingSound),
-                _soundSwitchFrame, Interlocked.Read(ref _processedFrame));
+            var retainedState = retained is null ? null : new RetainedPlayback(retained.Active,
+                retained.Previous, _live.Pending, retained.SwitchFrame, Interlocked.Read(ref _processedFrame));
             ReleaseGraph();
             var device = await DeviceInformation.CreateFromIdAsync(outputId);
             CheckCurrent();
@@ -149,14 +195,14 @@ public sealed class AudioTransport : IDisposable
             var inputFormat = AudioEncodingProperties.CreatePcm(_graph.EncodingProperties.SampleRate, 2, 32);
             inputFormat.Subtype = MediaEncodingSubtypes.Float;
             // Compile/preload off the UI thread and entirely before the graph starts.
-            var captured = LocalWorkspace.Clone(retained?.Document ?? document);
+            var captured = LocalWorkspace.Clone(retained?.Active.Document ?? document);
             var resumed = await Task.Run(() => retainedState?.Rebuild((int)inputFormat.SampleRate) ??
                 new RetainedPlayback(new PlaybackRevision(captured, (int)inputFormat.SampleRate), null, null, 0, 0));
             CheckCurrent();
-            _revision = resumed.Active;
-            _previousSound = resumed.Previous;
-            _pendingSound = resumed.Pending;
-            _soundSwitchFrame = resumed.SwitchFrame;
+            _live.Clear();
+            if (resumed.Pending is { } pending) _live.Post(pending);
+            if (retained is null) _liveTarget = null;
+            Volatile.Write(ref _timeline, new LiveTimeline(resumed.Active, resumed.Previous, resumed.SwitchFrame));
             _input = _graph.CreateFrameInputNode(inputFormat);
             _input.AddOutgoingConnection(_output);
             _input.QuantumStarted += OnQuantumStarted;
@@ -175,8 +221,9 @@ public sealed class AudioTransport : IDisposable
         {
             ReleaseGraph();
             Volatile.Write(ref _state, (int)TransportState.Stopped);
-            _revision = null;
-            _pendingSound = _previousSound = null;
+            Volatile.Write(ref _timeline, null);
+            _live.Clear();
+            _liveTarget = null;
             Interlocked.Exchange(ref _renderFrame, 0);
             Interlocked.Exchange(ref _processedFrame, 0);
             throw;
@@ -214,27 +261,24 @@ public sealed class AudioTransport : IDisposable
         ReleaseGraph();
         Interlocked.Exchange(ref _renderFrame, 0);
         Interlocked.Exchange(ref _processedFrame, 0);
-        _revision = null;
-        _pendingSound = _previousSound = null;
+        Volatile.Write(ref _timeline, null);
+        _live.Clear();
+        _liveTarget = null;
     }
 
     public TransportSnapshot Snapshot()
     {
         if (State == TransportState.Playing && Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastQuantumTimestamp)).TotalSeconds > 4)
             ReportFault(new InvalidOperationException(Text.Get("AudioError")));
-        var revision = _revision;
+        // Processed first: a splice is published before the frame that contains it can complete, so the
+        // timeline read afterwards is never older than what the processed cursor has already heard.
         var processed = Interlocked.Read(ref _processedFrame);
+        var timeline = Volatile.Read(ref _timeline);
         var state = State;
-        var presented = PlaybackDeadline.PositionFrame(processed, revision?.EndFrame, state == TransportState.Completed);
-        var musical = presented;
-        RenderPlan? plan = revision?.Initial;
-        if (revision is not null && presented >= revision.Initial.TotalFrames)
-        {
-            plan = revision.Body;
-            musical = revision.IsFinite ? plan.TotalFrames :
-                (presented - revision.Initial.TotalFrames) % plan.TotalFrames;
-        }
-        return new(state, Interlocked.Read(ref _renderFrame), processed, musical, plan, revision, IsMuted);
+        var render = Interlocked.Read(ref _renderFrame);
+        if (timeline is null) return new(state, render, processed, processed, null, null, IsMuted);
+        var position = LiveSplice.Present(timeline, processed, state == TransportState.Completed);
+        return new(state, render, processed, position.MusicalFrame, position.Plan, position.Revision, IsMuted);
     }
 
     private void OnQuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
@@ -251,26 +295,22 @@ public sealed class AudioTransport : IDisposable
     private unsafe void FillQuantum(AudioFrameInputNode sender, int frameCount)
     {
         if (frameCount > 32768) throw new InvalidOperationException(Text.Get("QuantumLimit"));
-        var revision = _revision;
-        if (revision is null) return;
+        var published = Volatile.Read(ref _timeline);
+        if (published is null) return;
         var byteCount = checked((uint)(frameCount * 2 * sizeof(float)));
         var cursor = Interlocked.Read(ref _renderFrame);
         var gain = Gain;
         var muted = IsMuted;
-        if (_previousSound is { } retiring &&
-            RetainedPlayback.HasProcessedTail(Interlocked.Read(ref _processedFrame), _soundSwitchFrame, retiring.Initial.SampleRate))
-            _previousSound = null;
-        if (_previousSound is null && Interlocked.Exchange(ref _pendingSound, null) is { } replacement)
-        {
-            _previousSound = revision;
-            _soundSwitchFrame = cursor;
-            Volatile.Write(ref _revision, replacement);
-            revision = replacement;
-        }
+        // Retires old tails, takes the newest live request and splices at the armed pulse boundary. A concurrent
+        // Stop() (null timeline) wins over this publication.
+        var timeline = _live.Advance(published, cursor, frameCount, Interlocked.Read(ref _processedFrame));
+        if (!ReferenceEquals(timeline, published) &&
+            !ReferenceEquals(Interlocked.CompareExchange(ref _timeline, timeline, published), published)) return;
+        var rate = timeline.Active.SampleRate;
         var frame = new AudioFrame(byteCount)
         {
-            RelativeTime = TimeSpan.FromSeconds((double)cursor / revision.Initial.SampleRate),
-            Duration = TimeSpan.FromSeconds((double)frameCount / revision.Initial.SampleRate)
+            RelativeTime = TimeSpan.FromSeconds((double)cursor / rate),
+            Duration = TimeSpan.FromSeconds((double)frameCount / rate)
         };
         try
         {
@@ -292,41 +332,8 @@ public sealed class AudioTransport : IDisposable
                     Marshal.ThrowExceptionForHR(getBuffer(access, &bytes, &capacity));
                     if (bytes is null || capacity < byteCount)
                         throw new InvalidOperationException(Text.Get("AudioError"));
-                    var samples = new Span<float>(bytes, frameCount * 2);
-                    samples.Clear();
-                    var written = 0;
-                    while (written < frameCount)
-                    {
-                        var absolute = cursor + written;
-                        var initial = absolute < revision.Initial.TotalFrames;
-                        if (!initial && revision.IsFinite) break;
-                        var plan = initial ? revision.Initial : revision.Body;
-                        var local = initial ? absolute : (absolute - revision.Initial.TotalFrames) % plan.TotalFrames;
-                        var count = (int)Math.Min(Math.Min(frameCount - written, plan.TotalFrames - local), 32768);
-                        count = PlaybackDeadline.RenderCount(absolute, count, revision.EndFrame);
-                        if (count == 0) break;
-                        // Looping body uses renderer's seam-tail mixing. Initial
-                        // finite intro is rendered once, never recurring count-in.
-                        var renderAt = initial ? local : absolute - revision.Initial.TotalFrames + plan.TotalFrames;
-                        var destination = samples.Slice(written * 2, count * 2);
-                        var boundary = _soundSwitchFrame - (initial ? 0 : revision.Initial.TotalFrames - plan.TotalFrames);
-                        PcmRenderer.Fill(destination, plan, renderAt, 2, gain, muted, !initial,
-                            attacksFromFrame: _previousSound is null ? null : boundary,
-                            limitPeaks: _previousSound is null);
-                        if (_previousSound is { } previous)
-                        {
-                            var oldPlan = initial ? previous.Initial : previous.Body;
-                            var tail = _tailMix.AsSpan(0, count * 2);
-                            PcmRenderer.Fill(tail, oldPlan, renderAt, 2, gain, muted, !initial,
-                                attacksBeforeFrame: boundary, limitPeaks: false);
-                            for (int index = 0; index < destination.Length; index++)
-                                destination[index] = Math.Clamp(destination[index] + tail[index], -1f, 1f);
-                        }
-                        if (revision.HasPracticeLimit && revision.EndFrame is { } end)
-                            PlaybackDeadline.FadeAtEnd(samples.Slice(written * 2, count * 2), absolute,
-                                plan.SampleRate, end);
-                        written += count;
-                    }
+                    LiveSplice.Render(new Span<float>(bytes, frameCount * 2), cursor, frameCount, timeline,
+                        gain, muted, _tailMix);
                     buffer.Length = byteCount;
                 }
                 finally { Marshal.Release(access); }
@@ -341,12 +348,13 @@ public sealed class AudioTransport : IDisposable
     {
         try
         {
-            var revision = _revision;
-            if (revision is not null && ReferenceEquals(sender, _input))
+            var timeline = Volatile.Read(ref _timeline);
+            if (timeline is not null && ReferenceEquals(sender, _input))
             {
-                var end = (long)Math.Round(((args.Frame.RelativeTime ?? TimeSpan.Zero) + (args.Frame.Duration ?? TimeSpan.Zero)).TotalSeconds * revision.Initial.SampleRate);
-                Interlocked.Exchange(ref _processedFrame, revision.EndFrame is { } limit ? Math.Min(end, limit) : end);
-                if (revision.EndFrame is { } deadline && end >= deadline && State == TransportState.Playing)
+                var end = (long)Math.Round(((args.Frame.RelativeTime ?? TimeSpan.Zero) + (args.Frame.Duration ?? TimeSpan.Zero)).TotalSeconds * timeline.Active.SampleRate);
+                var limit = timeline.EndFrameAt(end);
+                Interlocked.Exchange(ref _processedFrame, limit is { } bound ? Math.Min(end, bound) : end);
+                if (limit is { } deadline && end >= deadline && State == TransportState.Playing)
                 {
                     Volatile.Write(ref _state, (int)TransportState.Completed);
                     // The UI observes Completed and stops the graph, not an audio
