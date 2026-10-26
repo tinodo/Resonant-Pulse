@@ -270,7 +270,25 @@ if ($selection.Count -eq 0) {
         Wait-TapStatus 'idle'
     }
 }
+$beforeHelp = (Find-Control 'TransportStatus').Current.Name
+if ($beforeHelp -notlike 'Stopped*') { throw 'Read-only Help verification requires stopped transport.' }
+(Find-Control 'DestinationHelp').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+foreach ($id in @('HelpIntro', 'HelpBpmUnit', 'HelpWrittenBeats', 'HelpEditing', 'HelpPractice')) {
+    if ([string]::IsNullOrWhiteSpace((Find-Control $id).Current.Name)) {
+        throw "Help paragraph did not expose its accessible text: $id"
+    }
+}
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Opening Help unexpectedly changed stopped transport.'
+}
+Invoke-Control 'HelpOpenPlay'
+$null = Find-Control 'Tempo'
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Returning from Help unexpectedly changed stopped transport.'
+}
+Wait-TapStatus 'idle'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;tapIn=$tapIn;
+  help='read-only-help-navigation-no-automatic-start';
   tempoGuide='initial-overlapping-markings-exposed';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

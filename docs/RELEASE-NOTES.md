@@ -2,6 +2,12 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
+Help is now a discoverable navigation destination with a five-language quick
+start and musical reference. It explains output selection, count-in,
+pause/mute/stop, edit boundaries, program tempos, practice limits, note units
+versus written beats, subdivisions, swing, accents and tap-in. Visiting Help or
+returning to Play never starts playback.
+
 More tempo controls also includes an approximate Italian tempo guide. It follows
 the displayed BPM and selected note value, includes overlapping names where
 appropriate, and never changes timing or starts playback.

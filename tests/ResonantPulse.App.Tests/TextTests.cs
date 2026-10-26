@@ -9,6 +9,35 @@ namespace ResonantPulse.App.Tests;
 public sealed class TextTests
 {
     [TestMethod]
+    public void QuickStartAndMusicalReferenceExistInEverySupportedLanguage()
+    {
+        var previous = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                foreach (var key in new[] { "HelpDestination", "Help", "QuickStart", "MusicalReference", "HelpIntro",
+                    "HelpOutput", "HelpStarting", "HelpTransport", "HelpEditing", "HelpPractice",
+                    "HelpBpmUnit", "HelpWrittenBeats", "HelpSubdivision", "HelpAccents", "HelpTapping",
+                    "HelpKeyboardScope", "KeyboardHelp", "PresentationLimits" })
+                {
+                    Assert.AreNotEqual(key, Text.Get(key), $"{language}: {key}");
+                    Assert.IsFalse(string.IsNullOrWhiteSpace(Text.Get(key)), $"{language}: {key}");
+                }
+            }
+        }
+        finally
+        {
+            Text.Select(previous);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void TempoGuideAndInvalidEntryGuidanceFormatInEverySupportedLanguage()
     {
         var previous = Text.Language;

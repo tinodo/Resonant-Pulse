@@ -183,10 +183,11 @@ public sealed partial class MainWindow : Window
     private void RebuildNavigation()
     {
         Navigation.MenuItems.Clear();
-        foreach (var key in new[] { "Play", "Studio", "Train", "Stage", "Library" })
+        foreach (var key in new[] { "Play", "Studio", "Train", "Stage", "Library", "Help" })
         {
-            var item = new NavigationViewItem { Content = Text.Get(key), Tag = key };
-            Identify(item, "Destination" + key, Text.Get(key));
+            var label = Text.Get(key == "Help" ? "HelpDestination" : key);
+            var item = new NavigationViewItem { Content = label, Tag = key };
+            Identify(item, "Destination" + key, label);
             Navigation.MenuItems.Add(item);
         }
         if (Navigation.SettingsItem is NavigationViewItem settings)
@@ -198,7 +199,7 @@ public sealed partial class MainWindow : Window
 
     private void SelectView(string view)
     {
-        _view = view is "Play" or "Studio" or "Train" or "Stage" or "Library" or "Settings" ? view : "Play";
+        _view = view is "Play" or "Studio" or "Train" or "Stage" or "Library" or "Help" or "Settings" ? view : "Play";
         Navigation.SelectedItem = _view == "Settings" ? Navigation.SettingsItem :
             Navigation.MenuItems.OfType<NavigationViewItem>().First(item => (string)item.Tag == _view);
         BuildPage();
@@ -228,6 +229,7 @@ public sealed partial class MainWindow : Window
             "Train" => BuildTrain(),
             "Stage" => BuildStage(),
             "Library" => BuildLibrary(),
+            "Help" => BuildHelp(),
             "Settings" => BuildSettings(),
             _ => BuildPlay()
         };

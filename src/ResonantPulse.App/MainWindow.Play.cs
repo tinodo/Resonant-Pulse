@@ -234,7 +234,8 @@ public sealed partial class MainWindow
             Header = Text.Get("Help"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Content = Column(Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"), Copy("Horizon"))
+            Content = Column(ActionButton("QuickStart", "OpenQuickStart", () => SelectView("Help")),
+                Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"), Copy("Horizon"))
         };
         var heroCard = new Border { Style = (Style)Application.Current.Resources["InstrumentCardStyle"], Child = hero };
         return Scroll(Column(Heading(Text.Get("Metronome")), heroCard,
