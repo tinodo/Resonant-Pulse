@@ -217,7 +217,6 @@ public sealed partial class MainWindow
         var restoringSound = false;
         sound.Header = null;
         sound.Width = 152;
-        sound.Height = 44;
         sound.SelectionChanged += async (_, _) =>
         {
             if (restoringSound) return;
@@ -313,18 +312,32 @@ public sealed partial class MainWindow
         ArrangeContext(false);
 
         var page = new Grid { RowSpacing = 10 };
+        // The notice only appears when the dial keeps a usable size. The decision is made from measured heights, so enlarged
+        // Windows text (taller rows, a taller notice) is accounted for, and it is repeated whenever one of them changes.
+        // Nothing measured here depends on the notice being shown (the notice is measured on its own), so it cannot flip.
+        void PlaceNotice()
+        {
+            if (unitNotice is null || !unitNotice.IsOpen || page.ActualWidth <= 0 || page.ActualHeight <= 0 ||
+                context.ActualHeight <= 0) return;
+            var width = Math.Min(640, page.ActualWidth);
+            unitNotice.Width = width;
+            unitNotice.Visibility = Visibility.Visible;
+            unitNotice.Measure(new Windows.Foundation.Size(width, double.PositiveInfinity));
+            var noticeRow = unitNotice.DesiredSize.Height + tempoArea.Spacing;
+            var otherRows = (railInRow ? rail.ActualHeight : 0) + tempoCluster.ActualHeight + context.ActualHeight +
+                3 * page.RowSpacing;
+            unitNotice.Visibility = PlayLayout.NoticeFits(page.ActualWidth, page.ActualHeight, otherRows, noticeRow)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
         page.SizeChanged += (_, args) =>
         {
             ArrangeContext(args.NewSize.Width < 620);
-            if (unitNotice is not null)
-            {
-                // The notice only appears when the dial keeps a usable size; a wide row lets the action sit beside the title.
-                unitNotice.Visibility = PlayLayout.NoticeFits(args.NewSize.Width, args.NewSize.Height)
-                    ? Visibility.Visible : Visibility.Collapsed;
-                unitNotice.Width = Math.Min(640, args.NewSize.Width);
-            }
+            PlaceNotice();
             SizeInstrument();
         };
+        context.SizeChanged += (_, _) => PlaceNotice();
+        tempoCluster.SizeChanged += (_, _) => PlaceNotice();
+        rail.SizeChanged += (_, _) => PlaceNotice();
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -568,7 +581,7 @@ public sealed partial class MainWindow
     private Button BuildMeterPicker(OptionPanel rhythm)
     {
         var settings = _document.Settings;
-        var chip = new Button { Style = ResonantStyle("ChipButtonStyle"), Width = 96, Height = 64, Padding = new Thickness(0) };
+        var chip = new Button { Style = ResonantStyle("ChipButtonStyle"), MinWidth = 96, MinHeight = 64, Padding = new Thickness(0) };
         var face = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,
@@ -595,7 +608,7 @@ public sealed partial class MainWindow
             var preset = MeterPresets.All[index];
             var cell = new Button
             {
-                Style = ResonantStyle("ChipButtonStyle"), Width = 68, Height = 68, Padding = new Thickness(0),
+                Style = ResonantStyle("ChipButtonStyle"), MinWidth = 68, MinHeight = 68, Padding = new Thickness(0),
                 Content = TimeSignatureGlyph(preset.Beats, preset.Denominator, 22)
             };
             Identify(cell, $"MeterPreset{preset.Beats}_{preset.Denominator}", $"{preset.Beats}/{preset.Denominator}");

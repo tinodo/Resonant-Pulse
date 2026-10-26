@@ -64,14 +64,15 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <!-- The caption sits outside the ComboBox: a header inside it makes the box 32 DIP, shorter than the
-                         44 DIP refresh button beside it. Both are 44 DIP and centred on one line. -->
+                         44 DIP refresh button beside it. Both have a 44 DIP minimum (so they can grow with Windows text
+                         size) and stretch to the one row height, so they always match and share a centre line. -->
                     <StackPanel x:Name="OutputColumn" Spacing="4">
                       <TextBlock x:Name="OutputCaption" FontSize="14" Style="{StaticResource BodyStyle}" />
                       <Grid x:Name="OutputControls" ColumnSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <ComboBox x:Name="OutputPicker" Height="44" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                        <ComboBox x:Name="OutputPicker" MinHeight="44" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                   AutomationProperties.AutomationId="AudioOutputPicker" />
-                        <Button x:Name="OutputButton" Grid.Column="1" Width="44" Height="44" Padding="0" VerticalAlignment="Center"
+                        <Button x:Name="OutputButton" Grid.Column="1" MinWidth="44" MinHeight="44" Padding="0" VerticalAlignment="Stretch"
                                 AutomationProperties.AutomationId="RefreshAudioOutputs">
                           <FontIcon Glyph="&#xE72C;" />
                         </Button>

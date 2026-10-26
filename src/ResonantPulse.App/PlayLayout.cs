@@ -74,15 +74,12 @@ internal static class PlayLayout
         cachedWidth > 0 && Math.Abs(actualWidth - cachedWidth) > 1;
 
     /// <summary>
-    /// True when the notice (an InfoBar: title with its action button on a second row, about 107 tall, or about 130 when the
-    /// title wraps on a page narrower than 480) can sit above the tempo controls and still leave the dial at least
-    /// <see cref="MinDialWithNotice"/> tall. The heights of the other rows were measured on the real page: about 205 when
-    /// the settings row sits beside the beat strip, and about 290 or 330 once it stacks.
+    /// True when the notice can sit above the tempo controls and still leave the dial at least
+    /// <see cref="MinDialWithNotice"/> across. Every input is measured on the real page, so enlarged Windows text (taller
+    /// rows, a taller notice) is accounted for: <paramref name="otherRows"/> is everything on the page except the dial and
+    /// the notice (strip row, tempo buttons, settings row and the gaps between rows), and <paramref name="noticeRow"/> is
+    /// the notice plus its gap. None of them depends on whether the notice is shown, so the answer cannot oscillate.
     /// </summary>
-    internal static bool NoticeFits(double pageWidth, double pageHeight)
-    {
-        var noticeHeight = pageWidth >= 480 ? 107d : 130d;
-        var otherRows = pageWidth >= 620 ? 205d : pageWidth >= 480 ? 290d : 330d;
-        return pageHeight - otherRows - noticeHeight >= MinDialWithNotice;
-    }
+    internal static bool NoticeFits(double pageWidth, double pageHeight, double otherRows, double noticeRow) =>
+        DialSize(pageWidth, pageHeight - otherRows - noticeRow) >= MinDialWithNotice;
 }

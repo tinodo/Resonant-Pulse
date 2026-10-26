@@ -27,8 +27,9 @@ public sealed partial class MainWindow
     private static UIElement Aligned(UIElement child)
     {
         if (child is not ComboBox { Header: TextBlock caption } combo) return child;
+        // The caption moved out, so the implicit style's 44 DIP minimum is now the box itself. No fixed height: the box must
+        // be able to grow with Windows text size.
         combo.Header = null;
-        combo.Height = 44;
         combo.HorizontalAlignment = HorizontalAlignment.Stretch;
         caption.Margin = new Thickness(0, 0, 0, 4);
         var field = new StackPanel();

@@ -93,34 +93,42 @@ public sealed class PlayLayoutTests
     }
 
     [TestMethod]
-    [DataRow(978d, 600d, true)]   // the default window
-    [DataRow(938d, 554d, true)]   // 1000 x 720
-    [DataRow(738d, 434d, false)]  // 800 x 600: the dial would drop below 200
-    [DataRow(738d, 511d, false)]  // wide: one point under the 512 needed
-    [DataRow(738d, 512d, true)]
-    [DataRow(540d, 596d, false)]  // mid width: the settings row stacks, so more room is needed
-    [DataRow(540d, 597d, true)]
-    [DataRow(458d, 475d, false)]  // 520 x 720: no room
-    [DataRow(358d, 850d, true)]   // tall and narrow: the notice wraps but the dial keeps its room
-    [DataRow(358d, 475d, false)]
-    public void TheNoticeOnlyAppearsWhenTheDialKeepsAUsableSize(double pageWidth, double pageHeight, bool fits)
+    // Measured at 100% text size: tempo buttons 52 + settings row about 119 + three 10 DIP gaps = 201 beside the dial, and
+    // the notice (two rows) about 109 plus its 6 DIP gap = 115.
+    [DataRow(978d, 600d, 201d, 115d, true)]   // the default window
+    [DataRow(938d, 554d, 201d, 115d, true)]   // 1000 x 720
+    [DataRow(738d, 434d, 201d, 115d, false)]  // 800 x 600: the dial would drop below 200
+    [DataRow(738d, 516d, 201d, 115d, true)]   // exactly 200 left for the dial
+    [DataRow(738d, 515.9d, 201d, 115d, false)]
+    [DataRow(978d, 600d, 260d, 150d, false)]  // enlarged Windows text: taller rows and notice, so it steps aside
+    [DataRow(978d, 700d, 260d, 150d, true)]   // and returns when the window has room again
+    [DataRow(180d, 900d, 201d, 115d, false)]  // the page is narrower than the dial's minimum
+    [DataRow(458d, 700d, 290d, 136d, true)]   // narrow and stacked, but tall enough
+    public void TheNoticeOnlyAppearsWhenTheDialKeepsAUsableSize(double pageWidth, double pageHeight, double otherRows,
+        double noticeRow, bool fits)
     {
-        Assert.AreEqual(fits, PlayLayout.NoticeFits(pageWidth, pageHeight));
+        Assert.AreEqual(fits, PlayLayout.NoticeFits(pageWidth, pageHeight, otherRows, noticeRow));
     }
 
     [TestMethod]
-    public void ARoomierPageNeverHidesANoticeThatFitsInASmallerOneOfTheSameWidth()
+    public void TheNoticeNeverFlipsBackAndForthAsRoomOrHeightsChange()
     {
+        // Monotonic in every input: more room can only show it, and taller rows or a taller notice can only hide it.
         foreach (var width in new[] { 358d, 458d, 738d, 978d })
+        foreach (var otherRows in new[] { 150d, 201d, 290d, 330d })
+        foreach (var noticeRow in new[] { 60d, 115d, 136d, 180d })
         {
             var shown = false;
-            for (var height = 200d; height <= 1200; height += 10)
+            for (var height = 100d; height <= 1400; height += 5)
             {
-                var fits = PlayLayout.NoticeFits(width, height);
-                Assert.IsFalse(shown && !fits, $"{width} wide: shown at a shorter page but hidden at {height}");
+                var fits = PlayLayout.NoticeFits(width, height, otherRows, noticeRow);
+                Assert.IsFalse(shown && !fits, $"{width} wide, rows {otherRows}/{noticeRow}: shown lower but hidden at {height}");
                 shown |= fits;
+                if (!fits) continue;
+                Assert.IsTrue(PlayLayout.NoticeFits(width, height, otherRows - 10, noticeRow), "shorter rows must still fit");
+                Assert.IsTrue(PlayLayout.NoticeFits(width, height, otherRows, noticeRow - 10), "a shorter notice must still fit");
+                Assert.IsFalse(PlayLayout.NoticeFits(width, height - 5000, otherRows, noticeRow), "no room can never fit");
             }
-            Assert.IsTrue(shown, $"{width} wide never shows the notice");
         }
     }
 }
