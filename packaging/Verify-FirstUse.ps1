@@ -104,12 +104,16 @@ foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'AudioOutputPicker', 'Trans
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
 $start = Find-Control 'TransportStartPause'
+(Find-Control 'TempoOptions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+$guide = (Find-Control 'TempoGuide').Current.Name
+if ($guide -notlike '*Moderato*Allegro*') {
+    throw "Initial 120 BPM tempo guide did not expose overlapping markings: $guide"
+}
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
 $tapIn = 'not-run-no-output'
 if ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
-    (Find-Control 'TempoOptions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
     if ((Find-Control 'ArmTapIn').Current.IsEnabled) { throw 'Tap-in arming is enabled without a selected output.' }
     Wait-TapStatus 'idle'
 } else {
@@ -267,6 +271,7 @@ if ($selection.Count -eq 0) {
     }
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;tapIn=$tapIn;
+  tempoGuide='initial-overlapping-markings-exposed';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 Write-Output "First-use controls are visible; playback result: $playback"

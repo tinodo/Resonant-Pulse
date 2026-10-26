@@ -143,3 +143,14 @@ that exact owned element's focus identity, rather than assuming a focusable
 wrapper or immediate focus transfer. Fresh full native completion, including
 automatic tap-in playback, is still required before delivery. Physical
 unplug/reconnect acceptance has not been established.
+
+The approved approximate Italian tempo guide is being implemented on a stacked
+feature branch, not delivered in preview.3. It lives under More tempo controls
+and follows the numeric field, including tap-in synchronization, without changing
+the document or transport. Multiple overlapping labels remain visible rather
+than implying a uniquely correct musical classification. Bands use the
+[Tunable tempo reference](https://tunableapp.com/tempo/) as approximate musical
+background, not an interoperability standard; the extreme bands cover the app's
+1..1000 range, and Larghissimo reaches 25 to cover fractional input continuously.
+Beat unit and musical context remain explicit. Five-language guidance includes
+invalid numeric entry feedback. Hosted and native guide evidence is pending.

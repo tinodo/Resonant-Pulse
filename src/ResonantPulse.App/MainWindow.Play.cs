@@ -17,6 +17,8 @@ public sealed partial class MainWindow
         var instrument = new PulseInstrument();
         _instrument = instrument;
         var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000);
+        var tempoGuide = Body(TempoGuide.Format(tempo.Value));
+        Identify(tempoGuide, "TempoGuide", tempoGuide.Text);
         _playTempo = tempo;
         tempo.FontSize = 32;
         tempo.ValueChanged += async (_, args) =>
@@ -24,6 +26,8 @@ public sealed partial class MainWindow
             // The document can lag behind queued validation. Compare the UI
             // event pair so a rapid 120 -> 132 -> 120 retains both edits.
             var proposed = args.NewValue;
+            tempoGuide.Text = TempoGuide.Format(proposed);
+            AutomationProperties.SetName(tempoGuide, tempoGuide.Text);
             if (_isSynchronizingTempo || !TempoEdits.IsChange(args.OldValue, proposed)) return;
             _tempoInputVersion++;
             CancelTapIn();
@@ -67,7 +71,7 @@ public sealed partial class MainWindow
             Header = Text.Get("TempoOptions"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Content = Column(unit, CommandFlow(
+            Content = Column(unit, tempoGuide, Copy("TempoGuideHint"), CommandFlow(
                 ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, tempo.Value / 2); }),
                 ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, tempo.Value * 2); }),
                 ActionButton("ResetTap", "ResetTap", () =>
