@@ -37,6 +37,15 @@ public sealed partial class MainWindow
         var tempo = _document.Program.Count == 0 ? _tempoRequested ?? _document.Settings.Tempo
             : position?.Tempo ?? settings.Tempo;
         _instrument?.Present(shownSettings, tempo, phase, plan, frame, blind, _preferences.IsReducedMotion);
+        if (_tempoEdit is { } tempoEdit)
+        {
+            var tempoName = Text.Format("TempoEditName", PulseInstrument.FormatTempo(tempo));
+            if (tempoName != _tempoEditName)
+            {
+                _tempoEditName = tempoName;
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tempoEdit, tempoName);
+            }
+        }
         if (_beatStrip is { } strip)
         {
             var pulse = -1;
@@ -98,9 +107,9 @@ public sealed partial class MainWindow
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemStatus(TransportStatus,
             $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])};tempo={settings.Tempo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)};meter={meterBeats}/{meterDenominator}");
-        if (!blind && snapshot.Revision is { HasPracticeLimit: true, EndFrame: { } endFrame } timed)
+        if (!blind && snapshot.Revision is { HasPracticeLimit: true } timed &&
+            timed.FramesRemainingAt(snapshot.ProcessedFrame) is { } remaining)
         {
-            var remaining = Math.Max(0, endFrame - Math.Max(snapshot.ProcessedFrame, timed.CountInFrames));
             var duration = TimeSpan.FromSeconds(Math.Ceiling((double)remaining / timed.Initial.SampleRate));
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }

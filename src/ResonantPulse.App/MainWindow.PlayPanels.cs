@@ -144,7 +144,7 @@ public sealed partial class MainWindow
     private OptionPanel BuildTempoPanel()
     {
         var settings = _document.Settings;
-        var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000);
+        var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000, 1, 0);
         tempo.FontSize = 24;
         var unit = SelectChoices("Unit", "TempoUnit", Invariant(settings.BeatUnitQuarters), TempoUnitChoices(settings));
         var half = ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, Math.Round(tempo.Value / 2, 1)); });
@@ -281,7 +281,18 @@ public sealed partial class MainWindow
     {
         var name = Input("Name", "DocumentName", _document.Name);
         OptionPanel? project = null;
-        var save = ActionButton("Save", "PlaySave", async () => { project!.Flyout.Hide(); await SaveProjectAsync(); });
+        // The name is a draft until Done; saving the project must save what the field shows, not the old name.
+        async Task CommitNameAsync()
+        {
+            var newName = name.Text;
+            if (newName != _document.Name) await CommitAsync(doc => doc.Name = newName, false);
+        }
+        var save = ActionButton("Save", "PlaySave", async () =>
+        {
+            await CommitNameAsync();
+            project!.Flyout.Hide();
+            await SaveProjectAsync();
+        });
         var open = ActionButton("Open", "PlayOpen", async () => { project!.Flyout.Hide(); await OpenProjectAsync(); });
         project = CreateOptionPanel("ProjectOptions", "ProjectOptionsPanel", Column(name, CommandFlow(save, open)), null,
             () => name.Text = _document.Name,

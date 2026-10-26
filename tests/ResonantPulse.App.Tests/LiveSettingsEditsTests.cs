@@ -75,17 +75,33 @@ public sealed class LiveSettingsEditsTests
             s => s with { Sound = "Glass" },
             s => s with { Accents = [Accent.Strong, Accent.Soft] },
             s => s with { AccentOverridesGroups = true },
-            s => s with { ManualAccentIndices = [2] }
+            s => s with { ManualAccentIndices = [2] },
+            s => s with { BlindGaps = false }
         })
             Assert.AreEqual(LiveChange.Sound, LiveSettingsEdits.Classify(baseline, sound(baseline)));
         foreach (var structural in new Func<PulseSettings, PulseSettings>[]
         {
             s => s with { Tempo = 121 }, s => s with { BeatsPerBar = 3 }, s => s with { BeatDenominator = 8 },
             s => s with { BeatUnitQuarters = 0.5 }, s => s with { Subdivision = 2 }, s => s with { Swing = 0.6 },
-            s => s with { Groups = [2, 2] }, s => s with { AudibleBars = 1, SilentBars = 1 }, s => s with { BlindGaps = false },
+            s => s with { Groups = [2, 2] }, s => s with { AudibleBars = 1, SilentBars = 1 },
             s => s with { Sound = "Glass", Tempo = 90 }
         })
             Assert.AreEqual(LiveChange.Structural, LiveSettingsEdits.Classify(baseline, structural(baseline)));
+    }
+
+    [TestMethod]
+    public void BlindGapsOnlyDecidesWhatTheDisplayShowsSoItFollowsLiveEvenDuringAProgram()
+    {
+        var open = LiveSettingsEdits.Decide(Revision(Document(), 8000), null, Requested(Document(edit: s => s.BlindGaps = false)));
+        Assert.AreEqual(LiveEditOutcome.SoundApplied, open.Outcome);
+        Assert.IsFalse(open.Merged.Settings.BlindGaps);
+
+        var program = Document();
+        program.Program = [new ProgramStep { Bars = 2, StartTempo = 100, EndTempo = 100 }];
+        var finite = LiveSettingsEdits.Decide(Revision(program, 8000), null, Requested(Document(edit: s => s.BlindGaps = false)));
+        Assert.AreEqual(LiveEditOutcome.SoundApplied, finite.Outcome, "A display flag never needs a restart.");
+        Assert.IsTrue(finite.Publish);
+        Assert.IsFalse(finite.Merged.Settings.BlindGaps);
     }
 
     [TestMethod]
@@ -177,7 +193,7 @@ public sealed class LiveSettingsEditsTests
         foreach (var edit in new Action<PulseSettings>[]
         {
             s => s.BeatsPerBar = 3, s => s.BeatDenominator = 8, s => s.BeatUnitQuarters = 0.5, s => s.Subdivision = 2,
-            s => s.Swing = 0.6, s => s.Groups = [2, 2], s => { s.AudibleBars = 1; s.SilentBars = 1; }, s => s.BlindGaps = false
+            s => s.Swing = 0.6, s => s.Groups = [2, 2], s => { s.AudibleBars = 1; s.SilentBars = 1; }
         })
             Assert.AreEqual(LiveEditOutcome.RequiresRestart,
                 LiveSettingsEdits.Decide(finite, null, Requested(Document(edit: edit))).Outcome);

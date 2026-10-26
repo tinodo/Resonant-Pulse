@@ -35,12 +35,12 @@ internal static class LiveSettingsEdits
         settings.Groups = requested.Groups.ToArray();
         settings.AudibleBars = requested.AudibleBars;
         settings.SilentBars = requested.SilentBars;
-        settings.BlindGaps = requested.BlindGaps;
         return copy;
     }
 
     /// <summary>
-    /// Sound: only Sound/Accents/AccentOverridesGroups/ManualAccentIndices differ, so the musical clock is untouched.
+    /// Sound: only Sound/Accents/AccentOverridesGroups/ManualAccentIndices/BlindGaps differ (none of them reaches the
+    /// compiled plan), so the musical clock is untouched.
     /// Structural: any other live-eligible setting differs. A null and an empty manual-index list are equivalent.
     /// </summary>
     internal static LiveChange Classify(PulseSettings active, PulseSettings other)
@@ -49,9 +49,10 @@ internal static class LiveSettingsEdits
             active.BeatDenominator != other.BeatDenominator || active.BeatUnitQuarters != other.BeatUnitQuarters ||
             active.Subdivision != other.Subdivision || active.Swing != other.Swing ||
             active.AudibleBars != other.AudibleBars || active.SilentBars != other.SilentBars ||
-            active.BlindGaps != other.BlindGaps || !Same(active.Groups, other.Groups))
+            !Same(active.Groups, other.Groups))
             return LiveChange.Structural;
         return active.Sound != other.Sound || active.AccentOverridesGroups != other.AccentOverridesGroups ||
+            active.BlindGaps != other.BlindGaps ||
             !Same(active.Accents, other.Accents) || !Same(active.ManualAccentIndices, other.ManualAccentIndices)
             ? LiveChange.Sound : LiveChange.None;
     }

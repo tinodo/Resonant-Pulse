@@ -51,6 +51,7 @@ public sealed partial class MainWindow
     {
         if (_isClosed) return;
         _instrument?.RefreshTheme();
+        _beatStrip?.RefreshTheme();
         _tempoCurve?.RefreshTheme();
     }
 

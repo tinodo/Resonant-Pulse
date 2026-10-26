@@ -112,6 +112,31 @@ internal static class LiveSplice
     }
 
     /// <summary>
+    /// Runs every branch of the structural-edit path (boundary search in the count-in, the first loop and a later loop;
+    /// continuing and restarting splices; the queue state machine; the mixed render) on small throw-away revisions, so
+    /// the first real edit never pays for JIT compilation or type set-up inside the audio callback. It touches nothing
+    /// shared with a running transport and is independent of what the user happened to edit first.
+    /// </summary>
+    internal static void WarmUp()
+    {
+        const int rate = 8000, quantum = 512;
+        var before = new PlaybackRevision(new PulseDocument(), rate);
+        var faster = new PlaybackRevision(new PulseDocument { Settings = { Tempo = 150 } }, rate);
+        var waltz = new PlaybackRevision(new PulseDocument { Settings = { BeatsPerBar = 3 } }, rate);
+        var destination = new float[quantum * 2];
+        var scratch = new float[quantum * 2];
+        foreach (var cursor in new[] { 0L, before.CountInFrames + 1, before.Initial.TotalFrames + 1 })
+            foreach (var next in new[] { faster, waltz })
+            {
+                if (NextPulseBoundary(before, cursor) is not { } boundary) continue;
+                var start = Math.Max(0, boundary.Frame - quantum / 2);
+                var queue = new LiveEditQueue();
+                queue.Post(next);
+                var timeline = queue.Advance(new LiveTimeline(before), start, quantum, start);
+                Render(destination, start, quantum, timeline, 1f, false, scratch);
+            }
+    }
+    /// <summary>
     /// What the UI should show for a processed (absolute) frame: the revision that is audible there, its own-timeline
     /// position (clamped at the deadline once completed) and the plan/frame pair inside that revision.
     /// </summary>

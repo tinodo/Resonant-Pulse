@@ -117,9 +117,13 @@ public sealed class AudioTransport : IDisposable
             if (!decision.Publish) return decision.Outcome;
             var merged = decision.Merged;
             var rate = active.SampleRate;
-            var prepared = await Task.Run(() => new PlaybackRevision(merged, rate));
+            var prepared = await Task.Run(() =>
+            {
+                WarmSplicePathOnce();
+                return new PlaybackRevision(merged, rate);
+            });
             if (session != Volatile.Read(ref _soundSessionGeneration) || _isDisposed)
-                throw new InvalidOperationException(Text.Get("SoundSessionChanged"));
+                throw new LiveSessionChangedException();
             if (LiveSettingsEdits.Classify(active.Document.Settings, merged.Settings) != LiveChange.Structural &&
                 !active.HasSameClock(prepared))
                 throw new InvalidOperationException("A live sound edit must preserve the musical clock and stop boundary.");
@@ -130,12 +134,15 @@ public sealed class AudioTransport : IDisposable
         finally { _lifecycle.Release(); }
     }
 
-    /// <summary>
-    /// Source-compatible entry point for the former sound/accent-only update. It now simply forwards to
-    /// <see cref="UpdateLiveAsync"/> (so structural settings carried by <paramref name="requested"/> are applied live
-    /// too, except during a finite program, where only the sound part follows exactly as before); the outcome is ignored.
-    /// </summary>
-    public async Task UpdateSoundAsync(PulseSettings requested) => await UpdateLiveAsync(requested);
+    private static int _spliceWarmedUp;
+
+    /// <summary>Best effort and at most once per process: a warm-up must never fail the edit it accompanies.</summary>
+    private static void WarmSplicePathOnce()
+    {
+        if (Interlocked.Exchange(ref _spliceWarmedUp, 1) != 0) return;
+        try { LiveSplice.WarmUp(); }
+        catch (Exception exception) { Diagnostics.Write("Live splice warm-up skipped", exception); }
+    }
 
     public async Task StartAsync(PulseDocument document, string outputId)
     {

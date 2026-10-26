@@ -11,6 +11,15 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
   audio or press Start on a developer machine; run test instances against an
   isolated data folder (`RESONANT_PULSE_HOME`) and never capture another
   application's window.
+- Drive the native UI on a private desktop, not the owner's: run
+  `packaging\Verify-Local.ps1` (it uses `packaging\Invoke-OnPrivateDesktop.ps1`).
+  Nothing appears on screen, nobody can click into the test window, and no
+  keystroke or screen copy can reach another window. Keyboard injection and
+  screen copies do not work there, so the verifier skips Ctrl+M and screenshots;
+  for an image of your own window use `PrintWindow` from a driver process that is
+  separate from the process that started the application. Screenshots,
+  keystrokes and audio are otherwise opt-in (`-Screenshots`, `-Keyboard`,
+  `-RunAudio`) and only automatic on GitHub Actions.
 - GitHub Actions remains the authoritative gate (hosted build, native, package,
   CodeQL, review). Local runs give fast feedback only; never treat an
   unexecuted test or an uploaded artifact as a pass.

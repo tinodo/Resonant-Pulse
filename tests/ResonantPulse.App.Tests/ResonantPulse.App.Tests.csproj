@@ -16,6 +16,7 @@
     <Compile Include="../../src/ResonantPulse.App/TempoFormat.cs" Link="App/TempoFormat.cs" />
     <Compile Include="../../src/ResonantPulse.App/LiveSoundEdits.cs" Link="App/LiveSoundEdits.cs" />
     <Compile Include="../../src/ResonantPulse.App/LiveSettingsEdits.cs" Link="App/LiveSettingsEdits.cs" />
+    <Compile Include="../../src/ResonantPulse.App/LiveEditPolicy.cs" Link="App/LiveEditPolicy.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoEdits.cs" Link="App/TempoEdits.cs" />
     <Compile Include="../../src/ResonantPulse.App/StageOperationGate.cs" Link="App/StageOperationGate.cs" />
     <Compile Include="../../src/ResonantPulse.App/EditorOperationGate.cs" Link="App/EditorOperationGate.cs" />

@@ -2,36 +2,76 @@
 param(
     [Parameter(Mandatory)][int]$AppProcessId,
     [Parameter(Mandatory)][string]$ReportPath,
-    # Playback is audible and screenshots copy the whole screen, so on a developer machine both are opt-in
-    # (-RunAudio, -Screenshots). A GitHub Actions runner has no listener and nothing private, so it runs both.
-    # -NoAudio and -NoScreenshots always win.
+    # Playback is audible, screenshots copy the whole screen and the Ctrl+M check types into the focused window, so on a
+    # developer machine all three are opt-in (-RunAudio, -Screenshots, -Keyboard). A GitHub Actions runner has no
+    # listener, nothing private and no person typing, so it runs them. -NoAudio, -NoScreenshots and -NoKeyboard win.
     [switch]$RunAudio,
     [switch]$Screenshots,
+    [switch]$Keyboard,
     [switch]$NoAudio,
-    [switch]$NoScreenshots
+    [switch]$NoScreenshots,
+    [switch]$NoKeyboard
 )
 $ErrorActionPreference = 'Stop'
 $onCi = $env:GITHUB_ACTIONS -eq 'true'
 $playAudio = (-not $NoAudio) -and ($RunAudio -or $onCi)
 $takeScreenshots = (-not $NoScreenshots) -and ($Screenshots -or $onCi)
+$sendKeys = (-not $NoKeyboard) -and ($Keyboard -or $onCi)
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class RpDpi
 {
     [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
+}
+public static class RpWindows
+{
+    public delegate bool EnumProc(IntPtr window, IntPtr parameter);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr parameter);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassNameW(IntPtr window, StringBuilder text, int capacity);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+    // The visible top-level window of a process with the given class, or zero.
+    public static IntPtr FindMain(uint processId, string className)
+    {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows(delegate (IntPtr window, IntPtr parameter)
+        {
+            uint owner;
+            GetWindowThreadProcessId(window, out owner);
+            if (owner != processId || !IsWindowVisible(window)) return true;
+            StringBuilder text = new StringBuilder(256);
+            GetClassNameW(window, text, text.Capacity);
+            if (text.ToString() != className) return true;
+            found = window;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 '@
 # Measure and resize in real pixels, and express the requested sizes in device-independent units, so the same
 # scenarios mean the same thing on a 100% hosted runner and on a scaled developer display.
 [void][RpDpi]::SetProcessDpiAwarenessContext([IntPtr](-4))
 $process = [Diagnostics.Process]::GetProcessById($AppProcessId)
-$scale = [RpDpi]::GetDpiForWindow($process.MainWindowHandle) / 96.0
+# The application's own window is found by its WinUI class. Process.MainWindowHandle can return an unrelated small
+# window of the process instead (for example the input-method indicator Windows adds on a desktop without a shell).
+function Get-AppWindowHandle {
+    $found = [RpWindows]::FindMain([uint32]$AppProcessId, 'WinUIDesktopWin32WindowClass')
+    if ($found -ne [IntPtr]::Zero) { return $found }
+    $process.Refresh()
+    return $process.MainWindowHandle
+}
+$mainDeadline = [DateTime]::UtcNow.AddSeconds(10)
+while ([RpWindows]::FindMain([uint32]$AppProcessId, 'WinUIDesktopWin32WindowClass') -eq [IntPtr]::Zero -and
+       [DateTime]::UtcNow -lt $mainDeadline) { Start-Sleep -Milliseconds 200 }
+$scale = [RpDpi]::GetDpiForWindow((Get-AppWindowHandle)) / 96.0
 if ($scale -le 0) { $scale = 1.0 }
-$window = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+$window = [Windows.Automation.AutomationElement]::FromHandle((Get-AppWindowHandle))
 function Resize-To([double]$width, [double]$height) {
     $pattern = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
     $pattern.Resize([Math]::Round($width * $scale), [Math]::Round($height * $scale))
@@ -39,7 +79,7 @@ function Resize-To([double]$width, [double]$height) {
 function Get-CurrentWindow {
     $process.Refresh()
     if ($process.HasExited) { throw 'Application exited while verifying native controls.' }
-    [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+    [Windows.Automation.AutomationElement]::FromHandle((Get-AppWindowHandle))
 }
 function Find-Optional([string]$id) {
     $condition = [Windows.Automation.PropertyCondition]::new(
@@ -140,7 +180,7 @@ function Set-Text([string]$id, [string]$value) {
     (Find-Control $id).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($value)
 }
 function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
-    Invoke-Control 'PracticeTimer'
+    Open-Panel @('PracticeTimer') 'PracticeSeconds'
     Set-Number 'PracticeSeconds' $seconds
     Set-Number 'PracticeBeats' $beats
     Set-Number 'PracticeBars' $bars
@@ -151,7 +191,7 @@ function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
     $limit = [DateTime]::UtcNow.AddSeconds(15)
     $committed = ''
     do {
-        Invoke-Control 'PracticeTimer'
+        Open-Panel @('PracticeTimer') 'PracticeLimitsStatus'
         $committed = (Find-Control 'PracticeLimitsStatus').Current.ItemStatus
         Invoke-Control 'PracticeTimerOptionsCancel'
         Wait-Absent 'PracticeTimerOptionsCancel'
@@ -174,7 +214,25 @@ function Select-Combo([string]$id, [string]$itemName) {
     $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 200
 }
-function Open-Meter { Invoke-Control 'QuickMeter'; $null = Find-Control 'MeterCustom' }
+function Open-Panel([string[]]$steps, [string]$field) {
+    # A flyout that was just closed can ignore the next open while it finishes closing, and a hosted desktop can
+    # briefly take focus. Re-invoke the opening chain a couple of times before reporting the panel as missing.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            foreach ($step in $steps) { Invoke-Control $step }
+            $limit = [DateTime]::UtcNow.AddSeconds(3)
+            do {
+                if ($null -ne (Find-Optional $field)) { return }
+                Start-Sleep -Milliseconds 100
+            } while ([DateTime]::UtcNow -lt $limit)
+        } catch {
+            if ($attempt -eq 3) { throw }
+        }
+        Start-Sleep -Milliseconds 400
+    }
+    $null = Find-Control $field
+}
+function Open-Meter { Open-Panel @('QuickMeter') 'MeterCustom' }
 function Select-Meter([string]$preset, [string]$expectedName) {
     Open-Meter
     Invoke-Control "MeterPreset$preset"
@@ -235,17 +293,17 @@ Wait-Until { (Get-Dial) -like '122*BPM*' } 'Tempo + did not change the BPM reado
 Invoke-Control 'TempoDown'
 Invoke-Control 'TempoDown'
 Wait-Until { (Get-Dial) -like '120*BPM*' } 'Tempo - did not change the BPM readout immediately.'
-Invoke-Control 'TempoEdit'
+Open-Panel @('TempoEdit') 'Tempo'
 Set-Number 'Tempo' 77
 Invoke-Control 'TempoOptionsCancel'
 Wait-Absent 'TempoOptionsCancel'
 if ((Get-Dial) -notlike '120*BPM*') { throw 'Cancel applied a draft tempo.' }
-Invoke-Control 'TempoEdit'
+Open-Panel @('TempoEdit') 'Tempo'
 Set-Number 'Tempo' 90
 Invoke-Control 'TempoOptionsDone'
 Wait-Until { (Get-Dial) -like '90*BPM*' } 'Done did not apply the typed tempo.'
 Wait-Absent 'TempoOptionsDone'
-Invoke-Control 'TempoEdit'
+Open-Panel @('TempoEdit') 'Tempo'
 Set-Number 'Tempo' 120
 Invoke-Control 'TempoOptionsDone'
 Wait-Until { (Get-Dial) -like '120*BPM*' } 'The original tempo did not restore.'
@@ -264,15 +322,15 @@ foreach ($case in @(@('6_8', '6/8', 6), @('3_4', '3/4', 3), @('12_8', '12/8', 12
     $null = Find-Control "MainAccent$last"
     Wait-Absent "MainAccent$($case[2])"
     $dialText = Get-Dial
-    if (($case[1] -in @('6/8', '12/8')) -and ($dialText -notlike '*BPM*Eighth*')) {
-        throw "A /8 meter must count eighth notes: $dialText"
+    if ($case[1] -in @('6/8', '12/8')) {
+        Wait-Until { (Get-Dial) -like '*BPM*Eighth*' } "A /8 meter must count eighth notes: $dialText"
+        $dialText = Get-Dial
     }
     $meterEvidence += @{meter=$case[1];beats=$case[2];dial=$dialText}
 }
 Wait-Until { (Get-Dial) -like '120*BPM*Quarter*' } 'Quarter-note BPM did not return with 4/4.'
 # The custom builder is the advanced path, behind the same control. 8/8 must give eight clicks, not four.
-Open-Meter
-Invoke-Control 'MeterCustom'
+Open-Panel @('QuickMeter', 'MeterCustom') 'MeterBeats'
 Set-Number 'MeterBeats' 8
 Select-Combo 'MeterDenominator' 'Eighth note (8)'
 Set-Text 'MeterGroups' ''
@@ -281,11 +339,10 @@ Wait-Absent 'RhythmOptionsDone'
 Wait-Until { (Find-Control 'QuickMeter').Current.Name -like '*8/8*' } 'The custom 8/8 meter was not applied.'
 $null = Find-Control 'MainAccent7'
 Wait-Absent 'MainAccent8'
+Wait-Until { (Get-Dial) -like '*BPM*Eighth*' } 'Custom 8/8 must count eighth notes.'
 $dialText = Get-Dial
-if ($dialText -notlike '*BPM*Eighth*') { throw "Custom 8/8 must count eighth notes: $dialText" }
 $meterEvidence += @{meter='custom 8/8';beats=8;dial=$dialText}
-Open-Meter
-Invoke-Control 'MeterCustom'
+Open-Panel @('QuickMeter', 'MeterCustom') 'MeterBeats'
 Set-Number 'MeterBeats' 64
 Set-Text 'MeterGroups' ''
 Invoke-Control 'RhythmOptionsDone'
@@ -348,7 +405,7 @@ function Send-CtrlM {
     [Windows.Forms.SendKeys]::SendWait('^m')
 }
 foreach ($panel in $panels) {
-    foreach ($step in $panel.open) { Invoke-Control $step }
+    Open-Panel $panel.open $panel.field
     $element = Find-Control $panel.field
     if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($panel.field)" }
     if ($panel.open[0] -eq 'TempoEdit' -and (Find-Control 'Tempo').Current.IsOffscreen) {
@@ -357,8 +414,14 @@ foreach ($panel in $panels) {
     if ($panel.open[0] -eq 'AudioOptions' -and (Find-Control 'MasterGain').Current.IsOffscreen) {
         throw 'Volume is not accessible in Audio.'
     }
-    if ($panel.open[0] -ne 'AudioOptions' -and $panel.close -like '*Cancel' -and $null -eq (Find-Optional ($panel.close -replace 'Cancel$', 'Done'))) {
-        throw "Panel has no Done beside Cancel: $($panel.close)"
+    if ($panel.open[0] -ne 'AudioOptions' -and $panel.close -like '*Cancel') {
+        try { $null = Find-Control ($panel.close -replace 'Cancel$', 'Done') }
+        catch { throw "Panel has no Done beside Cancel: $($panel.close)" }
+    }
+    if (-not $sendKeys) {
+        Invoke-Control $panel.close
+        Wait-Absent $panel.field
+        continue
     }
     $focused = Find-Control $panel.focus
     $focused.SetFocus()
@@ -453,6 +516,8 @@ if (-not $playAudio) {
         Invoke-Control 'TempoDown'
         Invoke-Control 'TempoDown'
         Invoke-Control 'TempoDown'
+        # Stopping mid-commit would leave the later counted-stop checks running at 121 or 122 BPM.
+        Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;tempo=120;meter=4/4' } 'Live tempo and meter did not return to 120 BPM, 4/4 before stopping.' 20
     } finally {
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
             Invoke-Control 'TransportStop'
@@ -510,6 +575,7 @@ if (-not $playAudio) {
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;manyPulseInstrument=$manyPulseInstrument;
-  meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;popupShortcuts='ctrl-m-in-all-seven-panels';
+  meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;
+  popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

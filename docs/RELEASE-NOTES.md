@@ -2,20 +2,24 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
-The metronome is now the large, centered primary surface on Play, with tempo
-inside the cyan/magenta dial. It fills the available performance area rather
-than shrinking into a small preview beside a larger numeric input.
-**Rhythm**, **Tempo**, **Practice**, **Project** and **Help** open bounded panels.
-Precise numeric tempo editing lives in **Tempo**; -1, tap, +1, meter, sound and
-pulse strengths stay beneath the instrument. **Audio** on the compact transport
-opens output-device and volume controls without occupying the performance area.
+The metronome is the large, centered primary surface on Play, with the tempo
+inside the cyan/magenta dial. Click the number to type an exact tempo; the -,
+**TAP** and + buttons answer immediately (hold to repeat; Ctrl steps by ten).
+The time signature is a sheet-music picker (2/4, 3/4, 4/4, 6/8 and more) with
+**Custom...** for the full builder, and every written beat is an audible click,
+so 8/8 gives eight. Beat strengths are a row of bars (tall, medium, short or a
+rest) that you click to change. Practice, Project and Help are quiet entry
+points; every panel has Cancel and Done side by side, and Done applies. The
+window uses a modern custom title bar, and restoring your last session is silent.
 
-The **Sound** selector and individual pulse strengths apply during playback
-without restarting the clock. Existing click tails finish in their original
-sound. Manual pulse choices override automatic grouping only for edited slots;
-unedited group emphasis is preserved across bars, including dotted-note units.
-Count-in retains its separate cue accents. Ctrl+M remains available inside
-settings panels. Other tempo/rhythm edits still require Stop and Start.
+A running metronome follows Play without stopping. Sound and beat strengths
+switch at the next audio quantum; tempo, time signature, tempo unit,
+subdivision, swing, groups and gap bars are spliced in at the next beat. The bar
+carries on when the meter is unchanged and restarts at beat 1 when it changes,
+and the tails of earlier clicks finish in their original sound. Count-in and
+practice-timer changes apply at the next Start. When a project has a
+Studio/Train program, tempo and meter follow that program and Play says so.
+Ctrl+M remains available inside settings panels.
 
 The practice timer is in Play's **Practice** panel. Set a duration in
 seconds and choose Apply; zero disables it. Stop and Start to use a changed

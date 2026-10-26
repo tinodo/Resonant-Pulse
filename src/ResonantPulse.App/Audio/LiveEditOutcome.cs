@@ -1,5 +1,12 @@
 namespace ResonantPulse.App.Audio;
 
+/// <summary>
+/// A live edit was prepared for a playback session that was stopped, restarted or disposed in the meantime. The edit is
+/// still a valid document change: callers keep it and treat the transport as not playing it.
+/// </summary>
+public sealed class LiveSessionChangedException()
+    : InvalidOperationException(ResonantPulse.App.Localization.Text.Get("SoundSessionChanged"));
+
 /// <summary>Result of <c>AudioTransport.UpdateLiveAsync</c>.</summary>
 public enum LiveEditOutcome
 {
@@ -13,7 +20,7 @@ public enum LiveEditOutcome
     StructuralQueued,
     /// <summary>
     /// A finite program is playing and the request differs structurally (tempo, meter, unit, subdivision, swing,
-    /// groups, gap bars, blind gaps): restart playback to apply it. Sound/accent changes in the same request are
+    /// groups, gap bars): restart playback to apply it. Sound/accent/blind-gap changes in the same request are
     /// still applied live; sound-only requests never return this.
     /// </summary>
     RequiresRestart

@@ -252,6 +252,7 @@ public sealed partial class MainWindow : Window
     {
         _instrument = null;
         _beatStrip = null;
+        _tempoEdit = null;
         _position = null;
         _stageTempo = null;
         _stageMeter = null;
@@ -315,8 +316,19 @@ public sealed partial class MainWindow : Window
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
             await ValidateAsync(revised);
-            if (editorChange == EditorChangeKind.SoundAndAccentsOnly)
-                await _transport.UpdateSoundAsync(revised.Settings);
+            // Live-eligible edits follow the running transport (sound at the next quantum, tempo/meter/feel at the
+            // next pulse). This happens before the document is replaced so a failed update changes nothing.
+            var live = LiveEditOutcome.NotPlaying;
+            var countInChanged = false;
+            if (LiveEditPolicy.IsLive(editorChange))
+            {
+                // Stop (or a restart) during the off-thread compile only means the edit has nothing to follow:
+                // it is still a valid document change, so keep it instead of reporting an error.
+                try { live = await _transport.UpdateLiveAsync(revised.Settings); }
+                catch (LiveSessionChangedException) { live = LiveEditOutcome.NotPlaying; }
+                countInChanged = _transport.Snapshot().Revision is { } audible &&
+                    audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
+            }
             _undo.Push(_document);
             if (_undo.Count > 64)
             {
@@ -328,10 +340,11 @@ public sealed partial class MainWindow : Window
             _document = revised;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
-            if (editorChange != EditorChangeKind.SoundAndAccentsOnly && affectsPlayback &&
-                _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
+            if (LiveEditPolicy.LeavesPendingEdit(editorChange, affectsPlayback,
+                    _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted,
+                    live, countInChanged))
                 _hasPendingEdits = true;
-            // Edits are pending until Stop + Start. The immutable active
+            // Edits that cannot follow live are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.
             published();
             await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));

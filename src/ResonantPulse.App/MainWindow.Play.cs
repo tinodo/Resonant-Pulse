@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
@@ -19,6 +20,8 @@ public sealed partial class MainWindow
     // instrument stays exactly centred.
     private const double RailReserve = 272;
     private BeatStrip? _beatStrip;
+    private Button? _tempoEdit;
+    private string _tempoEditName = "";
     private double? _tempoRequested;
 
     private static Style ResonantStyle(string key) => (Style)Application.Current.Resources[key];
@@ -45,6 +48,10 @@ public sealed partial class MainWindow
         };
         Identify(tempoEdit, "TempoEdit", Text.Get("TempoEditHint"));
         ToolTipService.SetToolTip(tempoEdit, Text.Get("TempoEditHint"));
+        // The current value is part of the button's name (kept current by RefreshSnapshot), so a screen reader
+        // that lands here hears the tempo, not only the instruction.
+        _tempoEditName = "";
+        _tempoEdit = followsProgram ? null : tempoEdit;
         tempoEdit.KeyDown += (_, args) =>
         {
             var step = args.Key switch
@@ -336,9 +343,12 @@ public sealed partial class MainWindow
 
     private void NudgeTempo(double delta) => RequestTempo((_tempoRequested ?? _document.Settings.Tempo) + delta);
 
+    private bool _tempoPumpRunning;
+
     /// <summary>
-    /// Shows the requested tempo immediately and commits it. Commits are absolute values processed in order,
-    /// so holding a stepper or tapping quickly can never reorder or lose the final value.
+    /// Shows the requested tempo immediately and commits it. While a commit is running, further requests only
+    /// update the wanted value; the running pump then commits the newest one directly. Holding a stepper or tapping
+    /// quickly therefore never queues a backlog, never reorders, and the last value always wins.
     /// </summary>
     private void RequestTempo(double bpm)
     {
@@ -346,16 +356,44 @@ public sealed partial class MainWindow
         var requested = Math.Clamp(Math.Round(bpm, 1), 1, 1000);
         if (!TempoEdits.IsChange(_tempoRequested ?? _document.Settings.Tempo, requested)) return;
         _tempoRequested = requested;
+        AnnounceTempo(requested);
         RefreshSnapshot();
+        if (_tempoPumpRunning) return;
+        _tempoPumpRunning = true;
         _ = GuardAsync(async () =>
         {
-            try { await CommitAsync(doc => doc.Settings.Tempo = requested, editorChange: EditorChangeKind.GlobalTempoOnly); }
-            finally { if (_tempoRequested == requested) _tempoRequested = null; }
+            try
+            {
+                var committed = double.NaN;
+                while (_tempoRequested is { } wanted && wanted != committed)
+                {
+                    committed = wanted;
+                    await CommitAsync(doc => doc.Settings.Tempo = wanted, editorChange: EditorChangeKind.GlobalTempoOnly);
+                }
+            }
+            finally
+            {
+                _tempoPumpRunning = false;
+                _tempoRequested = null;
+                if (!_isClosed) RefreshSnapshot();
+            }
         });
     }
 
     private string DescribeBeat(int index, Accent level) =>
         Text.Format("BeatName", index + 1, Text.Get("Level" + level));
+
+    /// <summary>
+    /// Tells assistive technology the new tempo without moving focus. Only the most recent announcement is spoken,
+    /// so holding a stepper reads the final value, not every step.
+    /// </summary>
+    private void AnnounceTempo(double bpm)
+    {
+        if (_tempoEdit is not { } edit) return;
+        var peer = FrameworkElementAutomationPeer.FromElement(edit) ?? FrameworkElementAutomationPeer.CreatePeerForElement(edit);
+        peer?.RaiseNotificationEvent(AutomationNotificationKind.ActionCompleted, AutomationNotificationProcessing.MostRecent,
+            Text.Format("TempoAnnouncement", PulseInstrument.FormatTempo(bpm)), "TempoChanged");
+    }
 
     private async Task ChangeAccentAsync(int index, int delta, bool wrap)
     {
@@ -526,7 +564,11 @@ public sealed partial class MainWindow
         {
             if (!openCustomWhenClosed) return;
             openCustomWhenClosed = false;
-            DispatcherQueue.TryEnqueue(() => rhythm.Flyout.ShowAt(chip));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                // The page may have been rebuilt (or the window closed) since the picker closed.
+                if (!_isClosed && chip.XamlRoot is not null) rhythm.Flyout.ShowAt(chip);
+            });
         };
         custom.HorizontalAlignment = HorizontalAlignment.Stretch;
         var content = new StackPanel { Spacing = 12 };

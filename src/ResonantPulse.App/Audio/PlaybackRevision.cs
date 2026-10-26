@@ -78,6 +78,43 @@ public sealed class PlaybackRevision
     public long ToOwn(long absoluteFrame) => absoluteFrame + Shift;
     public long ToAbsolute(long ownFrame) => ownFrame - Shift;
 
+    /// <summary>
+    /// Practice/program time left, in frames, once the device has processed the ABSOLUTE <paramref name="processedFrame"/>
+    /// (the count-in is never part of it); null when playback never ends by itself.
+    /// </summary>
+    public long? FramesRemainingAt(long processedFrame) =>
+        EndFrame is { } end ? Math.Max(0, end - Math.Max(ToOwn(processedFrame), CountInFrames)) : null;
+
+    /// <summary>
+    /// Seconds after <paramref name="startFrame"/> of the targets of one lane that fall in the ABSOLUTE device-frame window
+    /// [<paramref name="startFrame"/>, <paramref name="endFrame"/>): what a keyboard-timing run is compared against.
+    /// </summary>
+    internal List<double> TargetSeconds(int lane, bool includeSilent, long startFrame, long endFrame)
+    {
+        var startOwn = ToOwn(startFrame);
+        var endOwn = ToOwn(endFrame);
+        var seconds = new List<double>();
+        void Append(RenderPlan plan, long origin, long excludeBefore)
+        {
+            foreach (var onset in plan.Targets)
+            {
+                if (onset.LaneIndex != lane || onset.Accent == Accent.Silent || (!includeSilent && !onset.Audible)) continue;
+                var frame = origin + onset.Frame;
+                if (frame < Math.Max(startOwn, excludeBefore) || frame >= endOwn) continue;
+                seconds.Add((double)(frame - startOwn) / plan.SampleRate);
+            }
+        }
+        Append(Initial, 0, CountInFrames);
+        if (IsFinite) return seconds;
+        for (var cycle = Math.Max(0, (startOwn - Initial.TotalFrames) / Body.TotalFrames); ; cycle++)
+        {
+            var origin = Initial.TotalFrames + cycle * Body.TotalFrames;
+            if (origin >= endOwn) break;
+            Append(Body, origin, origin);
+        }
+        return seconds;
+    }
+
     /// <summary>Allocation-light copy that shares the compiled plans; safe to call once per splice in the callback.</summary>
     internal PlaybackRevision Rebased(long shift, DeadlineParts deadline) =>
         shift == Shift && deadline == Deadline ? this : new(this, shift, deadline);
