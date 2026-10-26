@@ -2,6 +2,13 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
+Train now includes **Export timing report (CSV)** for the last completed keyboard
+measurement. The immutable report preserves its original context, matches,
+misses and extras. Numeric values round-trip independently of interface language;
+user label cells are JSON-encoded, and unavailable metrics are blank. No automatic
+history, microphone capture or acoustic-calibration claim is added. This feature
+is in development, not in published preview.3.
+
 Library now offers **Export WAV stems (ZIP)**: one main/subdivision/count-in
 track, one track per authored lane, and a manifest in one atomic local archive.
 Every stereo PCM16 track shares origin and length. Lane mute/solo, seeded

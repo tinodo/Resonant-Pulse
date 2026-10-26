@@ -22,6 +22,7 @@ public sealed partial class MainWindow
     private CheckBox? _timingSilentTargets;
     private readonly List<double> _observed = [];
     private string _lastTimingReport = "";
+    private TimingSession? _lastTimingSession;
     private readonly TempoCurveState _tempoCurveState = new();
 
     private UIElement BuildTrain()
@@ -72,6 +73,7 @@ public sealed partial class MainWindow
                 _timingStartTimestamp = Stopwatch.GetTimestamp();
                 _observed.Clear();
                 _lastTimingReport = "";
+                _lastTimingSession = null;
                 SetTimingArmed(true);
                 BuildPage();
                 ShowNotice("TimingArmed");
@@ -80,6 +82,15 @@ public sealed partial class MainWindow
             ActionButton("FinishTiming", "FinishKeyboardTiming", FinishTiming)));
         _timingStatus = Body(_isTimingArmed ? Text.Get("TimingArmed") : _lastTimingReport);
         panel.Children.Add(_timingStatus);
+        var export = ActionButton("ExportTimingCsv", "ExportTimingCsv", ExportTimingCsvAsync);
+        export.IsEnabled = !_isTimingArmed && _lastTimingSession is not null;
+        panel.Children.Add(export);
+        var csvHint = Copy("TimingCsvHint");
+        Identify(csvHint, "TimingCsvHint", csvHint.Text);
+        panel.Children.Add(csvHint);
+        if (_lastTimingSession is { } completed)
+            panel.Children.Add(Body(Text.Format("TimingCsvReady", completed.Context.ProjectName, completed.Context.TargetName,
+                completed.CompletedAtUtc.ToLocalTime().ToString("g", Text.Culture))));
         panel.Children.Add(Copy("IntegrationGates"));
         return Scroll(panel);
     }
@@ -130,6 +141,7 @@ public sealed partial class MainWindow
         {
             SetTimingArmed(false);
             _lastTimingReport = "";
+            _lastTimingSession = null;
             if (_timingStatus is not null) _timingStatus.Text = "";
             ShowError(exception);
         }
@@ -166,14 +178,19 @@ public sealed partial class MainWindow
                 Append(revision.Body, origin, origin);
             }
         }
-        var report = TimingAnalyzer.Analyze(expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
+        var context = new TimingSessionContext(revision.Document.Name,
+            _timingLane < 0 ? Text.Get("MainTarget") : revision.Document.Lanes[_timingLane].Name,
+            _timingLane, revision.Initial.SampleRate, _timingStartFrame, endFrame, _includeSilentTargets);
+        var session = new TimingSession(context, expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
+        var report = session.Report;
         _lastTimingReport = report.Matched == 0
             ? Text.Format("TimingNoMatches", report.Missed, report.Extra)
             : Text.Format("TimingReport", report.Matched, report.Missed, report.Extra,
                 report.MedianOffsetMilliseconds, report.SpreadMilliseconds, report.Coverage) +
-              "\n" + (report.Matched >= 4
+              "\n" + (report.HasDriftEstimate
                   ? Text.Format("TimingAdditional", report.DriftMillisecondsPerSecond, report.AmbiguousExpected)
                   : Text.Get("TimingDriftUnavailable"));
+        _lastTimingSession = session;
         if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
         if (_view == "Train") BuildPage();
     }
@@ -184,6 +201,7 @@ public sealed partial class MainWindow
         SetTimingArmed(false);
         _timingRevision = null;
         _observed.Clear();
+        _lastTimingSession = null;
         _lastTimingReport = Text.Get("TimingInvalidated");
         if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
     }
@@ -215,5 +233,16 @@ public sealed partial class MainWindow
         if (_timingTarget is not null) _timingTarget.IsEnabled = isEnabled;
         if (_timingToleranceInput is not null) _timingToleranceInput.IsEnabled = isEnabled;
         if (_timingSilentTargets is not null) _timingSilentTargets.IsEnabled = isEnabled;
+    }
+
+    private async Task ExportTimingCsvAsync()
+    {
+        var session = _lastTimingSession;
+        if (_isTimingArmed || session is null)
+            throw new InvalidOperationException(Text.Get("TimingCsvUnavailable"));
+        var path = await PickSavePathAsync(".csv", Text.Get("ExportTimingCsv"), session.Context.ProjectName + "-timing");
+        if (path is null) return;
+        await Task.Run(() => TimingCsvExporter.ExportAsync(path, session));
+        ShowNotice("Saved");
     }
 }

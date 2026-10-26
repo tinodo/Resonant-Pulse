@@ -41,6 +41,19 @@ public sealed class TimingAnalyzerTests
         Assert.AreEqual(10d, drift.DriftMillisecondsPerSecond, 1e-9);
         Assert.AreEqual(15d, drift.MedianOffsetMilliseconds, 1e-9);
         Assert.AreEqual(4, drift.Matched);
+        Assert.IsTrue(drift.HasDriftEstimate);
+    }
+
+    [TestMethod]
+    public void Analyze_DriftAvailabilityDistinguishesCoincidentTargetsFromMeasuredZero()
+    {
+        var coincident = TimingAnalyzer.Analyze([1, 1, 1, 1], [1, 1, 1, 1], 0);
+        Assert.AreEqual(4, coincident.Matched);
+        Assert.IsFalse(coincident.HasDriftEstimate);
+        var separated = TimingAnalyzer.Analyze([0, 1, 2, 3], [0, 1, 2, 3], 0);
+        Assert.IsTrue(separated.HasDriftEstimate);
+        Assert.AreEqual(0d, separated.DriftMillisecondsPerSecond);
+        Assert.IsFalse(TimingAnalyzer.Analyze([0, 1, 2], [0, 1, 2], 0).HasDriftEstimate);
     }
 
     [TestMethod]
