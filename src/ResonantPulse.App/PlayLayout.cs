@@ -47,9 +47,13 @@ internal static class PlayLayout
         return new RailPlan(RailPlacement.Row, labelledWidth <= width);
     }
 
-    /// <summary>True when a strip in the top-right corner stays clear of the dial's ring, with a small margin.</summary>
+    /// <summary>
+    /// True when a strip in the top-right corner fits the page's width and stays clear of the dial's ring, with a small
+    /// margin. A strip wider than the page would run off its left edge however far away the ring is.
+    /// </summary>
     internal static bool CornerIsClear(double width, double height, double stripWidth, double stripHeight = StripHeight)
     {
+        if (stripWidth > width) return false;
         var size = DialSize(width, height);
         var scale = size / DialBox;
         var centerX = width / 2;

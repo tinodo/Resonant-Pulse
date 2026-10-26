@@ -44,16 +44,27 @@ public sealed class PlayLayoutTests
     }
 
     [TestMethod]
+    public void AStripWiderThanThePageNeverGoesInTheCornerEvenWhenTheRingIsFarAway()
+    {
+        // Tall and narrow: the ring sits far below the corner, but a 330 wide strip cannot fit a 258 wide page.
+        Assert.AreEqual(new RailPlan(RailPlacement.Corner, false), PlayLayout.Choose(258, 700, 330, Icons));
+        Assert.IsFalse(PlayLayout.CornerIsClear(258, 700, 330));
+        // Not even the icons fit: a row of its own, without labels.
+        Assert.AreEqual(new RailPlan(RailPlacement.Row, false), PlayLayout.Choose(120, 700, 330, Icons));
+    }
+
+    [TestMethod]
     public void ACornerPlacementNeverCoversTheRingAtAnyWindowSizeOrLabelWidth()
     {
         // Independent of the closed-form distance: walk the ring's outermost tick circle and test every point.
-        foreach (var labelled in new[] { 220d, Labelled, 330d })
+        foreach (var labelled in new[] { 220d, Labelled, 330d, 420d })
         foreach (var width in Enumerable.Range(10, 80).Select(step => step * 20d))
         foreach (var height in Enumerable.Range(10, 50).Select(step => step * 20d))
         {
             var plan = PlayLayout.Choose(width, height, labelled, Icons);
             if (plan.Placement != RailPlacement.Corner) continue;
             var stripWidth = plan.ShowLabels ? labelled : Icons;
+            Assert.IsTrue(stripWidth <= width, $"{width}x{height}: a {stripWidth} wide strip does not fit the page");
             var size = PlayLayout.DialSize(width, height);
             var scale = size / 440;
             var centerX = width / 2;
