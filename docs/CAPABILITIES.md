@@ -169,5 +169,15 @@ delivered in preview.3. It preserves the Play layout and shared transport and
 offers quick-start and musical-reference text in all five languages. It is not
 a new audio engine, automatic exercise or capture workflow. The hosted native
 check visits Help, reads accessible guidance, returns to Play and requires the
-stopped transport and idle tap-in state to remain unchanged. Source, hosted and
-native evidence are still pending for this addition.
+stopped transport and idle tap-in state to remain unchanged.
+Source `e256221` passed hosted
+[run 40264310332](https://github.com/tinodo/Resonant-Pulse/actions/runs/40264310332):
+224 Core passes of 228 cases (four platform skips), 149 App passes and Windows
+x64/ARM64 build/package gates. The native report records
+`help=read-only-help-navigation-no-automatic-start` and initial tempo-guide
+exposure; playback/count/tap-in scenarios explicitly report `not-run-no-output`.
+CodeQL 40264310378 passed. Manually requested Copilot review 5647035183 reported
+no open issues, while retaining the prerequisite native/human acceptance caveat.
+The main-only review-completion gate correctly skipped this stacked base and
+must pass afresh after retargeting. This is hosted Help navigation evidence,
+not real-output, full accessibility/visual acceptance or public delivery.
