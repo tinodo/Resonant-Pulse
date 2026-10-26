@@ -66,6 +66,14 @@ internal static class PlayLayout
     }
 
     /// <summary>
+    /// True when a cached measurement of the strip no longer matches its real width. That happens when Windows text size
+    /// changes: the labels resize but the page does not, so no page event announces it. A difference within one
+    /// device-independent pixel is layout rounding, not a change.
+    /// </summary>
+    internal static bool StripWidthIsStale(double cachedWidth, double actualWidth) =>
+        cachedWidth > 0 && Math.Abs(actualWidth - cachedWidth) > 1;
+
+    /// <summary>
     /// True when the notice (an InfoBar: title with its action button on a second row, about 107 tall, or about 130 when the
     /// title wraps on a page narrower than 480) can sit above the tempo controls and still leave the dial at least
     /// <see cref="MinDialWithNotice"/> tall. The heights of the other rows were measured on the real page: about 205 when

@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
@@ -22,12 +23,17 @@ public sealed partial class MainWindow
         Directory.CreateDirectory(folder);
         var name = Tiny(new TextBox());
         var capture = Tiny(new Button());
+        var grow = Tiny(new Button());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
+        Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
+        // Stands in for a Windows text-size change: the page-tools labels get bigger while the page keeps its size.
+        grow.Click += (_, _) => GrowToolLabels(1.6);
         var host = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
         host.Children.Add(name);
         host.Children.Add(capture);
+        host.Children.Add(grow);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");
@@ -41,6 +47,25 @@ public sealed partial class MainWindow
         control.BorderThickness = new Thickness(0);
         control.Opacity = 0.01;
         return control;
+    }
+
+    private void GrowToolLabels(double factor)
+    {
+        if (FindById(Root, "PlaySettingsStrip") is not StackPanel strip) return;
+        foreach (var button in strip.Children.OfType<Button>())
+            if (button.Content is StackPanel { Children: [_, TextBlock label] })
+                label.FontSize *= factor;
+    }
+
+    private static FrameworkElement? FindById(DependencyObject parent, string id)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is FrameworkElement element && AutomationProperties.GetAutomationId(element) == id) return element;
+            if (FindById(child, id) is { } found) return found;
+        }
+        return null;
     }
 
     private async Task CaptureAsync(string folder, string requested)

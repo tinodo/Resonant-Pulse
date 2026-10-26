@@ -101,6 +101,7 @@ public sealed partial class MainWindow
             rail.Children.Add(button);
         }
         var railInRow = false;
+        var railLabelsShown = true;
         double railLabelledWidth = 0, railIconsWidth = 0;
         double MeasureRail(bool labels)
         {
@@ -121,12 +122,22 @@ public sealed partial class MainWindow
             var room = hero.ActualHeight + (railInRow ? Math.Max(PlayLayout.StripHeight, rail.ActualHeight) : 0);
             var plan = PlayLayout.Choose(hero.ActualWidth, room, railLabelledWidth, railIconsWidth);
             foreach (var label in railLabels) label.Visibility = plan.ShowLabels ? Visibility.Visible : Visibility.Collapsed;
+            railLabelsShown = plan.ShowLabels;
             railInRow = plan.Placement == RailPlacement.Row;
             Grid.SetRow(rail, railInRow ? 0 : 1);
             // The buttons' own padding hangs outside the page edge, so the last label (or icon) ends exactly where the
             // Settings item's text ends.
             rail.Margin = new Thickness(0, 0, plan.ShowLabels ? -12 : -14, 0);
         }
+        // The widths are measured once per page, so a change of Windows text size (which resizes the labels but not the
+        // page) would leave them stale. The strip's own width then no longer matches the measurement for its current
+        // mode: measure again and place it again.
+        rail.SizeChanged += (_, args) =>
+        {
+            if (!PlayLayout.StripWidthIsStale(railLabelsShown ? railLabelledWidth : railIconsWidth, args.NewSize.Width)) return;
+            railLabelledWidth = railIconsWidth = 0;
+            PlaceRail();
+        };
 
         void SizeInstrument()
         {

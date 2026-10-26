@@ -81,6 +81,18 @@ public sealed class PlayLayoutTests
     }
 
     [TestMethod]
+    [DataRow(0d, 273d, false)]     // nothing measured yet
+    [DataRow(273d, 273d, false)]
+    [DataRow(273d, 273.6d, false)] // layout rounding
+    [DataRow(273d, 272.1d, false)]
+    [DataRow(273d, 341d, true)]    // Windows text size went up: the labels grew
+    [DataRow(273d, 230d, true)]    // and down
+    public void AStripWidthIsStaleOnlyWhenItReallyChanged(double cached, double actual, bool stale)
+    {
+        Assert.AreEqual(stale, PlayLayout.StripWidthIsStale(cached, actual));
+    }
+
+    [TestMethod]
     [DataRow(978d, 600d, true)]   // the default window
     [DataRow(938d, 554d, true)]   // 1000 x 720
     [DataRow(738d, 434d, false)]  // 800 x 600: the dial would drop below 200
