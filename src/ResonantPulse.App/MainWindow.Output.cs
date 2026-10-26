@@ -63,7 +63,6 @@ public sealed partial class MainWindow
     private void PromptForOutput()
     {
         ShowNotice("ChooseOutput");
-        OutputPicker.Focus(FocusState.Programmatic);
-        OutputPicker.IsDropDownOpen = true;
+        AudioOptionsFlyout.ShowAt(AudioOptionsButton);
     }
 }

@@ -31,10 +31,12 @@ and API authorization remain required; update automation is separately guarded.
 
 ## Development and verification
 
-The Play-layout repair keeps Rhythm, Tempo, Practice, Project and Help commands
-visible above the scrolling instrument area. Each opens a bounded, scrollable
-panel instead of hiding entire groups below the fold. The transport uses
-content-sized buttons; remaining overflow has an explicit scroll cue.
+Play centers the large cyan/magenta metronome and its integrated BPM readout.
+The dial fills the remaining performance area; it is not a thumbnail next to a
+tempo form. Rhythm, Tempo, Practice, Project and Help open bounded panels.
+Precise numeric tempo entry is in Tempo; tap, +/-1, meter, sound and pulse
+strengths remain below the dial. Audio on the compact transport opens output
+and volume settings. Long pulse grids scroll within their own bounded strip.
 Main click sound and pulse accents (including Silent) now publish prepared
 audio revisions during playback without restarting the musical clock. Existing
 click tails finish in their original sound. A manual pulse choice overrides

@@ -78,7 +78,7 @@ public sealed partial class MainWindow
         }
         TransportStatus.Text = $"{state} · {(blind ? Text.Get("Silent") : detail)}" +
             (snapshot.IsMuted ? $" · {Text.Get("Muted")}" : "") +
-            (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : "") +
+            (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : !HasSelectedOutput ? $"\n{Text.Get("ChooseOutput")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemStatus(TransportStatus,
             $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])}");
