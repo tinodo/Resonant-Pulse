@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.3 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.6 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -144,5 +144,19 @@ On the real saved output, the exact verifier passed first Start/position advance
 competing limits, the 17-bar loop seam, counted pause/resume and acknowledged
 final reset. Original preferences were restored byte-for-byte, diagnostic
 recovery removed, and preview.3 reopened responsive and stopped with limits off.
-The per-user Start menu shortcut targets preview.3. This does not establish
+The per-user Start menu shortcut then targeted preview.3. This does not establish
 acoustic accuracy, full-product acceptance or Store publication.
+
+[Preview 0.1.0-preview.6](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.6)
+delivers the Play redesign and live edits from protected main `44a60d6`. Main
+build 40371460154 and CodeQL 40371460083 passed; release 40372330283 passed fresh
+hosted tests (232 Core passes of 236 cases, four platform skips, and 260 App
+passes), Windows x64/ARM64 builds and x64 native/package checks. Hosted audio,
+live-edit and counted-stop scenarios explicitly reported `not-run-no-output`.
+The actual public x64 ZIP checksum and embedded source/version/run were checked.
+The build was then installed on the development PC after a dry run on copies of
+its saved state: it started responsive and stopped, the saved preferences and
+recovery draft were byte-identical after startup, and the per-user Start menu
+shortcut now targets preview.6. No audio was played, so this does not establish
+acoustic accuracy, live-splice latency, full-product acceptance or Store
+publication.
