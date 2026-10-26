@@ -53,5 +53,16 @@ Unreleased practice-timer work adds a 0..86400-second live duration, localized
 controls/countdown and an audio-frame deadline after count-in. Pauses preserve
 remaining practice time; a finite program can end sooner. It does not truncate
 the authored preview or exports. This source is not in preview 0.1.0-preview.1;
-hosted regression/native verification and delivery evidence are required before
-it is described as delivered.
+it is not yet a public timer release.
+
+Timer source `0a821dc` passed hosted
+[run 40247889344](https://github.com/tinodo/Resonant-Pulse/actions/runs/40247889344):
+214 Core tests passed with four platform skips, and 71 App tests passed;
+Windows x64/ARM64 and native/package gates also passed. Its identical-tree
+pull-request merge build `15c1c92` was exercised on the real saved Realtek output.
+Count-in preserved the three practice seconds, automatic completion froze at
+zero, pause froze musical position and countdown, and resume completed at zero.
+The original public preview was then restored open and stopped, with preferences
+restored byte-for-byte and no test recovery document retained.
+These observations establish native state/processed-audio behavior, not
+acoustic timing, listening quality or full-product acceptance.
