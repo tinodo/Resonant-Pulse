@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.1 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.2 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -66,3 +66,12 @@ The original public preview was then restored open and stopped, with preferences
 restored byte-for-byte and no test recovery document retained.
 These observations establish native state/processed-audio behavior, not
 acoustic timing, listening quality or full-product acceptance.
+
+[Preview 0.1.0-preview.2](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.2)
+now delivers the timer. Protected-main build 40249136627, CodeQL 40249136761
+and release 40249141008 passed. The actual public x64 ZIP's checksum and embedded
+`73b9266` source/version/run metadata were checked before local activation.
+That released binary preserved three practice seconds during count-in, completed
+at zero and held its position, then stopped. Test settings were removed and saved
+preferences restored exactly before leaving the new release open and stopped.
+No Store submission or acoustic/full-product acceptance is implied.
