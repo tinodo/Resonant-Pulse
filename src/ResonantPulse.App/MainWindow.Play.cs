@@ -25,6 +25,7 @@ public sealed partial class MainWindow
             // event pair so a rapid 120 -> 132 -> 120 retains both edits.
             var proposed = args.NewValue;
             if (_isSynchronizingTempo || !TempoEdits.IsChange(args.OldValue, proposed)) return;
+            _tempoInputVersion++;
             CancelTapIn();
             await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = proposed,
                 editorChange: EditorChangeKind.GlobalTempoOnly));

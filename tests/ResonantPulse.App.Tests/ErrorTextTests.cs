@@ -10,6 +10,35 @@ namespace ResonantPulse.App.Tests;
 public sealed class ErrorTextTests
 {
     [TestMethod]
+    public void ActualTapInRangeFailuresKeepSpecificRecoveryGuidanceInAllLanguages()
+    {
+        var previous = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                foreach (var tempo in new[] { 0d, 1000d })
+                {
+                    var document = new PulseDocument { Program = [new() { StartTempo = 100, EndTempo = 200 }] };
+                    var exception = Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+                        TempoEdits.ApplyTapIn(document, tempo));
+                    Assert.AreEqual(Text.Get("TapInRange"), ErrorText.Explain(exception));
+                    Assert.AreNotEqual(Text.Get("ErrorRhythm"), ErrorText.Explain(exception));
+                }
+            }
+        }
+        finally
+        {
+            Text.Select(previous);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void MidiConstraintsWinOverGenericConstantAndSwingKeywordsInEveryLanguage()
     {
         var previousLanguage = Text.Language;

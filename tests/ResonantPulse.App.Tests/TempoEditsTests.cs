@@ -7,6 +7,71 @@ namespace ResonantPulse.App.Tests;
 public sealed class TempoEditsTests
 {
     [TestMethod]
+    public async Task DelayedTapInCleanupDoesNotOverwriteANewerQueuedManualInput()
+    {
+        var input = 120d;
+        var inputVersion = 0L;
+        var captured = inputVersion;
+        var published = 132d;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task PublishManual()
+        {
+            await release.Task;
+            published = 144;
+        }
+        input = 144;
+        inputVersion++;
+        var pending = PublishManual();
+        if (TempoEdits.ShouldSynchronizeTapIn(captured, inputVersion)) input = published;
+        release.SetResult();
+        await pending;
+        Assert.AreEqual(144d, input);
+        Assert.AreEqual(144d, published);
+        Assert.IsTrue(TempoEdits.ShouldSynchronizeTapIn(inputVersion, inputVersion));
+        // Returning to the original visible value is still an intervening edit.
+        input = 120;
+        inputVersion++;
+        Assert.IsFalse(TempoEdits.ShouldSynchronizeTapIn(captured, inputVersion));
+        Assert.AreEqual(120d, input);
+    }
+
+    [TestMethod]
+    [DataRow(29.0, 1000.0)]
+    [DataRow(58.0, 1.0)]
+    [DataRow(58.0, 2.0)]
+    public void ExactScalePreservesInclusiveBoundsWithoutRatioRoundoff(double original, double tempo)
+    {
+        var endpoint = tempo == 1 ? original : original / 2;
+        var document = new PulseDocument { Program = [
+            new() { StartTempo = original, EndTempo = original },
+            new() { StartTempo = endpoint, EndTempo = endpoint }
+        ] };
+        TempoEdits.ApplyTapIn(document, tempo);
+        Assert.AreEqual(tempo, document.Program[0].StartTempo);
+        Assert.AreEqual(tempo, document.Program[0].EndTempo);
+        Assert.AreEqual(tempo == 1 ? 1d : tempo / 2, document.Program[1].EndTempo);
+    }
+
+    [TestMethod]
+    public void ExactScaleRejectsEvenOneUlpOutsideEitherBoundary()
+    {
+        foreach (var (tempo, original, endpoint) in new[] {
+            (1000d, 29d, Math.BitIncrement(29d)),
+            (1d, 58d, Math.BitDecrement(58d))
+        })
+        {
+            var document = new PulseDocument { Program = [
+                new() { StartTempo = original, EndTempo = original },
+                new() { StartTempo = endpoint, EndTempo = endpoint }
+            ] };
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => TempoEdits.ApplyTapIn(document, tempo));
+            Assert.AreEqual(original, document.Program[0].StartTempo);
+            Assert.AreEqual(endpoint, document.Program[1].EndTempo);
+            Assert.AreEqual(120d, document.Settings.Tempo);
+        }
+    }
+
+    [TestMethod]
     [DataRow(0.5)]
     [DataRow(1.0)]
     [DataRow(1.5)]

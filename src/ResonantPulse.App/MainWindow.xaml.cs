@@ -117,7 +117,7 @@ public sealed partial class MainWindow : Window
                 _ = GuardAsync(() => CommitAsync(doc => doc.Settings.MasterGain = (float)args.NewValue,
                     false, editorChange: EditorChangeKind.MasterGainOnly));
         };
-        Root.KeyDown += OnKeyDown;
+        Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnKeyDown), true);
         Root.ActualThemeChanged += (_, _) => RefreshInstrumentTheme();
         Root.Loaded += async (_, _) =>
         {
@@ -398,6 +398,13 @@ public sealed partial class MainWindow : Window
     private void OnKeyDown(object sender, KeyRoutedEventArgs args)
     {
         if (_isDialogOpen || !_isReady) return;
+        if (args.Key == VirtualKey.Escape && (_tapIn.IsArmed || _tapIn.IsPending))
+        {
+            CancelTapIn();
+            args.Handled = true;
+            return;
+        }
+        if (args.Handled) return;
         var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (ctrl && args.Key == VirtualKey.M)
@@ -419,11 +426,6 @@ public sealed partial class MainWindow : Window
         if (!ctrl && args.Key == VirtualKey.T && _view == "Play")
         {
             if (!args.KeyStatus.WasKeyDown) _ = GuardAsync(TapTempoAsync);
-            args.Handled = true;
-        }
-        else if (args.Key == VirtualKey.Escape && (_tapIn.IsArmed || _tapIn.IsPending))
-        {
-            CancelTapIn();
             args.Handled = true;
         }
         else if (args.Key == VirtualKey.F && _isTimingArmed)

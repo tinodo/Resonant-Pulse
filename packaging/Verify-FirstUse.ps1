@@ -204,6 +204,15 @@ if ($selection.Count -eq 0) {
         Wait-TapStatus 'idle'
         $null = Wait-Transport 'Stopped'
         Invoke-Control 'ArmTapIn'
+        $keyboard = New-Object -ComObject WScript.Shell
+        if (-not $keyboard.AppActivate($AppProcessId)) { throw 'Could not activate the owned native app for Escape verification.' }
+        (Find-Control 'TapInCount').SetFocus()
+        if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
+            throw 'Editing focus is not in the owned app; no keyboard input was sent.'
+        }
+        $keyboard.SendKeys('{ESC}')
+        Wait-TapStatus 'idle'
+        Invoke-Control 'ArmTapIn'
         Invoke-Control 'TapTempo'
         Wait-TapStatus 'armed:1:4:False'
         (Find-Control 'DestinationStudio').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
@@ -222,7 +231,7 @@ if ($selection.Count -eq 0) {
         Invoke-Control 'TapTempo'
         $null = Wait-Transport 'Playing' $true
         Wait-TapStatus 'idle'
-        $tapIn = 'rejected-tap-stop-navigation-cancel-and-two-tap-start-passed'
+        $tapIn = 'rejected-tap-stop-editing-escape-navigation-cancel-and-two-tap-start-passed'
     } finally {
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*' -or
             (Find-Control 'TapStatus').Current.ItemStatus -ne 'idle') {

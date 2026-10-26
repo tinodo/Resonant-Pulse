@@ -5,6 +5,9 @@ namespace ResonantPulse.App;
 
 internal static class TempoEdits
 {
+    internal static bool ShouldSynchronizeTapIn(long capturedInputVersion, long currentInputVersion) =>
+        capturedInputVersion == currentInputVersion;
+
     internal static bool IsChange(double current, double proposed) =>
         double.IsFinite(proposed) && current != proposed;
 
@@ -19,17 +22,21 @@ internal static class TempoEdits
     internal static void ApplyTapIn(PulseDocument document, double tempo)
     {
         if (!double.IsFinite(tempo) || tempo is < 1 or > 1000)
-            throw new ArgumentOutOfRangeException(nameof(tempo), Text.Get("TapInRange"));
-        var ratio = document.Program.Count == 0 ? 1 : tempo / document.Program[0].StartTempo;
-        var scaled = document.Program.Select(step => (Start: step.StartTempo * ratio, End: step.EndTempo * ratio)).ToArray();
-        if (scaled.Any(step => !double.IsFinite(step.Start) || !double.IsFinite(step.End) ||
-            step.Start is < 1 or > 1000 || step.End is < 1 or > 1000))
-            throw new ArgumentOutOfRangeException(nameof(tempo), Text.Get("TapInRange"));
+            throw new ArgumentOutOfRangeException(null, Text.Get("TapInRange"));
+        // Reuse the compiler's exact round-trip decimal convention: 29 * (1000 / 29)
+        // must reach 1000, while a genuinely out-of-range endpoint must not be clamped.
+        var ratio = document.Program.Count == 0 ? Rational.One :
+            Rational.FromDouble(tempo) / Rational.FromDouble(document.Program[0].StartTempo);
+        var scaled = document.Program.Select(step => (
+            Start: Rational.FromDouble(step.StartTempo) * ratio,
+            End: Rational.FromDouble(step.EndTempo) * ratio)).ToArray();
+        if (scaled.Any(step => step.Start < 1 || step.Start > 1000 || step.End < 1 || step.End > 1000))
+            throw new ArgumentOutOfRangeException(null, Text.Get("TapInRange"));
         document.Settings.Tempo = tempo;
         for (var index = 0; index < scaled.Length; index++)
         {
-            document.Program[index].StartTempo = scaled[index].Start;
-            document.Program[index].EndTempo = scaled[index].End;
+            document.Program[index].StartTempo = scaled[index].Start.ToDouble();
+            document.Program[index].EndTempo = scaled[index].End.ToDouble();
         }
     }
 }

@@ -16,6 +16,7 @@ public sealed partial class MainWindow
     private NumberBox? _tapInCount;
     private NumberBox? _playTempo;
     private bool _isSynchronizingTempo;
+    private long _tempoInputVersion;
     private int _tapInRequiredTaps = 4;
 
     private void ArmTapIn(int requiredTaps)
@@ -74,6 +75,7 @@ public sealed partial class MainWindow
         var generation = _tapIn.Generation;
         var intent = _transportIntent;
         var revision = _documentRevision;
+        var inputVersion = _tempoInputVersion;
         var output = _preferences.OutputId;
         PulseDocument? committed = null;
         _isBusy = true;
@@ -106,7 +108,8 @@ public sealed partial class MainWindow
         {
             _tapIn.Finish(generation);
             _isBusy = false;
-            SynchronizePlayTempo();
+            if (TempoEdits.ShouldSynchronizeTapIn(inputVersion, _tempoInputVersion))
+                SynchronizePlayTempo();
             RefreshSnapshot();
         }
     }
