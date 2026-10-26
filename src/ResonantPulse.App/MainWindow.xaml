@@ -44,7 +44,7 @@
           <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" MinWidth="112" MaxWidth="168" MinHeight="44"
+        <Button x:Name="StartButton" Style="{StaticResource PrimaryButtonStyle}" MinWidth="112" MaxWidth="168"
                 AutomationProperties.AutomationId="TransportStartPause" HorizontalAlignment="Left" IsEnabled="False" />
         <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" HorizontalAlignment="Left" AutomationProperties.AutomationId="TransportStop" />
         <Button x:Name="MuteButton" Grid.Column="2" MinWidth="100" MaxWidth="180" HorizontalAlignment="Left"
@@ -63,21 +63,26 @@
                   <Grid x:Name="OutputRow" ColumnSpacing="12" RowSpacing="8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <Grid x:Name="OutputControls" ColumnSpacing="8">
-                      <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                      <ComboBox x:Name="OutputPicker" HorizontalAlignment="Stretch" VerticalAlignment="Top"
-                                AutomationProperties.AutomationId="AudioOutputPicker" />
-                      <Button x:Name="OutputButton" Grid.Column="1" VerticalAlignment="Bottom" MinWidth="44"
-                              AutomationProperties.AutomationId="RefreshAudioOutputs">
-                        <FontIcon Glyph="&#xE72C;" />
-                      </Button>
-                    </Grid>
+                    <!-- The caption sits outside the ComboBox: a header inside it makes the box 32 DIP, shorter than the
+                         44 DIP refresh button beside it. Both are 44 DIP and centred on one line. -->
+                    <StackPanel x:Name="OutputColumn" Spacing="4">
+                      <TextBlock x:Name="OutputCaption" FontSize="14" Style="{StaticResource BodyStyle}" />
+                      <Grid x:Name="OutputControls" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <ComboBox x:Name="OutputPicker" Height="44" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                  AutomationProperties.AutomationId="AudioOutputPicker" />
+                        <Button x:Name="OutputButton" Grid.Column="1" Width="44" Height="44" Padding="0" VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="RefreshAudioOutputs">
+                          <FontIcon Glyph="&#xE72C;" />
+                        </Button>
+                      </Grid>
+                    </StackPanel>
                     <Slider x:Name="MasterGain" Grid.Column="1" Minimum="0" Maximum="1" StepFrequency="0.01" Value="0.5"
                             VerticalAlignment="Top" AutomationProperties.AutomationId="MasterGain" />
                   </Grid>
                 </ScrollViewer>
-                <Button x:Name="AudioOptionsClose" Grid.Row="2" HorizontalAlignment="Right" MinWidth="96"
-                        Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="AudioOptionsClose" />
+                <Button x:Name="AudioOptionsClose" Grid.Row="2" HorizontalAlignment="Right" Width="120"
+                        Style="{StaticResource PrimaryButtonStyle}" AutomationProperties.AutomationId="AudioOptionsClose" />
               </Grid>
             </Flyout>
           </Button.Flyout>

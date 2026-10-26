@@ -26,7 +26,8 @@ public sealed partial class MainWindow
 
     private UIElement BuildTrain()
     {
-        _instrument = new PulseInstrument();
+        // Without a cap the dial's viewbox scales to the full page width inside the scrolling page and fills several screens.
+        _instrument = new PulseInstrument { MaxHeight = 360, HorizontalAlignment = HorizontalAlignment.Center };
         _position = Body("");
         _programStatus = Body("");
         _tempoCurve = new TempoCurve();

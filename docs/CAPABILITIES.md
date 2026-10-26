@@ -26,9 +26,22 @@ Play makes the large, centered metronome and its BPM readout the primary
 surface; its square geometry scales to the available area. The readout opens an
 exact tempo editor; -, TAP and + sit beneath it, with the sheet-music
 time-signature picker, the beat-strength strip and the sound selector below.
-Practice, Project and Help are a quiet rail (a horizontal strip at narrow
-widths). Long strips scroll within their own bounded area with an overflow cue.
-Every panel has Cancel and Done side by side; Done applies.
+Timer (the practice timer and auto-stop), Project and Help are page tools, not
+app settings: they act on the session being played, so they live on Play, in one
+strip in the top-right corner directly under the Settings item, in the same
+full-contrast text and level with Settings' right edge. As the window narrows the
+strip drops its words, then takes a row of its own, and it never covers the dial.
+Long strips scroll within their own bounded area with an overflow cue.
+Every panel has Cancel and Done side by side and the same size; Done applies.
+Form rows on every page share one rule: a dropdown, a number box and a text box
+are the same height, buttons in a row match, and a checkbox's label sits on its
+box's centre line.
+
+A saved BPM unit that does not divide the written bar (for example 8/8 counted in
+dotted halves) makes the clicks drift against the dial. The unit picker never
+offers such a unit, but an older or imported project can carry one, so Play shows
+a notice with a one-click fix that applies the unit matching the time signature
+and keeps the BPM number, so the click rate is unchanged.
 
 Live edits prepare immutable replacement revisions off the audio callback.
 Sound and beat-strength changes switch at the next audio quantum on the same

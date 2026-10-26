@@ -57,6 +57,13 @@ internal static class MeterPresets
         return (bar / Rational.FromDouble(unitQuarters)).Denominator.IsOne;
     }
 
+    /// <summary>
+    /// True when the saved BPM unit does not divide the written bar evenly. The unit picker never offers such a unit, but an
+    /// older or imported project can carry one, and its clicks then drift against the bar lines, the accents and the dial.
+    /// </summary>
+    internal static bool UnitNeedsFix(PulseSettings settings) =>
+        !UnitFitsBar(settings.BeatsPerBar, settings.BeatDenominator, settings.BeatUnitQuarters);
+
     internal static string GroupsText(IEnumerable<int> groups) => string.Join("+", groups);
 
     /// <summary>Parses "2+2+3". Empty means no grouping. The sum must equal the beats per bar.</summary>

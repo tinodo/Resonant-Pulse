@@ -1,0 +1,127 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
+
+namespace ResonantPulse.App;
+
+// Local visual verification only. This file is compiled ONLY with -p:UiTest=true (see ResonantPulse.App.csproj);
+// shipped builds contain none of it. A private desktop is never composed by Windows, so PrintWindow and screen copies
+// return black there. With RESONANT_PULSE_UITEST_DIR set, a UI Automation driver sets the text of the hidden
+// "UiTestCaptureName" box and invokes the hidden "UiTestCapture" button; the app then renders its own XAML tree and
+// every open flyout to <name>.png in that folder. Nothing outside this window can ever be captured.
+public sealed partial class MainWindow
+{
+    partial void InstallUiTestHook()
+    {
+        var folder = Environment.GetEnvironmentVariable("RESONANT_PULSE_UITEST_DIR");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        Directory.CreateDirectory(folder);
+        var name = Tiny(new TextBox());
+        var capture = Tiny(new Button());
+        Identify(name, "UiTestCaptureName", "ui test capture name");
+        Identify(capture, "UiTestCapture", "ui test capture");
+        capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
+        var host = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
+        host.Children.Add(name);
+        host.Children.Add(capture);
+        Grid.SetRowSpan(host, 4);
+        Root.Children.Add(host);
+        Diagnostics.Write("UI test capture hook installed (local verification build)");
+    }
+
+    private static T Tiny<T>(T control) where T : Control
+    {
+        control.Width = control.Height = 2;
+        control.MinWidth = control.MinHeight = 0;
+        control.Padding = new Thickness(0);
+        control.BorderThickness = new Thickness(0);
+        control.Opacity = 0.01;
+        return control;
+    }
+
+    private async Task CaptureAsync(string folder, string requested)
+    {
+        var safe = new string(requested.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.').ToArray());
+        if (safe.Length == 0) safe = "capture";
+        // RenderTargetBitmap returns nothing for elements inside a Popup. Each open flyout presenter is therefore moved
+        // into the page at the same position for the single render and handed back to its popup afterwards.
+        var moved = new List<(Popup Popup, FrameworkElement Child, Grid Host, (HorizontalAlignment Horizontal, VerticalAlignment Vertical) Alignment)>();
+        try
+        {
+            var notes = new List<string>();
+            foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).ToList())
+            {
+                if (popup.Child is not FrameworkElement child || child.ActualWidth < 1 || child.ActualHeight < 1) continue;
+                var origin = child.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
+                // The presenter keeps the margin the popup placed it with, so the host simply fills the window.
+                var host = new Grid { IsHitTestVisible = false };
+                popup.Child = null;
+                var alignment = (child.HorizontalAlignment, child.VerticalAlignment);
+                child.HorizontalAlignment = HorizontalAlignment.Left;
+                child.VerticalAlignment = VerticalAlignment.Top;
+                host.Children.Add(child);
+                Grid.SetRowSpan(host, 4);
+                Canvas.SetZIndex(host, 1000);
+                Root.Children.Add(host);
+                moved.Add((popup, child, host, alignment));
+                notes.Add($"{child.GetType().Name}@{origin.X:0},{origin.Y:0}");
+            }
+            if (moved.Count > 0)
+            {
+                Root.UpdateLayout();
+                await Task.Delay(250);
+                Root.UpdateLayout();
+                foreach (var (_, child, _, _) in moved)
+                    notes.Add($"laid out {child.ActualWidth:0}x{child.ActualHeight:0}");
+            }
+            var page = new RenderTargetBitmap();
+            await page.RenderAsync(Root);
+            var scale = Root.XamlRoot.RasterizationScale;
+            await WritePngAsync(Path.Combine(folder, safe + ".png"), await ReadPixelsAsync(page), page.PixelWidth, page.PixelHeight, 96 * scale);
+            await File.WriteAllTextAsync(Path.Combine(folder, safe + ".ok"),
+                $"{page.PixelWidth}x{page.PixelHeight} scale {scale}; popups: {(notes.Count == 0 ? "none" : string.Join(" | ", notes))}");
+        }
+        catch (Exception exception)
+        {
+            Diagnostics.Write("UI test capture failed", exception);
+            await File.WriteAllTextAsync(Path.Combine(folder, safe + ".err"), exception.ToString());
+        }
+        finally
+        {
+            foreach (var (popup, child, host, alignment) in moved)
+            {
+                host.Children.Remove(child);
+                Root.Children.Remove(host);
+                child.HorizontalAlignment = alignment.Horizontal;
+                child.VerticalAlignment = alignment.Vertical;
+                popup.Child = child;
+            }
+        }
+    }
+
+    private static async Task<byte[]> ReadPixelsAsync(RenderTargetBitmap bitmap)
+    {
+        var buffer = await bitmap.GetPixelsAsync();
+        var bytes = new byte[buffer.Length];
+        using var reader = DataReader.FromBuffer(buffer);
+        reader.ReadBytes(bytes);
+        return bytes;
+    }
+
+    private static async Task WritePngAsync(string path, byte[] pixels, int width, int height, double dpi)
+    {
+        using var stream = new InMemoryRandomAccessStream();
+        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
+        encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, (uint)width, (uint)height, dpi, dpi, pixels);
+        await encoder.FlushAsync();
+        var bytes = new byte[stream.Size];
+        using var reader = new DataReader(stream.GetInputStreamAt(0));
+        await reader.LoadAsync((uint)stream.Size);
+        reader.ReadBytes(bytes);
+        await File.WriteAllBytesAsync(path, bytes);
+    }
+}

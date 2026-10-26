@@ -15,15 +15,24 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
   `packaging\Verify-Local.ps1` (it uses `packaging\Invoke-OnPrivateDesktop.ps1`).
   Nothing appears on screen, nobody can click into the test window, and no
   keystroke or screen copy can reach another window. Keyboard injection and
-  screen copies do not work there, so the verifier skips Ctrl+M and screenshots;
-  for an image of your own window use `PrintWindow` from a driver process that is
-  separate from the process that started the application. Screenshots,
+  screen copies do not work there, so the verifier skips Ctrl+M and screenshots,
+  and `PrintWindow` returns a black frame because the window is never composed.
+  For an image of your own build, compile with `-p:UiTest=true` and set
+  `RESONANT_PULSE_UITEST_DIR`: the app then renders its own root to PNG files
+  (`MainWindow.UiTest.cs`, excluded from every other build) when a driver process
+  types a name into the hidden `UiTestCaptureName` box and invokes
+  `UiTestCapture`; pair each image with UI Automation rectangles to measure
+  alignment. Screenshots,
   keystrokes and audio are otherwise opt-in (`-Screenshots`, `-Keyboard`,
   `-RunAudio`) and only automatic on GitHub Actions. `-SilentAudio` runs the
   real audio scenarios (Start, live edits, counted stops, pause/resume) on the
   Windows default output at an inaudible master gain (0.0001, about -80 dBFS)
   seeded into the scratch data folder: it validates the engine and timing path,
   not how anything sounds.
+- Never launch a build that ignores `RESONANT_PULSE_HOME` (0.1.0-preview.5 and
+  older do): it would open the owner's real projects and settings and could play
+  them audibly. `Verify-Local.ps1` refuses such a build by looking for that
+  setting's name inside `ResonantPulse.dll`; any other launcher must do the same.
 - GitHub Actions remains the authoritative gate (hosted build, native, package,
   CodeQL, review). Local runs give fast feedback only; never treat an
   unexecuted test or an uploaded artifact as a pass.

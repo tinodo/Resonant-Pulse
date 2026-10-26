@@ -15,21 +15,42 @@ public sealed partial class MainWindow
     private static StackPanel Column(params UIElement[] children)
     {
         var panel = new StackPanel { Spacing = 16 };
-        foreach (var child in children) panel.Children.Add(child);
+        foreach (var child in children) panel.Children.Add(Aligned(child));
         return panel;
     }
 
-    private static Grid Flow(params UIElement[] children) => WrapControls(220, children);
+    /// <summary>
+    /// A ComboBox keeps its header inside the control, which leaves the box itself 32 DIP tall, while NumberBox and TextBox
+    /// boxes are 44 DIP. Rows of mixed fields therefore misaligned (Settings, Studio). The caption moves above the box and the
+    /// box becomes 44 DIP with the same 4 DIP gap the other fields use.
+    /// </summary>
+    private static UIElement Aligned(UIElement child)
+    {
+        if (child is not ComboBox { Header: TextBlock caption } combo) return child;
+        combo.Header = null;
+        combo.Height = 44;
+        combo.HorizontalAlignment = HorizontalAlignment.Stretch;
+        caption.Margin = new Thickness(0, 0, 0, 4);
+        var field = new StackPanel();
+        field.Children.Add(caption);
+        field.Children.Add(combo);
+        return field;
+    }
 
-    private static Grid WrapControls(double minimumWidth, params UIElement[] children)
+    private static Grid Flow(params UIElement[] children) => WrapControls(220, false, children);
+
+    private static Grid WrapControls(double minimumWidth, bool stretchHeight, params UIElement[] source)
     {
         var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
+        var children = source.Select(Aligned).ToArray();
         var panel = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
         foreach (var child in children)
         {
             if (child is not FrameworkElement element)
-                throw new ArgumentException("Form controls must be framework elements.", nameof(children));
-            element.VerticalAlignment = VerticalAlignment.Top;
+                throw new ArgumentException("Form controls must be framework elements.", nameof(source));
+            // Fields keep their own height; commands in one row share the tallest one's height, so a two-line label
+            // never leaves its neighbours shorter.
+            element.VerticalAlignment = stretchHeight ? VerticalAlignment.Stretch : VerticalAlignment.Top;
             element.HorizontalAlignment = HorizontalAlignment.Stretch;
             panel.Children.Add(child);
         }
@@ -70,7 +91,7 @@ public sealed partial class MainWindow
         return panel;
     }
 
-    private static UIElement CommandFlow(params UIElement[] children) => WrapControls(170, children);
+    private static UIElement CommandFlow(params UIElement[] children) => WrapControls(170, true, children);
 
     private static TextBlock Body(string text) => new()
     {
@@ -189,7 +210,12 @@ public sealed partial class MainWindow
 
     private static CheckBox Check(string key, string id, bool value)
     {
-        var check = new CheckBox { Content = new TextBlock { Text = Text.Get(key), TextWrapping = TextWrapping.Wrap }, IsChecked = value, MinHeight = 44 };
+        // The default 5 DIP top padding pushes a centred label below the box's centre; without it they share one line.
+        var check = new CheckBox
+        {
+            Content = new TextBlock { Text = Text.Get(key), TextWrapping = TextWrapping.Wrap }, IsChecked = value, MinHeight = 44,
+            VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 0, 0, 0)
+        };
         Identify(check, id, Text.Get(key));
         return check;
     }
