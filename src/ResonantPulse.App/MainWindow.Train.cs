@@ -47,7 +47,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < targetDocument.Lanes.Count; index++)
             targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), targetDocument.Lanes[index].Name));
         var target = SelectChoices("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
-        var tolerance = Number("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
+        var tolerance = NumberInt("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
         var includeSilent = Check("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
         _timingTarget = target;
         _timingToleranceInput = tolerance;

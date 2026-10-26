@@ -1,94 +1,150 @@
 using System.Diagnostics;
 using System.Globalization;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using ResonantPulse.App.Controls;
 using ResonantPulse.App.Localization;
 using ResonantPulse.Core;
+using Windows.System;
 
 namespace ResonantPulse.App;
 
 public sealed partial class MainWindow
 {
+    // Width reserved on both sides of the instrument when the secondary rail is docked, so the
+    // instrument stays exactly centred.
+    private const double RailReserve = 272;
+    private BeatStrip? _beatStrip;
+    private double? _tempoRequested;
+
+    private static Style ResonantStyle(string key) => (Style)Application.Current.Resources[key];
+
     private UIElement BuildPlay()
     {
         var settings = _document.Settings;
-        var name = Input("Name", "DocumentName", _document.Name);
+        // A program carries its own tempo and meter per section; the single-tempo controls would change nothing audible.
+        var followsProgram = _document.Program.Count > 0;
+        _tempoRequested = null;
+
+        // The metronome itself: a large dial whose BPM readout opens the exact tempo editor.
         var instrument = new PulseInstrument
         {
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch
         };
         _instrument = instrument;
-        var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000);
-        tempo.FontSize = 24;
-        tempo.ValueChanged += async (_, args) =>
+        var tempoPanel = BuildTempoPanel();
+        var tempoEdit = new Button
         {
-            // The document can lag behind queued validation. Compare the UI
-            // event pair so a rapid 120 -> 132 -> 120 retains both edits.
-            var proposed = args.NewValue;
-            if (!TempoEdits.IsChange(args.OldValue, proposed)) return;
-            await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = proposed,
-                editorChange: EditorChangeKind.GlobalTempoOnly));
+            Flyout = tempoPanel.Flyout, Style = ResonantStyle("GhostButtonStyle"), Padding = new Thickness(0),
+            MinWidth = 0, MinHeight = 0, HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top
         };
-        var unit = SelectChoices("Unit", "TempoUnit", settings.BeatUnitQuarters.ToString(CultureInfo.InvariantCulture),
-        [
-            new("0.5", Text.Get("Eighth")), new("1", Text.Get("Quarter")),
-            new("1.5", Text.Get("DottedQuarter")), new("2", Text.Get("Half")), new("3", Text.Get("DottedHalf"))
-        ]);
-        var tap = ActionButton("Tap", "TapTempo", () =>
+        Identify(tempoEdit, "TempoEdit", Text.Get("TempoEditHint"));
+        ToolTipService.SetToolTip(tempoEdit, Text.Get("TempoEditHint"));
+        tempoEdit.KeyDown += (_, args) =>
         {
-            var estimate = _tap.Tap((double)Stopwatch.GetTimestamp() / Stopwatch.Frequency);
-            // NumberBox.ValueChanged is the single commit path. An unchanged
-            // estimate must not add a redundant undo entry or recovery write.
-            if (TempoEdits.TryApplyTap(tempo.Value, estimate, out var proposed))
-                tempo.Value = proposed;
-        });
-        var decrease = ActionButton("TempoDown", "TempoDown", () => { tempo.Value = Math.Max(1, tempo.Value - 1); });
-        var increase = ActionButton("TempoUp", "TempoUp", () => { tempo.Value = Math.Min(1000, tempo.Value + 1); });
-        decrease.Content = "-1";
-        increase.Content = "+1";
-        decrease.VerticalAlignment = increase.VerticalAlignment = tap.VerticalAlignment = VerticalAlignment.Stretch;
-        decrease.Width = increase.Width = 44;
-        tap.Width = 112;
-        var tempoCommands = new Grid { ColumnSpacing = 8 };
-        tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        tempoCommands.Children.Add(decrease);
-        Grid.SetColumn(increase, 2);
-        tempoCommands.Children.Add(increase);
-        Grid.SetColumn(tap, 1);
-        tempoCommands.Children.Add(tap);
-        var tempoOptions = PlayOption("TempoTab", "TempoOptions",
-            Column(tempo, unit, CommandFlow(
-                ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, tempo.Value / 2); }),
-                ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, tempo.Value * 2); }),
-                ActionButton("ResetTap", "ResetTap", () => _tap.Reset()))));
-        unit.SelectionChanged += async (_, _) => await GuardAsync(async () =>
+            var step = args.Key switch
+            {
+                VirtualKey.Up => 1, VirtualKey.Down => -1, VirtualKey.PageUp => 10, VirtualKey.PageDown => -10, _ => 0
+            };
+            if (step == 0) return;
+            NudgeTempo(step);
+            args.Handled = true;
+        };
+        var dial = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        dial.Children.Add(instrument);
+        if (!followsProgram) dial.Children.Add(tempoEdit);
+        dial.PointerWheelChanged += (_, args) =>
         {
-            await CommitAsync(doc => doc.Settings.BeatUnitQuarters = double.Parse(Selected(unit), CultureInfo.InvariantCulture));
-            tempoOptions.Flyout.Hide();
-            BuildPage();
-        });
+            var delta = args.GetCurrentPoint(dial).Properties.MouseWheelDelta;
+            if (delta == 0) return;
+            NudgeTempo(Math.Sign(delta) * (args.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? 10 : 1));
+            args.Handled = true;
+        };
         var hero = new Grid();
-        hero.Children.Add(instrument);
-        var settingsDocked = false;
+        hero.Children.Add(dial);
+        var railDocked = false;
         void SizeInstrument()
         {
-            var width = hero.ActualWidth - (settingsDocked ? 272 : 0);
+            var width = hero.ActualWidth - (railDocked ? RailReserve : 0);
             var size = Math.Clamp(Math.Min(width, hero.ActualHeight), 0, 560);
-            instrument.Width = instrument.Height = size;
+            dial.Width = dial.Height = size;
+            var scale = size / 440d;
+            // The readout and unit label sit at fixed canvas coordinates inside the dial.
+            tempoEdit.Width = 290 * scale;
+            tempoEdit.Height = 140 * scale;
+            tempoEdit.Margin = new Thickness(0, 128 * scale, 0, 0);
         }
         hero.SizeChanged += (_, _) => SizeInstrument();
-        var beats = Number("Beats", "MeterBeats", settings.BeatsPerBar, 1, 64);
-        var denominator = Select("Denominator", "MeterDenominator", settings.BeatDenominator.ToString(), "1", "2", "4", "8", "16", "32", "64");
-        var groups = Input("Groups", "MeterGroups", string.Join("+", settings.Groups));
-        var division = Number("Subdivision", "Subdivision", settings.Subdivision, 1, 64);
-        var swing = Number("Swing", "Swing", settings.Swing, 0.5, 0.9, 0.01);
-        var countIn = Number("CountIn", "CountInBars", settings.CountInBars, 0, 32);
+
+        // Tempo: slower, tap, faster. Always live.
+        var slower = Stepper("\uE738", "TempoDown", "TempoSlower", -1);
+        var faster = Stepper("\uE710", "TempoUp", "TempoFaster", 1);
+        var tapCaption = new TextBlock
+        {
+            Text = Text.Get("TapCaption"), Style = ResonantStyle("CaptionStyle"), TextWrapping = TextWrapping.NoWrap,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        var tapTitle = new TextBlock
+        {
+            Text = Text.Get("TapShort"), FontSize = 16, FontWeight = FontWeights.SemiBold,
+            Style = ResonantStyle("BodyStyle"), HorizontalAlignment = HorizontalAlignment.Center
+        };
+        var tapStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        tapStack.Children.Add(tapTitle);
+        tapStack.Children.Add(tapCaption);
+        var tap = new Button { Style = ResonantStyle("TapButtonStyle"), Content = tapStack };
+        Identify(tap, "TapTempo", Text.Get("Tap"));
+        ToolTipService.SetToolTip(tap, Text.Get("TapHelp"));
+        AutomationProperties.SetHelpText(tap, Text.Get("TapHelp"));
+        var tapIdle = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4.5) };
+        tapIdle.Tick += (_, _) => { tapIdle.Stop(); tapCaption.Text = Text.Get("TapCaption"); };
+        tap.Click += (_, _) =>
+        {
+            var estimate = _tap.Tap((double)Stopwatch.GetTimestamp() / Stopwatch.Frequency);
+            tapCaption.Text = _tap.CurrentBpm is { } bpm
+                ? Text.Format("TapProgress", _tap.AcceptedIntervals + 1, bpm.ToString("0.#", Text.Culture))
+                : Text.Get("TapAgain");
+            tapIdle.Stop();
+            tapIdle.Start();
+            if (TempoEdits.TryApplyTap(_tempoRequested ?? _document.Settings.Tempo, estimate, out var proposed))
+                RequestTempo(proposed);
+        };
+        var tempoCluster = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 14, HorizontalAlignment = HorizontalAlignment.Center
+        };
+        tempoCluster.Children.Add(slower);
+        tempoCluster.Children.Add(tap);
+        tempoCluster.Children.Add(faster);
+        Identify(tempoCluster, "PlayQuickControls", Text.Get("Tempo"));
+        var tempoArea = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        tempoArea.Children.Add(tempoCluster);
+        if (followsProgram)
+        {
+            slower.IsEnabled = faster.IsEnabled = tap.IsEnabled = false;
+            var programNote = new TextBlock
+            {
+                Text = Text.Get("ProgramControlsNote"), Style = ResonantStyle("CaptionStyle"), TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center, MaxWidth = 420
+            };
+            Identify(programNote, "ProgramControlsNote", programNote.Text);
+            tempoArea.Children.Add(programNote);
+        }
+
+        // Time signature (sheet-music quick picks; the full builder is behind "Custom…"), beat strength, sound.
+        var rhythm = BuildRhythmPanel();
+        var meter = BuildMeterPicker(rhythm);
+        meter.IsEnabled = !followsProgram;
         var sound = Select("Sound", "MainSound", settings.Sound, "Wood", "Glass", "Click", "Kick", "HiHat");
         var restoringSound = false;
+        sound.Header = null;
+        sound.Width = 152;
+        sound.Height = 44;
         sound.SelectionChanged += async (_, _) =>
         {
             if (restoringSound) return;
@@ -111,221 +167,131 @@ public sealed partial class MainWindow
                 }
             });
         };
-        var audible = Number("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
-        var silent = Number("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
-        var blind = Check("Blind", "BlindGaps", settings.BlindGaps);
-        var accentButtons = new List<UIElement>();
-        var accentLabels = new List<Action<Accent>>();
-        void RefreshAccentLabels()
-        {
-            var pattern = AccentPatterns.ExpandEffectiveMain(_document.Settings,
-                Math.Max(accentLabels.Count, PrimaryAccentCount(_document.Settings)));
-            for (int index = 0; index < accentLabels.Count; index++) accentLabels[index](pattern[index]);
-        }
-        var effective = AccentPatterns.ExpandEffectiveMain(settings, PrimaryAccentCount(settings));
-        for (var beat = 0; beat < PrimaryAccentCount(settings); beat++)
-        {
-            var index = beat;
-            var current = effective[index];
-            var button = new Button
-            {
-                VerticalAlignment = VerticalAlignment.Top,
-                HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 52
-            };
-            void Describe(Accent accent)
-            {
-                var label = Text.Format("BeatAccent", index + 1, Text.Get(accent.ToString()));
-                button.Content = new TextBlock
-                {
-                    Text = Text.Format("PulseNumber", index + 1) + "\n" + Text.Get(accent.ToString()),
-                    TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap
-                };
-                Identify(button, $"MainAccent{index}", label);
-            }
-            Describe(current);
-            accentLabels.Add(Describe);
-            button.Click += async (_, _) => await GuardAsync(async () =>
-            {
-                try
-                {
-                    await CommitAsync(doc =>
-                    {
-                        var count = Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings));
-                        var chosen = AccentPatterns.ExpandEffectiveMain(doc.Settings, count)[index];
-                        var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents, count);
-                        pattern[index] = (Accent)(((int)chosen + 1) % 4);
-                        doc.Settings.Accents = pattern;
-                        doc.Settings.ManualAccentIndices = (doc.Settings.ManualAccentIndices ?? []).Append(index).Distinct().Order().ToArray();
-                    }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
-                }
-                finally { RefreshAccentLabels(); }
-            });
-            accentButtons.Add(button);
-        }
-        var accents = WrapControls(120, accentButtons.ToArray());
-        accents.Width = Math.Min(560, accentButtons.Count * 140);
-        accents.HorizontalAlignment = HorizontalAlignment.Center;
-        var rhythmContent = Column(Copy("RhythmDraftHint"),
-            Flow(beats, denominator, groups, division, swing, countIn, audible, silent), blind);
-        var rhythmOptions = PlayOption("RhythmTab", "RhythmOptions", rhythmContent);
-        var apply = ActionButton("ApplyRhythm", "ApplyPlaySettings", async () =>
-        {
-            await CommitAsync(doc =>
-            {
-                doc.Settings.BeatsPerBar = Integer(beats);
-                doc.Settings.BeatDenominator = int.Parse(Selected(denominator), CultureInfo.InvariantCulture);
-                doc.Settings.Groups = string.IsNullOrWhiteSpace(groups.Text) ? [] :
-                    groups.Text.Split('+', StringSplitOptions.TrimEntries).Select(value => int.Parse(value, CultureInfo.InvariantCulture)).ToArray();
-                doc.Settings.Subdivision = Integer(division);
-                doc.Settings.Swing = Value(swing);
-                doc.Settings.CountInBars = Integer(countIn);
-                doc.Settings.Sound = Selected(sound);
-                doc.Settings.AudibleBars = Integer(audible);
-                doc.Settings.SilentBars = Integer(silent);
-                doc.Settings.BlindGaps = blind.IsChecked == true;
-                // Preserve the authored period, including a repeating [Silent].
-                // Changing meter/sound/gaps must not rewrite the accent pattern.
-            });
-            rhythmOptions.Flyout.Hide();
-            BuildPage();
-        });
-        rhythmContent.Children.Add(apply);
-        rhythmContent.Children.Add(Copy("GroupAccentRule"));
-        rhythmContent.Children.Add(ActionButton("AllNormal", "AllNormalAccents", async () =>
-                {
-                    try
-                    {
-                        await CommitAsync(doc =>
-                        {
-                            doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray();
-                            doc.Settings.AccentOverridesGroups = true;
-                        }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
-                    }
-                    finally { RefreshAccentLabels(); }
-                }));
-        var meter = ActionButton("TimeSignature", "QuickMeter", () =>
-        {
-            rhythmOptions.Flyout.ShowAt(rhythmOptions);
-        });
-        meter.Content = $"{settings.BeatsPerBar} / {settings.BeatDenominator}";
-        meter.FontSize = 20;
-        meter.HorizontalAlignment = HorizontalAlignment.Left;
-        meter.MinWidth = 108;
-        Identify(meter, "QuickMeter", $"{Text.Get("TimeSignature")}: {settings.BeatsPerBar}/{settings.BeatDenominator}");
-        var project = PlayOption("ProjectTab", "ProjectOptions", Column(name,
-                ActionButton("RenameProject", "ApplyDocumentName", () => CommitAsync(doc => doc.Name = name.Text, false)),
-                CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync))));
-        var practiceSeconds = Number("PracticeSeconds", "PracticeSeconds", settings.PracticeSeconds, 0, 86400);
-        var practiceBeats = Number("PracticeBeats", "PracticeBeats", settings.PracticeBeats, 0, 6_400_000);
-        var practiceBars = Number("PracticeBars", "PracticeBars", settings.PracticeBars, 0, 100_000);
-        var practiceFeedback = Body(Text.Format("PracticeLimitsSaved",
-            settings.PracticeSeconds, settings.PracticeBeats, settings.PracticeBars));
-        Identify(practiceFeedback, "PracticeLimitsStatus", practiceFeedback.Text);
-        long practiceCommitVersion = 0;
-        AutomationProperties.SetItemStatus(practiceFeedback, "0");
-        var practice = PlayOption("PracticeTab", "PracticeTimer",
-            Column(practiceSeconds, practiceBeats, practiceBars, Copy("PracticeTimerHint"), Copy("CountedStopHint"),
-                practiceFeedback,
-                ActionButton("Apply", "ApplyPracticeTimer", async () =>
-                {
-                    var seconds = Integer(practiceSeconds);
-                    var beatsToPlay = Integer(practiceBeats);
-                    var barsToPlay = Integer(practiceBars);
-                    var edited = false;
-                    await CommitAsync(doc =>
-                    {
-                        doc.Settings.PracticeSeconds = seconds;
-                        doc.Settings.PracticeBeats = beatsToPlay;
-                        doc.Settings.PracticeBars = barsToPlay;
-                        edited = true;
-                    },
-                        editorChange: EditorChangeKind.PracticeTimerOnly);
-                    if (!edited) return; // A locked document reports its notice without publishing.
-                    practiceFeedback.Text = Text.Format("PracticeLimitsSaved", seconds, beatsToPlay, barsToPlay);
-                    AutomationProperties.SetName(practiceFeedback, practiceFeedback.Text);
-                    AutomationProperties.SetItemStatus(practiceFeedback,
-                        FormattableString.Invariant($"{++practiceCommitVersion}:{seconds}:{beatsToPlay}:{barsToPlay}"));
-                })));
-        var help = PlayOption("HelpTab", "PlayHelp",
-            Column(Copy("FirstUseHint"), Copy("LiveSoundHint"), Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"), Copy("Horizon")));
-        sound.Header = null;
-        sound.Width = 160;
         AutomationProperties.SetHelpText(sound, Text.Get("LiveSoundHint"));
         ToolTipService.SetToolTip(sound, Text.Get("LiveSoundHint"));
-        var meterSound = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
-        meterSound.Children.Add(meter);
-        var soundField = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        var soundLabel = Copy("Sound");
-        soundLabel.VerticalAlignment = VerticalAlignment.Center;
-        soundField.Children.Add(soundLabel);
-        soundField.Children.Add(sound);
-        meterSound.Children.Add(soundField);
-        var quick = new StackPanel
+
+        var pulses = PrimaryAccentCount(settings);
+        var strip = new BeatStrip { Describe = DescribeBeat };
+        _beatStrip = strip;
+        strip.Rebuild(pulses, GroupStartPulses(settings, pulses), 44, AccentPatterns.ExpandEffectiveMain(settings, pulses));
+        strip.BeatInvoked += async (_, index) => await GuardAsync(() => ChangeAccentAsync(index, 1, wrap: true));
+        strip.BeatNudged += async (_, args) => await GuardAsync(() => ChangeAccentAsync(args.Index, args.Delta, wrap: false));
+        var stripScroll = new ScrollViewer
         {
-            Orientation = Orientation.Horizontal, Spacing = 16, HorizontalAlignment = HorizontalAlignment.Center
-        };
-        quick.Children.Add(tempoCommands);
-        quick.Children.Add(meterSound);
-        var quickScroll = Scroll(quick);
-        Identify(quickScroll, "PlayQuickControls", Text.Get("Settings"));
-        var scroll = Scroll(accents);
-        var textScale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        scroll.MaxHeight = 60 * textScale;
-        Identify(scroll, "PulseAccentStrip", Text.Get("PulseStrengths"));
-        var cue = Copy("MorePulses");
-        cue.Width = 100;
-        cue.VerticalAlignment = VerticalAlignment.Center;
-        Identify(cue, "PlayScrollHint", Text.Get("ScrollControlsHint"));
-        cue.Visibility = Visibility.Collapsed;
-        var shortcuts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var command in new[] { rhythmOptions, tempoOptions, practice, project, help })
-        {
-            command.MinWidth = 100;
-            shortcuts.Children.Add(command);
-        }
-        var settingsScroll = new ScrollViewer
-        {
-            Content = shortcuts, HorizontalScrollMode = ScrollMode.Enabled,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = strip, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        Identify(settingsScroll, "PlaySettingsStrip", Text.Get("Settings"));
-        var pulseControls = new Grid();
-        pulseControls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        pulseControls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        pulseControls.Children.Add(scroll);
-        Grid.SetColumn(cue, 1);
-        pulseControls.Children.Add(cue);
-        scroll.LayoutUpdated += (_, _) =>
+        Identify(stripScroll, "PulseAccentStrip", Text.Get("PulseStrengths"));
+        var cue = new TextBlock
         {
-            // The hint must not create the overflow that keeps itself visible.
-            var unhintedWidth = Math.Min(560, Math.Max(0, pulseControls.ActualWidth - 16));
-            var overflow = accentButtons.Count > FlowColumns(unhintedWidth, 120, textScale, accentButtons.Count);
-            cue.Visibility = overflow ? Visibility.Visible : Visibility.Collapsed;
-            pulseControls.ColumnSpacing = overflow ? 12 : 0;
+            Text = Text.Get("MorePulses"), Style = ResonantStyle("CaptionStyle"), Visibility = Visibility.Collapsed,
+            HorizontalAlignment = HorizontalAlignment.Right
         };
-        scroll.SizeChanged += (_, args) =>
-            accents.Width = Math.Min(Math.Min(560, accentButtons.Count * 140), Math.Max(0, args.NewSize.Width - 16));
-        var page = new Grid { RowSpacing = 8 };
+        Identify(cue, "PlayScrollHint", Text.Get("ScrollControlsHint"));
+        stripScroll.SizeChanged += (_, args) =>
+        {
+            var available = Math.Max(0, args.NewSize.Width - 8);
+            var cell = Math.Clamp(available / Math.Max(1, pulses), 32, 56);
+            strip.SetCellWidth(cell);
+            // Judged from the data, not from the scrollbar the cue itself could create.
+            cue.Visibility = pulses * 32 > available ? Visibility.Visible : Visibility.Collapsed;
+        };
+
+        var meterColumn = Captioned("TimeSignature", meter);
+        var strengthText = new TextBlock
+        {
+            Text = Text.Get("BeatStrengthCaption"), Style = ResonantStyle("CaptionStyle"),
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center
+        };
+        var strengthMenu = BuildStrengthMenu();
+        var strengthCaption = new Grid { ColumnSpacing = 6 };
+        strengthCaption.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        strengthCaption.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        strengthCaption.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        cue.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(cue, 1);
+        Grid.SetColumn(strengthMenu, 2);
+        strengthCaption.Children.Add(strengthText);
+        strengthCaption.Children.Add(cue);
+        strengthCaption.Children.Add(strengthMenu);
+        var stripColumn = new StackPanel { Spacing = 6 };
+        stripColumn.Children.Add(strengthCaption);
+        stripColumn.Children.Add(stripScroll);
+        var soundColumn = Captioned("Sound", sound);
+        var context = new Grid { ColumnSpacing = 20, RowSpacing = 10, HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 720 };
+        context.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        context.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        context.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        context.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        context.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        context.Children.Add(meterColumn);
+        context.Children.Add(stripColumn);
+        context.Children.Add(soundColumn);
+        void ArrangeContext(bool narrow)
+        {
+            sound.Width = narrow ? 128 : 152;
+            Grid.SetRow(meterColumn, 0); Grid.SetColumn(meterColumn, 0); Grid.SetColumnSpan(meterColumn, narrow ? 2 : 1);
+            Grid.SetRow(soundColumn, 0); Grid.SetColumn(soundColumn, 2);
+            Grid.SetRow(stripColumn, narrow ? 1 : 0); Grid.SetColumn(stripColumn, narrow ? 0 : 1);
+            Grid.SetColumnSpan(stripColumn, narrow ? 3 : 1);
+            meterColumn.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+            soundColumn.HorizontalAlignment = narrow ? HorizontalAlignment.Right : HorizontalAlignment.Center;
+        }
+        ArrangeContext(false);
+
+        // Secondary entry points: quiet, icon-led, never competing with the instrument.
+        var practice = BuildPracticePanel();
+        var project = BuildProjectPanel();
+        var help = BuildHelpPanel();
+        var rail = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+        var railButtons = new List<Button>();
+        foreach (var (panel, key, id, glyph) in new[]
+        {
+            (practice, "PracticeTab", "PracticeTimer", "\uE916"), (project, "ProjectTab", "ProjectOptions", "\uE8B7"),
+            (help, "HelpTab", "PlayHelp", "\uE897")
+        })
+        {
+            var button = new Button
+            {
+                Flyout = panel.Flyout, Style = ResonantStyle("GhostButtonStyle"), MinWidth = 108,
+                HorizontalContentAlignment = HorizontalAlignment.Left
+            };
+            LabelButton(button, key, glyph);
+            Identify(button, id, Text.Get(key));
+            ToolTipService.SetToolTip(button, Text.Get(key));
+            rail.Children.Add(button);
+            railButtons.Add(button);
+        }
+        var railScroll = new ScrollViewer
+        {
+            Content = rail, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Identify(railScroll, "PlaySettingsStrip", Text.Get("Settings"));
+
+        var page = new Grid { RowSpacing = 10 };
         page.SizeChanged += (_, args) =>
         {
-            settingsDocked = args.NewSize.Width >= 620;
-            shortcuts.Orientation = settingsDocked ? Orientation.Vertical : Orientation.Horizontal;
-            shortcuts.Spacing = settingsDocked ? 6 : 8;
-            settingsScroll.Width = settingsDocked ? 120 : double.NaN;
-            settingsScroll.HorizontalAlignment = settingsDocked ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
-            settingsScroll.VerticalAlignment = settingsDocked ? VerticalAlignment.Center : VerticalAlignment.Stretch;
-            settingsScroll.HorizontalScrollMode = settingsDocked ? ScrollMode.Disabled : ScrollMode.Enabled;
-            settingsScroll.HorizontalScrollBarVisibility = settingsDocked ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-            settingsScroll.VerticalScrollMode = settingsDocked ? ScrollMode.Enabled : ScrollMode.Disabled;
-            settingsScroll.VerticalScrollBarVisibility = settingsDocked ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
-            Grid.SetRow(settingsScroll, settingsDocked ? 1 : 0);
-            quick.Orientation = args.NewSize.Width < 620 ? Orientation.Vertical : Orientation.Horizontal;
-            meterSound.Orientation = args.NewSize.Width < 360 ? Orientation.Vertical : Orientation.Horizontal;
-            quickScroll.MaxHeight = args.NewSize.Width < 620 ? 116 : double.PositiveInfinity;
-            tempoCommands.HorizontalAlignment = HorizontalAlignment.Center;
-            meterSound.HorizontalAlignment = HorizontalAlignment.Center;
-            soundField.HorizontalAlignment = HorizontalAlignment.Center;
+            var width = args.NewSize.Width;
+            railDocked = width >= 620;
+            rail.Orientation = railDocked ? Orientation.Vertical : Orientation.Horizontal;
+            rail.Spacing = railDocked ? 4 : 8;
+            railScroll.Width = railDocked ? 124 : double.NaN;
+            railScroll.HorizontalAlignment = railDocked ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
+            railScroll.VerticalAlignment = railDocked ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+            railScroll.HorizontalScrollMode = railDocked ? ScrollMode.Disabled : ScrollMode.Enabled;
+            railScroll.HorizontalScrollBarVisibility = railDocked ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+            railScroll.VerticalScrollMode = railDocked ? ScrollMode.Enabled : ScrollMode.Disabled;
+            railScroll.VerticalScrollBarVisibility = railDocked ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+            Grid.SetRow(railScroll, railDocked ? 1 : 0);
+            // On very narrow windows the quiet entry points shrink to their icons (names stay in tooltips and for screen readers).
+            foreach (var railButton in railButtons)
+            {
+                if (railButton.Content is StackPanel { Children: [_, TextBlock label] })
+                    label.Visibility = width < 420 ? Visibility.Collapsed : Visibility.Visible;
+                railButton.MinWidth = width < 420 ? 44 : 108;
+            }
+            ArrangeContext(width < 620);
             SizeInstrument();
         };
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -334,50 +300,255 @@ public sealed partial class MainWindow
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(hero, 1);
         page.Children.Add(hero);
-        page.Children.Add(settingsScroll);
-        Grid.SetRow(quickScroll, 2);
-        page.Children.Add(quickScroll);
-        Grid.SetRow(pulseControls, 3);
-        page.Children.Add(pulseControls);
+        page.Children.Add(railScroll);
+        Grid.SetRow(tempoArea, 2);
+        page.Children.Add(tempoArea);
+        Grid.SetRow(context, 3);
+        page.Children.Add(context);
         return page;
     }
 
-    private Button PlayOption(string key, string id, UIElement content)
+    private static StackPanel Captioned(string captionKey, FrameworkElement control)
     {
-        var close = ActionButton("CloseOptions", id + "Close", () => { });
-        var scroll = Scroll(content);
-        scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
-        var panel = new Grid { RowSpacing = 12 };
-        panel.KeyDown += OnKeyDown;
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        panel.Children.Add(close);
-        Grid.SetRow(scroll, 1);
-        panel.Children.Add(scroll);
-        var flyout = new Flyout { Content = panel };
-        close.Click += (_, _) => flyout.Hide();
-        flyout.Opening += (_, _) => SizeOptionsFlyout(flyout, panel, scroll);
-        var button = new Button { Flyout = flyout, HorizontalContentAlignment = HorizontalAlignment.Center };
-        LabelButton(button, key);
-        Identify(button, id, Text.Get(key));
+        var column = new StackPanel { Spacing = 6 };
+        column.Children.Add(new TextBlock { Text = Text.Get(captionKey), Style = ResonantStyle("CaptionStyle") });
+        column.Children.Add(control);
+        return column;
+    }
+
+    private RepeatButton Stepper(string glyph, string id, string helpKey, int direction)
+    {
+        var button = new RepeatButton
+        {
+            Style = ResonantStyle("StepperButtonStyle"), Delay = 450, Interval = 80,
+            Content = new FontIcon { Glyph = glyph, FontSize = 18 }
+        };
+        Identify(button, id, Text.Get(helpKey));
+        ToolTipService.SetToolTip(button, Text.Get(helpKey));
+        button.Click += (_, _) =>
+        {
+            var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            NudgeTempo(direction * (ctrl ? 10 : 1));
+        };
         return button;
     }
 
-    private void SizeOptionsFlyout(Flyout flyout, Grid panel, ScrollViewer scroll)
+    private void NudgeTempo(double delta) => RequestTempo((_tempoRequested ?? _document.Settings.Tempo) + delta);
+
+    /// <summary>
+    /// Shows the requested tempo immediately and commits it. Commits are absolute values processed in order,
+    /// so holding a stepper or tapping quickly can never reorder or lose the final value.
+    /// </summary>
+    private void RequestTempo(double bpm)
     {
-        scroll.MaxHeight = Math.Max(100, Root.ActualHeight - 200);
-        panel.Width = Math.Clamp(Root.ActualWidth - 100, 240, 640);
-        flyout.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
+        if (_document.Program.Count > 0) return;
+        var requested = Math.Clamp(Math.Round(bpm, 1), 1, 1000);
+        if (!TempoEdits.IsChange(_tempoRequested ?? _document.Settings.Tempo, requested)) return;
+        _tempoRequested = requested;
+        RefreshSnapshot();
+        _ = GuardAsync(async () =>
         {
-            Setters =
-            {
-                new Setter(FrameworkElement.MaxWidthProperty, Math.Max(280, Root.ActualWidth - 32)),
-                new Setter(FrameworkElement.MaxHeightProperty, Math.Max(180, Root.ActualHeight - 32)),
-                new Setter(Control.PaddingProperty, new Thickness(12))
-            }
-        };
+            try { await CommitAsync(doc => doc.Settings.Tempo = requested, editorChange: EditorChangeKind.GlobalTempoOnly); }
+            finally { if (_tempoRequested == requested) _tempoRequested = null; }
+        });
     }
 
-    private static int PrimaryAccentCount(PulseSettings settings) =>
-        Math.Clamp((int)Math.Ceiling(4d * settings.BeatsPerBar / settings.BeatDenominator / settings.BeatUnitQuarters), 1, 256);
+    private string DescribeBeat(int index, Accent level) =>
+        Text.Format("BeatName", index + 1, Text.Get("Level" + level));
+
+    private async Task ChangeAccentAsync(int index, int delta, bool wrap)
+    {
+        try
+        {
+            await CommitAsync(doc =>
+            {
+                var count = Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings));
+                var chosen = AccentPatterns.ExpandEffectiveMain(doc.Settings, count)[index];
+                var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents, count);
+                var next = (int)chosen + delta;
+                pattern[index] = (Accent)(wrap ? (next % 4 + 4) % 4 : Math.Clamp(next, 0, 3));
+                doc.Settings.Accents = pattern;
+                doc.Settings.ManualAccentIndices = (doc.Settings.ManualAccentIndices ?? []).Append(index).Distinct().Order().ToArray();
+            }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
+        }
+        finally { RefreshBeatStrength(); }
+    }
+
+    private void RefreshBeatStrength()
+    {
+        if (_beatStrip is not { } strip) return;
+        strip.SetLevels(AccentPatterns.ExpandEffectiveMain(_document.Settings,
+            Math.Max(strip.Count, PrimaryAccentCount(_document.Settings))));
+    }
+
+    /// <summary>Commands that act on the whole strip. They sit outside the rhythm form, so each applies at once.</summary>
+    private Button BuildStrengthMenu()
+    {
+        var flyout = new Flyout { Placement = FlyoutPlacementMode.Top };
+        var items = new StackPanel { Spacing = 4, MinWidth = 190 };
+        foreach (var (key, id, allNormal) in new[] { ("AllNormal", "AllNormalAccents", true), ("DefaultAccents", "DefaultAccents", false) })
+        {
+            var item = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left };
+            LabelButton(item, key);
+            Identify(item, id, Text.Get(key));
+            item.Click += async (_, _) =>
+            {
+                flyout.Hide();
+                await GuardAsync(() => ResetStrengthAsync(allNormal));
+            };
+            items.Children.Add(item);
+        }
+        items.KeyDown += OnKeyDown;
+        flyout.Content = items;
+        flyout.Opening += (_, _) => items.RequestedTheme = Root.RequestedTheme;
+        // The tap target is 28 DIP tall, but its slot matches the caption line so the dial keeps its height.
+        var button = new Button
+        {
+            Style = ResonantStyle("GhostButtonStyle"), MinHeight = 28, Height = 28, MinWidth = 36, Padding = new Thickness(0),
+            Margin = new Thickness(0, -6, 0, -6), Content = new FontIcon { Glyph = "\uE712", FontSize = 14 }, Flyout = flyout
+        };
+        Identify(button, "StrengthMenu", Text.Get("ResetStrengths"));
+        ToolTipService.SetToolTip(button, Text.Get("ResetStrengths"));
+        return button;
+    }
+
+    private async Task ResetStrengthAsync(bool allNormal)
+    {
+        try
+        {
+            await CommitAsync(doc =>
+            {
+                if (allNormal)
+                {
+                    doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray();
+                    doc.Settings.AccentOverridesGroups = true;
+                }
+                else
+                {
+                    doc.Settings.Accents = MeterPresets.DefaultAccents(PrimaryAccentCount(doc.Settings));
+                    doc.Settings.AccentOverridesGroups = false;
+                    doc.Settings.ManualAccentIndices = null;
+                }
+            }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
+        }
+        finally { RefreshBeatStrength(); }
+    }
+
+    /// <summary>Pulse indices at which an additive group starts (for spacing the beat strip).</summary>
+    private static HashSet<int> GroupStartPulses(PulseSettings settings, int count)
+    {
+        var starts = new HashSet<int>();
+        var unit = Rational.FromDouble(settings.BeatUnitQuarters);
+        var boundary = 0;
+        foreach (var group in settings.Groups)
+        {
+            var position = new Rational(4 * boundary, settings.BeatDenominator) / unit;
+            if (position.Denominator.IsOne && position.Numerator >= 0 && position.Numerator < count)
+                starts.Add((int)position.Numerator);
+            boundary += group;
+        }
+        return starts;
+    }
+
+    private static int PrimaryAccentCount(PulseSettings settings) => MeterPresets.PulsesPerBar(settings);
+
+    private static StackPanel TimeSignatureGlyph(int beats, int denominator, double size)
+    {
+        var glyph = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var value in new[] { beats, denominator })
+            glyph.Children.Add(new TextBlock
+            {
+                Text = value.ToString(CultureInfo.InvariantCulture), FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Bahnschrift"),
+                FontWeight = FontWeights.SemiBold, FontSize = size, LineHeight = size * 0.95,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center, Style = ResonantStyle("BodyStyle")
+            });
+        return glyph;
+    }
+
+    private Button BuildMeterPicker(OptionPanel rhythm)
+    {
+        var settings = _document.Settings;
+        var chip = new Button { Style = ResonantStyle("ChipButtonStyle"), Width = 96, Height = 64, Padding = new Thickness(0) };
+        var face = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+        };
+        face.Children.Add(TimeSignatureGlyph(settings.BeatsPerBar, settings.BeatDenominator, 24));
+        face.Children.Add(new FontIcon { Glyph = "\uE70D", FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 });
+        chip.Content = face;
+        Identify(chip, "QuickMeter", $"{Text.Get("TimeSignature")}: {settings.BeatsPerBar}/{settings.BeatDenominator}");
+        ToolTipService.SetToolTip(chip, Text.Get("MeterChange"));
+
+        var picker = new Flyout { Placement = FlyoutPlacementMode.Top };
+        var title = new TextBlock
+        {
+            Text = Text.Get("TimeSignature"), FontSize = 16, FontWeight = FontWeights.SemiBold, Style = ResonantStyle("BodyStyle")
+        };
+        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+        const int columns = 4;
+        for (var column = 0; column < columns; column++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (var row = 0; row < (MeterPresets.All.Count + columns - 1) / columns; row++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var index = 0; index < MeterPresets.All.Count; index++)
+        {
+            var preset = MeterPresets.All[index];
+            var cell = new Button
+            {
+                Style = ResonantStyle("ChipButtonStyle"), Width = 68, Height = 68, Padding = new Thickness(0),
+                Content = TimeSignatureGlyph(preset.Beats, preset.Denominator, 22)
+            };
+            Identify(cell, $"MeterPreset{preset.Beats}_{preset.Denominator}", $"{preset.Beats}/{preset.Denominator}");
+            if (MeterPresets.IsCurrent(settings, preset))
+            {
+                cell.BorderThickness = new Thickness(2);
+                cell.Loaded += (_, _) => cell.BorderBrush = ThemeBrushes.Resolve(cell, "PulseBrush");
+            }
+            cell.Click += async (_, _) =>
+            {
+                picker.Hide();
+                await GuardAsync(() => ApplyMeterPresetAsync(preset));
+            };
+            Grid.SetColumn(cell, index % columns);
+            Grid.SetRow(cell, index / columns);
+            grid.Children.Add(cell);
+        }
+        var openCustomWhenClosed = false;
+        var custom = ActionButton("MeterCustom", "MeterCustom", () =>
+        {
+            openCustomWhenClosed = true;
+            picker.Hide();
+        });
+        // Showing the builder only once this flyout has fully closed keeps two flyouts on one anchor from racing.
+        picker.Closed += (_, _) =>
+        {
+            if (!openCustomWhenClosed) return;
+            openCustomWhenClosed = false;
+            DispatcherQueue.TryEnqueue(() => rhythm.Flyout.ShowAt(chip));
+        };
+        custom.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(title);
+        content.Children.Add(grid);
+        content.Children.Add(custom);
+        content.KeyDown += OnKeyDown;
+        picker.Content = content;
+        picker.Opening += (_, _) => content.RequestedTheme = Root.RequestedTheme;
+        chip.Flyout = picker;
+        return chip;
+    }
+
+    private async Task ApplyMeterPresetAsync(MeterPreset preset)
+    {
+        if (MeterPresets.IsApplied(_document.Settings, preset)) return;
+        var applied = false;
+        await CommitAsync(doc =>
+        {
+            MeterPresets.Apply(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
+            applied = true;
+        }, editorChange: EditorChangeKind.PlayStructure);
+        if (applied) BuildPage();
+    }
 }

@@ -133,7 +133,7 @@ public sealed class PulseInstrument : Grid
         _settings = settings;
         DrawTicks(settings);
         _isBlind = blind;
-        _tempo.Text = blind ? Text.Get("Silent") : tempo.ToString("0.0", Text.Culture);
+        _tempo.Text = blind ? Text.Get("Silent") : FormatTempo(tempo);
         _unit.Text = blind ? "" : $"BPM · {NoteUnit(settings.BeatUnitQuarters)}";
         _phase.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
         _phaseHalo.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
@@ -175,10 +175,13 @@ public sealed class PulseInstrument : Grid
         }
     }
 
+    internal static string FormatTempo(double tempo) => TempoFormat.Format(tempo, Text.Culture);
+
     public static string NoteUnit(double unit) => unit switch
     {
+        0.0625 => Text.Get("SixtyFourth"), 0.125 => Text.Get("ThirtySecond"), 0.25 => Text.Get("Sixteenth"),
         0.5 => Text.Get("Eighth"), 1 => Text.Get("Quarter"), 1.5 => Text.Get("DottedQuarter"),
-        2 => Text.Get("Half"), 3 => Text.Get("DottedHalf"),
+        2 => Text.Get("Half"), 3 => Text.Get("DottedHalf"), 4 => Text.Get("Whole"),
         _ => $"{unit.ToString("0.###", Text.Culture)} × {Text.Get("Quarter")}"
     };
 }

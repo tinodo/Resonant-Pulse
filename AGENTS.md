@@ -4,10 +4,16 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
 
 ## Operating constraints
 
-- The developer machine is shared. Do not compile, build, test, bundle, install
-  SDKs, launch audio, or run broad recursive filesystem scans locally.
-- All build/type/test/package validation runs in GitHub Actions. Inspect exact
-  files locally. Never treat an unexecuted test or an uploaded artifact as a pass.
+- The developer machine is shared, and the owner has explicitly authorised local
+  build, test and visual verification for this repository. Keep it light: one
+  build at a time, below-normal priority, no watchers or lingering build
+  servers, no SDK installs, no broad recursive filesystem scans. Never launch
+  audio or press Start on a developer machine; run test instances against an
+  isolated data folder (`RESONANT_PULSE_HOME`) and never capture another
+  application's window.
+- GitHub Actions remains the authoritative gate (hosted build, native, package,
+  CodeQL, review). Local runs give fast feedback only; never treat an
+  unexecuted test or an uploaded artifact as a pass.
 - Preserve work belonging to other sessions. This repository is separate from
   the Resonant tuner.
 - Use precise musical units. BPM has an explicit note unit; canonical musical

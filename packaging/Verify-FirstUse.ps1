@@ -1,26 +1,69 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][int]$AppProcessId,
-    [Parameter(Mandatory)][string]$ReportPath
+    [Parameter(Mandatory)][string]$ReportPath,
+    # Playback is audible and screenshots copy the whole screen, so on a developer machine both are opt-in
+    # (-RunAudio, -Screenshots). A GitHub Actions runner has no listener and nothing private, so it runs both.
+    # -NoAudio and -NoScreenshots always win.
+    [switch]$RunAudio,
+    [switch]$Screenshots,
+    [switch]$NoAudio,
+    [switch]$NoScreenshots
 )
 $ErrorActionPreference = 'Stop'
+$onCi = $env:GITHUB_ACTIONS -eq 'true'
+$playAudio = (-not $NoAudio) -and ($RunAudio -or $onCi)
+$takeScreenshots = (-not $NoScreenshots) -and ($Screenshots -or $onCi)
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class RpDpi
+{
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
+}
+'@
+# Measure and resize in real pixels, and express the requested sizes in device-independent units, so the same
+# scenarios mean the same thing on a 100% hosted runner and on a scaled developer display.
+[void][RpDpi]::SetProcessDpiAwarenessContext([IntPtr](-4))
 $process = [Diagnostics.Process]::GetProcessById($AppProcessId)
+$scale = [RpDpi]::GetDpiForWindow($process.MainWindowHandle) / 96.0
+if ($scale -le 0) { $scale = 1.0 }
 $window = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
-function Find-Control([string]$id) {
+function Resize-To([double]$width, [double]$height) {
+    $pattern = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
+    $pattern.Resize([Math]::Round($width * $scale), [Math]::Round($height * $scale))
+}
+function Get-CurrentWindow {
+    $process.Refresh()
+    if ($process.HasExited) { throw 'Application exited while verifying native controls.' }
+    [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+}
+function Find-Optional([string]$id) {
     $condition = [Windows.Automation.PropertyCondition]::new(
         [Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
+    (Get-CurrentWindow).FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
+}
+function Find-Control([string]$id) {
     $limit = [DateTime]::UtcNow.AddSeconds(5)
     do {
-        $process.Refresh()
-        if ($process.HasExited) { throw "Application exited while finding native control: $id" }
-        $currentWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
-        $element = $currentWindow.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
+        $element = Find-Optional $id
         if ($null -ne $element) { return $element }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $limit)
-    throw "Required first-use control remained missing: $id"
+    $present = (Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
+        ForEach-Object { $_.Current.AutomationId } | Where-Object { $_ } | Select-Object -First 80
+    throw "Required first-use control remained missing: $id (present: $($present -join ', '))"
+}
+function Wait-Absent([string]$id) {
+    $limit = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        if ($null -eq (Find-Optional $id)) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "Control should not exist: $id"
 }
 function Invoke-Control([string]$id) {
     $limit = [DateTime]::UtcNow.AddSeconds(10)
@@ -35,8 +78,17 @@ function Invoke-Control([string]$id) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Native control remained disabled: $id"
 }
+function Wait-Until([scriptblock]$condition, [string]$failure, [int]$seconds = 10) {
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    do {
+        if (& $condition) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "$failure (readout: $(Get-Dial); status: $((Find-Control 'TransportStatus').Current.Name))"
+}
+function Get-Dial { (Find-Control 'PhaseInstrument').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
 function Test-InstrumentHierarchy {
-    $currentBounds = $window.Current.BoundingRectangle
+    $currentBounds = (Get-CurrentWindow).Current.BoundingRectangle
     $dial = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
     $sound = (Find-Control 'MainSound').Current.BoundingRectangle
     $centerError = [Math]::Abs(($dial.X + $dial.Width / 2) - ($currentBounds.X + $currentBounds.Width / 2))
@@ -45,13 +97,14 @@ function Test-InstrumentHierarchy {
         -not $currentBounds.Contains($dial)) {
         throw "The metronome is not the large, centered primary surface: dial=$dial, center error=$centerError"
     }
-    $value = (Find-Control 'PhaseInstrument').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
-    if ($value -notlike '120.0*BPM*') { throw "The main metronome does not present the tempo: $value" }
+    $value = Get-Dial
+    if ($value -notlike '120*BPM*') { throw "The main metronome does not present the tempo: $value" }
     return @{width=$dial.Width;height=$dial.Height;centerError=$centerError;value=$value}
 }
 function Save-PlayScreenshot([string]$name) {
+    if (-not $takeScreenshots) { return }
     Add-Type -AssemblyName System.Drawing
-    $rect = $window.Current.BoundingRectangle
+    $rect = (Get-CurrentWindow).Current.BoundingRectangle
     $bitmap = [Drawing.Bitmap]::new([int]$rect.Width, [int]$rect.Height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     try {
@@ -72,7 +125,7 @@ function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Expected $prefix transport state, observed: $text"
 }
-function Set-PracticeNumber([string]$id, [int]$value) {
+function Set-Number([string]$id, [int]$value) {
     $element = Find-Control $id
     [object]$pattern = $null
     if ($element.TryGetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern, [ref]$pattern)) {
@@ -80,31 +133,55 @@ function Set-PracticeNumber([string]$id, [int]$value) {
     } elseif ($element.TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
         $pattern.SetValue([string]$value)
     } else {
-        throw "Practice input has no writable numeric automation pattern: $id"
+        throw "Input has no writable numeric automation pattern: $id"
     }
 }
+function Set-Text([string]$id, [string]$value) {
+    (Find-Control $id).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($value)
+}
 function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
-    $condition = [Windows.Automation.PropertyCondition]::new(
-        [Windows.Automation.AutomationElement]::AutomationIdProperty, 'PracticeSeconds')
-    $currentWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
-    if ($null -eq $currentWindow.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)) {
-        Invoke-Control 'PracticeTimer'
-    }
-    Set-PracticeNumber 'PracticeSeconds' $seconds
-    Set-PracticeNumber 'PracticeBeats' $beats
-    Set-PracticeNumber 'PracticeBars' $bars
-    $before = (Find-Control 'PracticeLimitsStatus').Current.ItemStatus
-    Invoke-Control 'ApplyPracticeTimer'
+    Invoke-Control 'PracticeTimer'
+    Set-Number 'PracticeSeconds' $seconds
+    Set-Number 'PracticeBeats' $beats
+    Set-Number 'PracticeBars' $bars
+    Invoke-Control 'PracticeTimerOptionsDone'
+    Wait-Absent 'PracticeTimerOptionsDone'
+    # Reopen to read the acknowledgement the panel recorded after a successful publication and recovery write.
     $expected = ':{0}:{1}:{2}' -f $seconds, $beats, $bars
     $limit = [DateTime]::UtcNow.AddSeconds(15)
+    $committed = ''
     do {
+        Invoke-Control 'PracticeTimer'
         $committed = (Find-Control 'PracticeLimitsStatus').Current.ItemStatus
-        if ($committed -ne $before -and $committed.EndsWith($expected, [StringComparison]::Ordinal)) {
-            return
-        }
+        Invoke-Control 'PracticeTimerOptionsCancel'
+        Wait-Absent 'PracticeTimerOptionsCancel'
+        if ($committed.EndsWith($expected, [StringComparison]::Ordinal)) { return }
+        Start-Sleep -Milliseconds 200
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "Practice-limit Done did not confirm successful publication and recovery: $expected (observed $committed)"
+}
+function Select-Combo([string]$id, [string]$itemName) {
+    $combo = Find-Control $id
+    $combo.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    $limit = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $item = (Get-CurrentWindow).FindFirst([Windows.Automation.TreeScope]::Descendants,
+            [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty, $itemName))
+        if ($null -ne $item) { break }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $limit)
-    throw "Practice-limit Apply did not confirm successful publication and recovery: $expected (observed $committed)"
+    if ($null -eq $item) { throw "Option is missing in ${id}: $itemName" }
+    $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    Start-Sleep -Milliseconds 200
+}
+function Open-Meter { Invoke-Control 'QuickMeter'; $null = Find-Control 'MeterCustom' }
+function Select-Meter([string]$preset, [string]$expectedName) {
+    Open-Meter
+    Invoke-Control "MeterPreset$preset"
+    Wait-Until { (Find-Control 'QuickMeter').Current.Name -like "*$expectedName*" } "Meter did not change to $expectedName."
+}
+function Test-Visible($rectangle, $bounds, [string]$what) {
+    if ($rectangle.IsEmpty -or -not $bounds.Contains($rectangle)) { throw "$what is not fully visible: $rectangle in $bounds" }
 }
 $deadline = [DateTime]::UtcNow.AddSeconds(20)
 do {
@@ -114,29 +191,31 @@ do {
 } while ([DateTime]::UtcNow -lt $deadline)
 if ($status.Current.Name -notlike 'Stopped*') { throw 'First-use initialization did not reach Stopped.' }
 $bounds = $window.Current.BoundingRectangle
+$primary = @('PhaseInstrument', 'TempoEdit', 'TempoDown', 'TapTempo', 'TempoUp', 'QuickMeter', 'MainSound', 'MainAccent0',
+    'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'TransportStop', 'EmergencyMute')
 $controls = @()
-foreach ($id in @('PhaseInstrument', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0', 'RhythmOptions',
-    'TempoOptions', 'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'EmergencyMute')) {
+foreach ($id in $primary) {
     $element = Find-Control $id
     $rect = $element.Current.BoundingRectangle
-    if ($element.Current.IsOffscreen -or $rect.IsEmpty -or -not $bounds.Contains($rect)) {
-        throw "Primary control is not visible in the first-use window: $id ($rect)"
-    }
-    if ($id -like 'MainAccent*' -and $rect.Height -lt 50) { throw "Pulse control is clipped: $id ($rect)" }
+    if ($element.Current.IsOffscreen) { throw "Primary control is offscreen in the first-use window: $id ($rect)" }
+    Test-Visible $rect $bounds "Primary control $id"
+    if ($id -like 'MainAccent*' -and $rect.Height -lt 50) { throw "Beat control is clipped: $id ($rect)" }
     $controls += @{id=$id;name=$element.Current.Name;visible=$true;width=$rect.Width;height=$rect.Height}
+}
+# One way to do each thing: the time signature has no second "Rhythm" button and tempo no second "Tempo" button.
+foreach ($duplicate in 'RhythmOptions', 'TempoOptions') {
+    if ($null -ne (Find-Optional $duplicate)) { throw "Duplicate entry point is present on the Play surface: $duplicate" }
 }
 $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
 if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
 $instrumentEvidence = Test-InstrumentHierarchy
 $resizeEvidence = @()
-$transform = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
 foreach ($size in @(@(800, 600), @(1000, 720))) {
-    $transform.Resize([double]$size[0], [double]$size[1])
+    Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 500
-    $currentBounds = $window.Current.BoundingRectangle
+    $currentBounds = (Get-CurrentWindow).Current.BoundingRectangle
     Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
-    foreach ($id in @('PhaseInstrument','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
-        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','AudioOptions')) {
+    foreach ($id in $primary) {
         $element = Find-Control $id
         $rect = $element.Current.BoundingRectangle
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($rect) -or
@@ -147,83 +226,154 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
     $composition = Test-InstrumentHierarchy
     $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true;instrument=$composition}
 }
-$transform.Resize(800, 600)
-Invoke-Control 'RhythmOptions'
-$originalGroups = (Find-Control 'MeterGroups').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
-Set-PracticeNumber 'MeterBeats' 64
-(Find-Control 'MeterGroups').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('')
-Invoke-Control 'ApplyPlaySettings'
+# Live-looking tempo: the readout answers immediately, Cancel discards, Done applies.
+Resize-To 800 600
+Start-Sleep -Milliseconds 500
+Invoke-Control 'TempoUp'
+Invoke-Control 'TempoUp'
+Wait-Until { (Get-Dial) -like '122*BPM*' } 'Tempo + did not change the BPM readout immediately.'
+Invoke-Control 'TempoDown'
+Invoke-Control 'TempoDown'
+Wait-Until { (Get-Dial) -like '120*BPM*' } 'Tempo - did not change the BPM readout immediately.'
+Invoke-Control 'TempoEdit'
+Set-Number 'Tempo' 77
+Invoke-Control 'TempoOptionsCancel'
+Wait-Absent 'TempoOptionsCancel'
+if ((Get-Dial) -notlike '120*BPM*') { throw 'Cancel applied a draft tempo.' }
+Invoke-Control 'TempoEdit'
+Set-Number 'Tempo' 90
+Invoke-Control 'TempoOptionsDone'
+Wait-Until { (Get-Dial) -like '90*BPM*' } 'Done did not apply the typed tempo.'
+Wait-Absent 'TempoOptionsDone'
+Invoke-Control 'TempoEdit'
+Set-Number 'Tempo' 120
+Invoke-Control 'TempoOptionsDone'
+Wait-Until { (Get-Dial) -like '120*BPM*' } 'The original tempo did not restore.'
+Wait-Absent 'TempoOptionsDone'
+# Beat strength: a tap changes only that beat, and the name says what it is now.
+$before = (Find-Control 'MainAccent1').Current.Name
+Invoke-Control 'MainAccent1'
+Wait-Until { (Find-Control 'MainAccent1').Current.Name -ne $before } 'Tapping a beat did not change its strength.'
+foreach ($tap in 1..3) { Invoke-Control 'MainAccent1' }
+Wait-Until { (Find-Control 'MainAccent1').Current.Name -eq $before } 'Four taps did not return the beat to its original strength.'
+# Time signature: sheet-music quick picks. Every written beat is one click (8/8 = eight beats, not four).
+$meterEvidence = @()
+foreach ($case in @(@('6_8', '6/8', 6), @('3_4', '3/4', 3), @('12_8', '12/8', 12), @('4_4', '4/4', 4))) {
+    Select-Meter $case[0] $case[1]
+    $last = $case[2] - 1
+    $null = Find-Control "MainAccent$last"
+    Wait-Absent "MainAccent$($case[2])"
+    $dialText = Get-Dial
+    if (($case[1] -in @('6/8', '12/8')) -and ($dialText -notlike '*BPM*Eighth*')) {
+        throw "A /8 meter must count eighth notes: $dialText"
+    }
+    $meterEvidence += @{meter=$case[1];beats=$case[2];dial=$dialText}
+}
+Wait-Until { (Get-Dial) -like '120*BPM*Quarter*' } 'Quarter-note BPM did not return with 4/4.'
+# The custom builder is the advanced path, behind the same control. 8/8 must give eight clicks, not four.
+Open-Meter
+Invoke-Control 'MeterCustom'
+Set-Number 'MeterBeats' 8
+Select-Combo 'MeterDenominator' 'Eighth note (8)'
+Set-Text 'MeterGroups' ''
+Invoke-Control 'RhythmOptionsDone'
+Wait-Absent 'RhythmOptionsDone'
+Wait-Until { (Find-Control 'QuickMeter').Current.Name -like '*8/8*' } 'The custom 8/8 meter was not applied.'
+$null = Find-Control 'MainAccent7'
+Wait-Absent 'MainAccent8'
+$dialText = Get-Dial
+if ($dialText -notlike '*BPM*Eighth*') { throw "Custom 8/8 must count eighth notes: $dialText" }
+$meterEvidence += @{meter='custom 8/8';beats=8;dial=$dialText}
+Open-Meter
+Invoke-Control 'MeterCustom'
+Set-Number 'MeterBeats' 64
+Set-Text 'MeterGroups' ''
+Invoke-Control 'RhythmOptionsDone'
+Wait-Absent 'RhythmOptionsDone'
 $lastPulse = Find-Control 'MainAccent63'
 Start-Sleep -Milliseconds 500
 Save-PlayScreenshot 'play-many-pulses.png'
-$manyPulseInstrument = Test-InstrumentHierarchy
-if ((Find-Control 'PlayScrollHint').Current.IsOffscreen) { throw 'Long pulse strip has no visible overflow cue.' }
-(Find-Control 'PulseAccentStrip').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).SetScrollPercent(-1, 100)
-Start-Sleep -Milliseconds 200
+$manyPulseInstrument = $null
+$hierarchy = Test-InstrumentHierarchy
+$manyPulseInstrument = $hierarchy
+if ((Find-Control 'PlayScrollHint').Current.IsOffscreen) { throw 'Long beat strip has no visible overflow cue.' }
+(Find-Control 'PulseAccentStrip').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).SetScrollPercent(100, -1)
+Start-Sleep -Milliseconds 300
 $lastPulse = Find-Control 'MainAccent63'
 if ($lastPulse.Current.IsOffscreen -or $lastPulse.Current.BoundingRectangle.Height -lt 50) {
-    throw 'The last pulse is not fully reachable in the bounded strip.'
+    throw 'The last beat is not fully reachable in the bounded strip.'
 }
-Invoke-Control 'RhythmOptions'
-Set-PracticeNumber 'MeterBeats' 4
-(Find-Control 'MeterGroups').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($originalGroups)
-Invoke-Control 'ApplyPlaySettings'
-$deadline = [DateTime]::UtcNow.AddSeconds(10)
-while ((Find-Control 'QuickMeter').Current.Name -notlike '*4/4*' -and [DateTime]::UtcNow -lt $deadline) {
-    Start-Sleep -Milliseconds 100
-}
-if ((Find-Control 'QuickMeter').Current.Name -notlike '*4/4*') { throw 'Meter did not restore after long-strip verification.' }
+Select-Meter '4_4' '4/4'
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 foreach ($size in @(@(400, 720), @(320, 900))) {
-    $transform.Resize([double]$size[0], [double]$size[1])
+    Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 500
-    $currentBounds = $window.Current.BoundingRectangle
+    $currentBounds = (Get-CurrentWindow).Current.BoundingRectangle
     Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
-    foreach ($id in 'TransportStartPause','TransportStop','EmergencyMute','AudioOptions') {
+    foreach ($id in 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions', 'TempoDown', 'TapTempo', 'TempoUp', 'QuickMeter') {
         $element = Find-Control $id
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
-            throw "Transport command is inaccessible at $($size[0])x$($size[1]): $id"
+            throw "Command is inaccessible at $($size[0])x$($size[1]): $id"
         }
     }
-    $quick = Find-Control 'PlayQuickControls'
-    [object]$quickPattern = $null
-    if ($quick.TryGetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern, [ref]$quickPattern) -and
-        $quickPattern.Current.VerticallyScrollable) { $quickPattern.SetScrollPercent(-1, 100) }
-    Start-Sleep -Milliseconds 200
     $soundControl = Find-Control 'MainSound'
     if ($soundControl.Current.IsOffscreen -or -not $currentBounds.Contains($soundControl.Current.BoundingRectangle) -or
         $soundControl.Current.BoundingRectangle.Height -lt 44) {
         throw "Sound selector is not fully reachable at $($size[0])x$($size[1])."
     }
-}
-$transform.Resize($bounds.Width, $bounds.Height)
-Start-Sleep -Milliseconds 500
-foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
-    @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'),
-    @('AudioOptions','AudioOutputPicker'))) {
-    Invoke-Control $option[0]
-    $element = Find-Control $option[1]
-    if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
-    if ($option[0] -eq 'TempoOptions') {
-        $tempoInput = Find-Control 'Tempo'
-        if ($tempoInput.Current.IsOffscreen) { throw 'Precise tempo input is not accessible in Tempo.' }
+    $firstBeat = Find-Control 'MainAccent0'
+    if ($firstBeat.Current.IsOffscreen -or -not $currentBounds.Contains($firstBeat.Current.BoundingRectangle)) {
+        throw "Beat strip is not reachable at $($size[0])x$($size[1])."
     }
-    if ($option[0] -eq 'AudioOptions' -and (Find-Control 'MasterGain').Current.IsOffscreen) {
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 500
+# Every panel: opens with its fields visible, and an emergency mute (Ctrl+M) works while it owns the keyboard.
+$panels = @(
+    @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
+    @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'},
+    @{open=@('TempoEdit');                  field='TempoUnit';         close='TempoOptionsCancel'; focus='TempoOptionsCancel'},
+    @{open=@('PracticeTimer');              field='PracticeSeconds';   close='PracticeTimerOptionsCancel'; focus='PracticeTimerOptionsCancel'},
+    @{open=@('ProjectOptions');             field='DocumentName';      close='ProjectOptionsPanelCancel'; focus='ProjectOptionsPanelCancel'},
+    @{open=@('PlayHelp');                   field='PlayHelpPanelDone'; close='PlayHelpPanelDone'; focus='PlayHelpPanelDone'},
+    @{open=@('AudioOptions');               field='AudioOutputPicker'; close='AudioOptionsClose'; focus='AudioOptionsClose'}
+)
+Add-Type -AssemblyName System.Windows.Forms
+# Keystrokes go to whichever window has the keyboard. Never send them unless the application owns it right now,
+# so a person working in another window can never receive them.
+function Send-CtrlM {
+    if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
+        throw 'Keyboard focus is not in the application; refusing to send Ctrl+M to another window.'
+    }
+    [Windows.Forms.SendKeys]::SendWait('^m')
+}
+foreach ($panel in $panels) {
+    foreach ($step in $panel.open) { Invoke-Control $step }
+    $element = Find-Control $panel.field
+    if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($panel.field)" }
+    if ($panel.open[0] -eq 'TempoEdit' -and (Find-Control 'Tempo').Current.IsOffscreen) {
+        throw 'Precise tempo input is not accessible in the tempo editor.'
+    }
+    if ($panel.open[0] -eq 'AudioOptions' -and (Find-Control 'MasterGain').Current.IsOffscreen) {
         throw 'Volume is not accessible in Audio.'
     }
-    Add-Type -AssemblyName System.Windows.Forms
-    $close = Find-Control ($option[0] + 'Close')
-    $close.SetFocus()
+    if ($panel.open[0] -ne 'AudioOptions' -and $panel.close -like '*Cancel' -and $null -eq (Find-Optional ($panel.close -replace 'Cancel$', 'Done'))) {
+        throw "Panel has no Done beside Cancel: $($panel.close)"
+    }
+    $focused = Find-Control $panel.focus
+    $focused.SetFocus()
     if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
         throw 'Popup shortcut verification does not own keyboard focus.'
     }
     $muteName = (Find-Control 'EmergencyMute').Current.Name
-    [Windows.Forms.SendKeys]::SendWait('^m')
+    Send-CtrlM
     Start-Sleep -Milliseconds 250
-    if ((Find-Control 'EmergencyMute').Current.Name -eq $muteName) { throw "Ctrl+M did not reach the popup: $($option[0])" }
-    [Windows.Forms.SendKeys]::SendWait('^m')
+    if ((Find-Control 'EmergencyMute').Current.Name -eq $muteName) { throw "Ctrl+M did not reach the popup: $($panel.field)" }
+    Send-CtrlM
     Start-Sleep -Milliseconds 250
-    if ((Find-Control 'EmergencyMute').Current.Name -ne $muteName) { throw "Ctrl+M did not restore mute state: $($option[0])" }
-    Invoke-Control ($option[0] + 'Close')
+    if ((Find-Control 'EmergencyMute').Current.Name -ne $muteName) { throw "Ctrl+M did not restore mute state: $($panel.field)" }
+    Invoke-Control $panel.close
+    Wait-Absent $panel.field
 }
 Invoke-Control 'AudioOptions'
 $picker = Find-Control 'AudioOutputPicker'
@@ -233,7 +383,13 @@ $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
 $liveSound = 'not-run-no-output'
-if ($selection.Count -eq 0) {
+$liveTempoAndMeter = 'not-run-no-output'
+if (-not $playAudio) {
+    $playback = 'not-run-audio-disabled'
+    $practiceStops = 'not-run-audio-disabled'
+    $liveSound = 'not-run-audio-disabled'
+    $liveTempoAndMeter = 'not-run-audio-disabled'
+} elseif ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
 } else {
     if (-not $start.Current.IsEnabled) { throw 'Start is disabled despite a selected output.' }
@@ -259,7 +415,7 @@ if ($selection.Count -eq 0) {
         $null = Wait-Transport 'Playing' $true
         $soundPicker = Find-Control 'MainSound'
         $soundPicker.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
-        $glass = $window.FindFirst([Windows.Automation.TreeScope]::Descendants,
+        $glass = (Get-CurrentWindow).FindFirst([Windows.Automation.TreeScope]::Descendants,
             [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'Glass'))
         if ($null -eq $glass) { throw 'Glass sound option is missing.' }
         $glass.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
@@ -278,11 +434,25 @@ if ($selection.Count -eq 0) {
                 if ($activeSound -like "sound=Glass;accents=$accent,*") { break }
                 Start-Sleep -Milliseconds 50
             } while ([DateTime]::UtcNow -lt $deadline)
-            if ($activeSound -notlike "sound=Glass;accents=$accent,*") { throw "Pulse choice did not reach active audio: $accent" }
-            if ($activeSound -notmatch ';manual=0(?:,|$)') { throw 'Manual accent precedence did not reach active audio.' }
+            if ($activeSound -notlike "sound=Glass;accents=$accent,*") { throw "Beat choice did not reach active audio: $accent" }
+            if ($activeSound -notmatch ';manual=0(?:,|;|$)') { throw 'Manual accent precedence did not reach active audio.' }
             if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live sound edit interrupted playback.' }
         }
-        $liveSound = 'sound-and-all-four-pulse-choices-published-without-stop'
+        $liveSound = 'sound-and-all-four-beat-choices-published-without-stop'
+        # Tempo and time signature are live too: the active revision follows without Stop.
+        Invoke-Control 'TempoUp'
+        Invoke-Control 'TempoUp'
+        Invoke-Control 'TempoUp'
+        Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;tempo=123;*' } 'Live tempo never reached the active audio revision.' 15
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live tempo edit interrupted playback.' }
+        Select-Meter '3_4' '3/4'
+        Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;meter=3/4' } 'Live meter never reached the active audio revision.' 15
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live meter edit interrupted playback.' }
+        $liveTempoAndMeter = 'tempo-and-meter-published-without-stop'
+        Select-Meter '4_4' '4/4'
+        Invoke-Control 'TempoDown'
+        Invoke-Control 'TempoDown'
+        Invoke-Control 'TempoDown'
     } finally {
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
             Invoke-Control 'TransportStop'
@@ -340,8 +510,6 @@ if ($selection.Count -eq 0) {
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;manyPulseInstrument=$manyPulseInstrument;
-  liveSound=$liveSound;popupShortcuts='ctrl-m-in-all-six-panels';
+  meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;popupShortcuts='ctrl-m-in-all-seven-panels';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
-Write-Output "First-use controls are visible; playback result: $playback"
-Write-Output "Practice stop result: $practiceStops"

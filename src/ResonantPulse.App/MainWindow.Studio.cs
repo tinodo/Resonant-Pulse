@@ -21,7 +21,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < _document.Lanes.Count; index++)
             panel.Children.Add(BuildLaneEditor(index));
         panel.Children.Add(BuildGenerator());
-        var seed = Number("Seed", "DocumentSeed", _document.Seed, int.MinValue, int.MaxValue);
+        var seed = NumberInt("Seed", "DocumentSeed", _document.Seed, int.MinValue, int.MaxValue);
         panel.Children.Add(seed);
         panel.Children.Add(EditorActionButton("Apply", "ApplySeed", async () =>
         {
@@ -67,7 +67,7 @@ public sealed partial class MainWindow
         var lane = _document.Lanes[index];
         var id = $"Lane{index}";
         var name = Input("Name", id + "Name", lane.Name);
-        var pulses = Number("Pulses", id + "Pulses", lane.Pulses, 1, 256);
+        var pulses = NumberInt("Pulses", id + "Pulses", lane.Pulses, 1, 256);
         pulses.IsEnabled = lane.Events.Count == 0;
         var cycle = Number("Cycle", id + "Cycle", lane.CycleQuarters, 1d / 1024, 4096, 0.125);
         var offset = Number("Offset", id + "Offset", lane.OffsetQuarters, -4096, 4096, 0.125);
@@ -190,13 +190,13 @@ public sealed partial class MainWindow
         var name = Input("Name", id + "Name", step.Name);
         var start = Number("StartTempo", id + "StartTempo", step.StartTempo, 1, 1000, 0.1);
         var end = Number("EndTempo", id + "EndTempo", step.EndTempo, 1, 1000, 0.1);
-        var bars = Number("Bars", id + "Bars", step.Bars, 1, 100000);
-        var repeats = Number("Repeats", id + "Repeats", step.Repeats, 1, 1024);
+        var bars = NumberInt("Bars", id + "Bars", step.Bars, 1, 100000);
+        var repeats = NumberInt("Repeats", id + "Repeats", step.Repeats, 1, 1024);
         var ramp = Select("Ramp", id + "Ramp", step.Ramp, "Constant", "LinearTime", "LinearBeat");
-        var beats = Number("Beats", id + "Beats", step.BeatsPerBar, 1, 64);
+        var beats = NumberInt("Beats", id + "Beats", step.BeatsPerBar, 1, 64);
         var denominator = Select("Denominator", id + "Denominator", step.BeatDenominator.ToString(CultureInfo.InvariantCulture), "1", "2", "4", "8", "16", "32", "64");
-        var audible = Number("AudibleBars", id + "Audible", step.AudibleBars, 0, 100000);
-        var silent = Number("SilentBars", id + "Silent", step.SilentBars, 0, 100000);
+        var audible = NumberInt("AudibleBars", id + "Audible", step.AudibleBars, 0, 100000);
+        var silent = NumberInt("SilentBars", id + "Silent", step.SilentBars, 0, 100000);
         var content = Column(Flow(name, start, end, bars, repeats, ramp, beats, denominator, audible, silent),
             CommandFlow(EditorActionButton("Apply", id + "Apply", async () =>
             {

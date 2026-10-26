@@ -42,7 +42,7 @@ public sealed partial class MainWindow
         });
         reduced.Checked += SaveMotion;
         reduced.Unchecked += SaveMotion;
-        var bars = Number("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
+        var bars = NumberInt("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
         var panel = Column(Heading(Text.Get("Settings")), Flow(language, theme), reduced,
             Heading(Text.Get("Output")), Copy("OutputPolicy"),
             bars,
