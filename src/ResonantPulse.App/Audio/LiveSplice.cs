@@ -169,8 +169,14 @@ internal static class LiveSplice
         }
         var boundary = timeline.SwitchFrame;
         var before = (int)Math.Clamp(boundary - cursor, 0, frameCount);
-        // The old revision's deadline lies after the boundary (a splice never fires past it) and is superseded.
-        if (before > 0) RenderPieces(samples[..(before * 2)], previous, cursor, before, gain, muted, null, null, true);
+        if (before > 0)
+        {
+            // Everything before the boundary is still the old revision's: it keeps its stop fade too, so a splice
+            // never changes audio it had already committed to play. After the boundary the new deadline governs.
+            var head = samples[..(before * 2)];
+            RenderPieces(head, previous, cursor, before, gain, muted, null, null, true);
+            FadeAtDeadline(head, previous, cursor);
+        }
         var start = cursor + before;
         var count = RenderActive(samples[(before * 2)..], active, start, frameCount - before, gain, muted,
             boundary + active.Shift, false);

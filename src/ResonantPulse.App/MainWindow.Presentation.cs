@@ -33,9 +33,10 @@ public sealed partial class MainWindow
             Groups = meterBeats == settings.BeatsPerBar && meterDenominator == settings.BeatDenominator ? settings.Groups : []
         };
         var phase = position is null ? 0 : (position.BeatIndex + position.BeatPhase) / meterBeats;
-        // The readout shows what the player asked for; the audible revision follows at the next click.
-        var tempo = _document.Program.Count == 0 ? _tempoRequested ?? _document.Settings.Tempo
-            : position?.Tempo ?? settings.Tempo;
+        // The readout shows what the player asked for while nothing plays a program; otherwise the audible tempo, so a
+        // running program (or a running open-ended revision) is not misreported after a Studio edit changes the document.
+        var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoRequested,
+            _document.Settings.Tempo, position?.Tempo, settings.Tempo);
         _instrument?.Present(shownSettings, tempo, phase, plan, frame, blind, _preferences.IsReducedMotion);
         if (_tempoEdit is { } tempoEdit)
         {

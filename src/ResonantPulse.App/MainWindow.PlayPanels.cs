@@ -61,12 +61,15 @@ public sealed partial class MainWindow
         panel.KeyDown += OnKeyDown;
 
         var flyout = new Flyout { Content = panel };
+        var isOpen = false;
         flyout.Opening += (_, _) =>
         {
             SizeOptionsFlyout(flyout, panel, scroll);
             error.Visibility = Visibility.Collapsed;
             populate?.Invoke();
         };
+        flyout.Opened += (_, _) => isOpen = true;
+        flyout.Closed += (_, _) => isOpen = false;
         if (cancel is not null) cancel.Click += (_, _) => flyout.Hide();
         done.Click += async (_, _) =>
         {
@@ -78,8 +81,14 @@ public sealed partial class MainWindow
             catch (Exception exception)
             {
                 Diagnostics.Write("Option panel", exception);
-                error.Text = ErrorText.Explain(exception);
-                error.Visibility = Visibility.Visible;
+                if (isOpen)
+                {
+                    error.Text = ErrorText.Explain(exception);
+                    error.Visibility = Visibility.Visible;
+                }
+                // Dismissed (or the page rebuilt) while the change was being applied: an inline message would be
+                // on a hidden panel, so the failure goes to the window-level notice instead.
+                else if (!_isClosed) ShowError(exception);
             }
         };
         return new OptionPanel(flyout);
