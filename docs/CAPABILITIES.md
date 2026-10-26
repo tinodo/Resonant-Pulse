@@ -33,7 +33,9 @@ Explicit pulse edits take precedence over automatic grouping emphasis only for
 edited slots; unedited boundaries retain their phase across bars. Per-slot
 `ManualAccentIndices` and the explicit All Normal override are saved in projects.
 Count-in still uses its own cue accents; structural tempo/rhythm edits still
-require Stop + Start. Source/native/release evidence for this repair is pending.
+require Stop + Start. Revision-specific source, native and review evidence is
+recorded in [PR 14](https://github.com/tinodo/Resonant-Pulse/pull/14); release
+downloads identify the delivered source. Preview.3 predates this repair.
 
 First use resolves the Windows default render endpoint, rather than taking the
 first enumerated device. The selection is then remembered. Losing a saved device

@@ -57,6 +57,9 @@ public sealed class PlaybackRevision
 internal sealed record RetainedPlayback(PlaybackRevision Active, PlaybackRevision? Previous,
     PlaybackRevision? Pending, long SwitchFrame, long ProcessedFrame)
 {
+    public static bool HasProcessedTail(long processedFrame, long switchFrame, int sampleRate) =>
+        processedFrame >= switchFrame && processedFrame - switchFrame >= (long)Math.Ceiling(sampleRate * 0.05);
+
     public RetainedPlayback Rebuild(int sampleRate)
     {
         var previousRate = Active.Initial.SampleRate;

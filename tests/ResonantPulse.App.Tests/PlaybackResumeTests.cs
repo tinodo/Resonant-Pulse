@@ -73,4 +73,46 @@ public sealed class PlaybackResumeTests
         for (int index = 0; index < baseline.Length; index++)
             Assert.AreEqual(baseline[index], Math.Clamp(before[index] + after[index], -1f, 1f));
     }
+
+    [TestMethod]
+    [DataRow(8000, 8000, false)]
+    [DataRow(8000, 16000, false)]
+    [DataRow(48000, 44100, false)]
+    [DataRow(8000, 8000, true)]
+    [DataRow(8000, 16000, true)]
+    [DataRow(48000, 44100, true)]
+    public void RenderedAheadTailIsRetainedForReopeningFromCompletedCursor(int oldRate, int newRate, bool wasSilent)
+    {
+        var boundary = oldRate / 100;
+        var processed = boundary + oldRate / 500;
+        var rendered = boundary + oldRate / 20 + 128;
+        Assert.IsTrue(RetainedPlayback.HasProcessedTail(rendered, boundary, oldRate));
+        Assert.IsFalse(RetainedPlayback.HasProcessedTail(processed, boundary, oldRate));
+        var state = new RetainedPlayback(
+            Revision("Glass", oldRate, wasSilent ? Accent.Normal : Accent.Silent),
+            Revision("Wood", oldRate, wasSilent ? Accent.Silent : Accent.Normal),
+            null, boundary, processed);
+        var resumed = state.Rebuild(newRate);
+        var previous = resumed.Previous;
+        Assert.IsNotNull(previous);
+        float[] before = new float[256], after = new float[256], baseline = new float[256];
+        PcmRenderer.Fill(before, previous.Initial, resumed.ProcessedFrame, loop: false,
+            attacksBeforeFrame: resumed.SwitchFrame, limitPeaks: false);
+        PcmRenderer.Fill(after, resumed.Active.Initial, resumed.ProcessedFrame, loop: false,
+            attacksFromFrame: resumed.SwitchFrame, limitPeaks: false);
+        PcmRenderer.Fill(baseline, previous.Initial, resumed.ProcessedFrame, loop: false);
+        Assert.AreEqual(wasSilent, baseline.All(sample => sample == 0));
+        for (int index = 0; index < baseline.Length; index++)
+            Assert.AreEqual(baseline[index], Math.Clamp(before[index] + after[index], -1f, 1f));
+    }
+
+    [TestMethod]
+    public void RetirementRequiresTheExactProcessedTailHorizon()
+    {
+        const long boundary = 12345, horizon = boundary + 2400;
+        Assert.IsFalse(RetainedPlayback.HasProcessedTail(boundary - 1, boundary, 48000));
+        Assert.IsFalse(RetainedPlayback.HasProcessedTail(horizon - 1, boundary, 48000));
+        Assert.IsTrue(RetainedPlayback.HasProcessedTail(horizon, boundary, 48000));
+        Assert.IsTrue(RetainedPlayback.HasProcessedTail(horizon + 1, boundary, 48000));
+    }
 }

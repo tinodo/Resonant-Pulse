@@ -257,7 +257,8 @@ public sealed class AudioTransport : IDisposable
         var cursor = Interlocked.Read(ref _renderFrame);
         var gain = Gain;
         var muted = IsMuted;
-        if (_previousSound is not null && cursor >= _soundSwitchFrame + (long)Math.Ceiling(revision.Initial.SampleRate * 0.05))
+        if (_previousSound is { } retiring &&
+            RetainedPlayback.HasProcessedTail(Interlocked.Read(ref _processedFrame), _soundSwitchFrame, retiring.Initial.SampleRate))
             _previousSound = null;
         if (_previousSound is null && Interlocked.Exchange(ref _pendingSound, null) is { } replacement)
         {
