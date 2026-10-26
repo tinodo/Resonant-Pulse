@@ -161,7 +161,7 @@ public sealed partial class MainWindow : Window
                     false, editorChange: EditorChangeKind.MasterGainOnly));
         };
         Root.KeyDown += OnKeyDown;
-        Root.ActualThemeChanged += (_, _) => { RefreshInstrumentTheme(); ApplyCaptionTheme(); };
+        Root.ActualThemeChanged += (_, _) => RefreshInstrumentTheme();
         Root.Loaded += async (_, _) =>
         {
             if (_isReady) return;
@@ -486,9 +486,22 @@ public sealed partial class MainWindow : Window
 
     private void ApplyCaptionTheme()
     {
-        var foreground = Root.ActualTheme == ElementTheme.Light ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
-        AppWindow.TitleBar.ButtonForegroundColor = foreground;
-        AppWindow.TitleBar.ButtonInactiveForegroundColor = foreground;
+        var bar = AppWindow.TitleBar;
+        var palette = CaptionPalettes.Choose(ThemeBrushes.IsHighContrast, Root.ActualTheme == ElementTheme.Light);
+        if (palette == CaptionPalette.System)
+        {
+            // A null color restores the system default, which a Contrast theme pairs legibly.
+            bar.ButtonForegroundColor = null;
+            bar.ButtonInactiveForegroundColor = null;
+            bar.ButtonBackgroundColor = null;
+            bar.ButtonInactiveBackgroundColor = null;
+            return;
+        }
+        var foreground = palette == CaptionPalette.DarkOnLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+        bar.ButtonForegroundColor = foreground;
+        bar.ButtonInactiveForegroundColor = foreground;
+        bar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        bar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
     }
 
     private static void Identify(DependencyObject control, string id, string name)

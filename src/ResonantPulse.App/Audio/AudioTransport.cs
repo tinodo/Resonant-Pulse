@@ -72,6 +72,14 @@ public sealed class AudioTransport : IDisposable
     private int _generation;
     private int _soundSessionGeneration;
     private bool _isDisposed;
+    private readonly Func<long> _readProcessed;
+    private readonly Func<LiveTimeline?> _readTimeline;
+
+    public AudioTransport()
+    {
+        _readProcessed = () => Interlocked.Read(ref _processedFrame);
+        _readTimeline = () => Volatile.Read(ref _timeline);
+    }
 
     public event EventHandler<Exception>? Failed;
     public TransportState State => (TransportState)Volatile.Read(ref _state);
@@ -277,10 +285,9 @@ public sealed class AudioTransport : IDisposable
     {
         if (State == TransportState.Playing && Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastQuantumTimestamp)).TotalSeconds > 4)
             ReportFault(new InvalidOperationException(Text.Get("AudioError")));
-        // Processed first: a splice is published before the frame that contains it can complete, so the
-        // timeline read afterwards is never older than what the processed cursor has already heard.
-        var processed = Interlocked.Read(ref _processedFrame);
-        var timeline = Volatile.Read(ref _timeline);
+        // The processed cursor and the timeline are published independently: retry until a timeline was read while that
+        // cursor was current, so a pre-splice frame is never mapped onto the new revision after the old one retires.
+        var (processed, timeline) = ConsistentRead.Read(_readProcessed, _readTimeline);
         var state = State;
         var render = Interlocked.Read(ref _renderFrame);
         if (timeline is null) return new(state, render, processed, processed, null, null, IsMuted);

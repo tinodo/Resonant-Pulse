@@ -21,8 +21,8 @@ internal readonly record struct PresentedPosition(PlaybackRevision Revision, Ren
 /// </para>
 /// <para>
 /// <b>Mixing.</b> Frames before B come from the old revision, frames from B on from the new one plus the ringing tails
-/// of old attacks that started before B; new attacks before B never sound. Both partitions are summed unclipped and
-/// clamped once.
+/// of old attacks that started before B; new attacks before B never sound. The new revision's gap mask silences those
+/// tails too, as it would any ringing click. Both partitions are summed unclipped and clamped once.
 /// </para>
 /// </summary>
 internal static class LiveSplice
@@ -184,10 +184,37 @@ internal static class LiveSplice
         var tail = scratch[..(count * 2)];
         tail.Clear();
         RenderPieces(tail, previous, start, count, gain, muted, null, boundary + previous.Shift, false);
+        // A gap is an output mask: tails ringing out of the old revision must not leak into a bar the new one keeps silent.
+        MaskSilence(tail, active, start, count);
         var mixed = samples.Slice(before * 2, count * 2);
         for (var index = 0; index < mixed.Length; index++)
             mixed[index] = Math.Clamp(mixed[index] + tail[index], -1f, 1f);
         FadeAtDeadline(mixed, active, start);
+    }
+
+    /// <summary>
+    /// Applies the gap mask of <paramref name="revision"/> to absolute frames [start, start + frames) of an interleaved
+    /// stereo buffer, piecewise across its Initial/Body seam like <see cref="RenderPieces"/>.
+    /// </summary>
+    private static void MaskSilence(Span<float> stereo, PlaybackRevision revision, long start, int frames)
+    {
+        var done = 0;
+        while (done < frames)
+        {
+            var own = revision.ToOwn(start + done);
+            if (own < 0)
+            {
+                done += (int)Math.Min(-own, frames - done);
+                continue;
+            }
+            var initial = own < revision.Initial.TotalFrames;
+            if (!initial && revision.IsFinite) break;
+            var plan = initial ? revision.Initial : revision.Body;
+            var local = initial ? own : (own - revision.Initial.TotalFrames) % plan.TotalFrames;
+            var count = (int)Math.Min(frames - done, plan.TotalFrames - local);
+            PcmRenderer.ApplyGapMask(stereo.Slice(done * 2, count * 2), plan, local, 2, false);
+            done += count;
+        }
     }
 
     private static int RenderActive(Span<float> destination, PlaybackRevision revision, long start, int frames,
