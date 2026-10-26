@@ -264,8 +264,14 @@ public sealed class WaveStemExporterTests
         using var temp = new TempDirectory();
         string path = temp.File("locked.zip");
         await File.WriteAllTextAsync(path, "retained");
+        Exception? failure = null;
         using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-            await Check.ThrowsAsync<IOException>(() => WaveStemExporter.ExportAsync(path, Check.Plan(), []));
+        {
+            try { await WaveStemExporter.ExportAsync(path, Check.Plan(), []); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { failure = error; }
+        }
+        Assert.IsNotNull(failure, "A destination without delete sharing must not be replaced.");
+        Assert.IsTrue((failure.HResult & 0xFFFF) is 5 or 32 or 33, failure.Message);
         Assert.AreEqual("retained", await File.ReadAllTextAsync(path));
         Assert.AreEqual(1, Directory.GetFiles(temp.Root).Length);
         temp.NoTemps();

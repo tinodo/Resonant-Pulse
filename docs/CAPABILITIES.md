@@ -192,5 +192,5 @@ even when there are no performer targets. The existing mixed-WAV and stem
 paths share the same streaming PCM16 writer.
 The UI confirms track count/uncompressed size before choosing a ZIP. Per-track
 peak protection and PCM16 rounding do not promise bit-identical recombination.
-Hosted tests/native control exposure, actual file-picker/DAW behavior and
+Hosted tests/native preflight confirmation/cancellation, actual file-picker/DAW behavior and
 public delivery are not yet established for this addition.
