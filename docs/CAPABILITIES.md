@@ -153,4 +153,31 @@ than implying a uniquely correct musical classification. Bands use the
 background, not an interoperability standard; the extreme bands cover the app's
 1..1000 range, and Larghissimo reaches 25 to cover fractional input continuously.
 Beat unit and musical context remain explicit. Five-language guidance includes
-invalid numeric entry feedback. Hosted and native guide evidence is pending.
+invalid numeric entry feedback.
+Source `be14ac3` passed hosted
+[run 40262883080](https://github.com/tinodo/Resonant-Pulse/actions/runs/40262883080):
+224 Core passes of 228 cases (four platform skips), 148 App passes and Windows
+x64/ARM64 build/package gates. The hosted first-use report exposed initial
+overlapping guide names; its audio/count/tap-in scenarios explicitly reported
+`not-run-no-output`. CodeQL 40262883059 passed. Manually requested Copilot
+review 5646968834 reported no open issues. The main-only review-completion
+gate correctly skipped this stacked base; it must pass afresh after retargeting.
+This is neither real-output guide acceptance nor delivery.
+
+A read-only Help destination is being added on the next stacked branch, not
+delivered in preview.3. It preserves the Play layout and shared transport and
+offers quick-start and musical-reference text in all five languages. It is not
+a new audio engine, automatic exercise or capture workflow. The hosted native
+check visits Help, reads accessible guidance, returns to Play and requires the
+stopped transport and idle tap-in state to remain unchanged.
+Source `e256221` passed hosted
+[run 40264310332](https://github.com/tinodo/Resonant-Pulse/actions/runs/40264310332):
+224 Core passes of 228 cases (four platform skips), 149 App passes and Windows
+x64/ARM64 build/package gates. The native report records
+`help=read-only-help-navigation-no-automatic-start` and initial tempo-guide
+exposure; playback/count/tap-in scenarios explicitly report `not-run-no-output`.
+CodeQL 40264310378 passed. Manually requested Copilot review 5647035183 reported
+no open issues, while retaining the prerequisite native/human acceptance caveat.
+The main-only review-completion gate correctly skipped this stacked base and
+must pass afresh after retargeting. This is hosted Help navigation evidence,
+not real-output, full accessibility/visual acceptance or public delivery.
