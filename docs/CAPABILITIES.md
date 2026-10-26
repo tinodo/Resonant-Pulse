@@ -25,8 +25,9 @@ not a signed Store release.
 Play makes the large, centered metronome and integrated BPM readout the primary
 surface. Its square geometry scales to the available performance area. Numeric
 tempo entry and audio setup are secondary panels, not competing large forms.
-The fixed settings header, compact transport and inline tap/meter/sound controls
-remain accessible. Long pulse grids have their own bounded scroll strip and cue.
+The secondary settings rail (a scrolling horizontal strip at narrow widths),
+compact transport and inline tap/meter/sound controls remain accessible.
+Long pulse grids have their own bounded scroll strip and inline overflow cue.
 Sound/pulse-only edits prepare immutable replacement plans off the callback,
 publish at a subsequent audio quantum and preserve prior attack tails. They
 retain the current cursor, loop, count-in, program and stop boundaries.

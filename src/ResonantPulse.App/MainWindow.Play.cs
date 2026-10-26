@@ -73,11 +73,14 @@ public sealed partial class MainWindow
         });
         var hero = new Grid();
         hero.Children.Add(instrument);
-        hero.SizeChanged += (_, args) =>
+        var settingsDocked = false;
+        void SizeInstrument()
         {
-            var size = Math.Clamp(Math.Min(args.NewSize.Width, args.NewSize.Height), 0, 560);
+            var width = hero.ActualWidth - (settingsDocked ? 272 : 0);
+            var size = Math.Clamp(Math.Min(width, hero.ActualHeight), 0, 560);
             instrument.Width = instrument.Height = size;
-        };
+        }
+        hero.SizeChanged += (_, _) => SizeInstrument();
         var beats = Number("Beats", "MeterBeats", settings.BeatsPerBar, 1, 64);
         var denominator = Select("Denominator", "MeterDenominator", settings.BeatDenominator.ToString(), "1", "2", "4", "8", "16", "32", "64");
         var groups = Input("Groups", "MeterGroups", string.Join("+", settings.Groups));
@@ -266,15 +269,14 @@ public sealed partial class MainWindow
         var quickScroll = Scroll(quick);
         Identify(quickScroll, "PlayQuickControls", Text.Get("Settings"));
         var scroll = Scroll(accents);
-        scroll.MaxHeight = 60 * new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
+        var textScale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
+        scroll.MaxHeight = 60 * textScale;
         Identify(scroll, "PulseAccentStrip", Text.Get("PulseStrengths"));
-        var cue = Copy("ScrollControlsHint");
-        Identify(cue, "PlayScrollHint", cue.Text);
+        var cue = Copy("MorePulses");
+        cue.Width = 100;
+        cue.VerticalAlignment = VerticalAlignment.Center;
+        Identify(cue, "PlayScrollHint", Text.Get("ScrollControlsHint"));
         cue.Visibility = Visibility.Collapsed;
-        scroll.LayoutUpdated += (_, _) =>
-        {
-            cue.Visibility = scroll.ScrollableHeight > 1 ? Visibility.Visible : Visibility.Collapsed;
-        };
         var shortcuts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var command in new[] { rhythmOptions, tempoOptions, practice, project, help })
         {
@@ -288,27 +290,51 @@ public sealed partial class MainWindow
             VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
         Identify(settingsScroll, "PlaySettingsStrip", Text.Get("Settings"));
-        var pulseControls = new StackPanel { Spacing = 8 };
+        var pulseControls = new Grid();
+        pulseControls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        pulseControls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         pulseControls.Children.Add(scroll);
+        Grid.SetColumn(cue, 1);
         pulseControls.Children.Add(cue);
+        scroll.LayoutUpdated += (_, _) =>
+        {
+            // The hint must not create the overflow that keeps itself visible.
+            var unhintedWidth = Math.Min(560, Math.Max(0, pulseControls.ActualWidth - 16));
+            var overflow = accentButtons.Count > FlowColumns(unhintedWidth, 120, textScale, accentButtons.Count);
+            cue.Visibility = overflow ? Visibility.Visible : Visibility.Collapsed;
+            pulseControls.ColumnSpacing = overflow ? 12 : 0;
+        };
+        scroll.SizeChanged += (_, args) =>
+            accents.Width = Math.Min(Math.Min(560, accentButtons.Count * 140), Math.Max(0, args.NewSize.Width - 16));
         var page = new Grid { RowSpacing = 8 };
         page.SizeChanged += (_, args) =>
         {
-            accents.Width = Math.Min(Math.Min(560, accentButtons.Count * 140), Math.Max(0, args.NewSize.Width - 16));
+            settingsDocked = args.NewSize.Width >= 620;
+            shortcuts.Orientation = settingsDocked ? Orientation.Vertical : Orientation.Horizontal;
+            shortcuts.Spacing = settingsDocked ? 6 : 8;
+            settingsScroll.Width = settingsDocked ? 120 : double.NaN;
+            settingsScroll.HorizontalAlignment = settingsDocked ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
+            settingsScroll.VerticalAlignment = settingsDocked ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+            settingsScroll.HorizontalScrollMode = settingsDocked ? ScrollMode.Disabled : ScrollMode.Enabled;
+            settingsScroll.HorizontalScrollBarVisibility = settingsDocked ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+            settingsScroll.VerticalScrollMode = settingsDocked ? ScrollMode.Enabled : ScrollMode.Disabled;
+            settingsScroll.VerticalScrollBarVisibility = settingsDocked ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+            Grid.SetRow(settingsScroll, settingsDocked ? 1 : 0);
             quick.Orientation = args.NewSize.Width < 620 ? Orientation.Vertical : Orientation.Horizontal;
             meterSound.Orientation = args.NewSize.Width < 360 ? Orientation.Vertical : Orientation.Horizontal;
             quickScroll.MaxHeight = args.NewSize.Width < 620 ? 116 : double.PositiveInfinity;
             tempoCommands.HorizontalAlignment = HorizontalAlignment.Center;
             meterSound.HorizontalAlignment = HorizontalAlignment.Center;
             soundField.HorizontalAlignment = HorizontalAlignment.Center;
+            SizeInstrument();
         };
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        page.Children.Add(settingsScroll);
         Grid.SetRow(hero, 1);
         page.Children.Add(hero);
+        page.Children.Add(settingsScroll);
         Grid.SetRow(quickScroll, 2);
         page.Children.Add(quickScroll);
         Grid.SetRow(pulseControls, 3);

@@ -68,7 +68,7 @@ public sealed class LiveSoundEditsTests
                 Text.Select(language);
                 foreach (string key in new[] { "RhythmTab", "TempoTab", "PracticeTab", "ProjectTab",
                     "HelpTab", "CloseOptions", "ScrollControlsHint", "LiveSoundHint", "PulseNumber", "SoundSessionChanged",
-                    "AudioOptions", "AudioOptionsHelp", "PulseStrengths" })
+                    "AudioOptions", "AudioOptionsHelp", "PulseStrengths", "MorePulses" })
                     Assert.AreNotEqual(key, Text.Get(key), $"{language}/{key}");
             }
         }

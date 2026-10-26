@@ -93,6 +93,9 @@ jobs:
             artifacts/startup.png
             artifacts/play-800x600.png
             artifacts/play-1000x720.png
+            artifacts/play-many-pulses.png
+            artifacts/play-400x720.png
+            artifacts/play-320x900.png
             artifacts/application-stdout.log
             artifacts/application-stderr.log
             artifacts/native-app.log

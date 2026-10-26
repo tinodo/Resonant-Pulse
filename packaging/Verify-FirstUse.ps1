@@ -49,6 +49,18 @@ function Test-InstrumentHierarchy {
     if ($value -notlike '120.0*BPM*') { throw "The main metronome does not present the tempo: $value" }
     return @{width=$dial.Width;height=$dial.Height;centerError=$centerError;value=$value}
 }
+function Save-PlayScreenshot([string]$name) {
+    Add-Type -AssemblyName System.Drawing
+    $rect = $window.Current.BoundingRectangle
+    $bitmap = [Drawing.Bitmap]::new([int]$rect.Width, [int]$rect.Height)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $origin = [Drawing.Point]::new([Math]::Max(0, [int]$rect.X), [Math]::Max(0, [int]$rect.Y))
+        $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
+        $image = Join-Path (Split-Path -Parent $ReportPath) $name
+        $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
 function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     $limit = [DateTime]::UtcNow.AddSeconds(65)
     do {
@@ -122,15 +134,7 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
     $transform.Resize([double]$size[0], [double]$size[1])
     Start-Sleep -Milliseconds 500
     $currentBounds = $window.Current.BoundingRectangle
-    Add-Type -AssemblyName System.Drawing
-    $bitmap = [Drawing.Bitmap]::new([int]$currentBounds.Width, [int]$currentBounds.Height)
-    $graphics = [Drawing.Graphics]::FromImage($bitmap)
-    try {
-        $origin = [Drawing.Point]::new([Math]::Max(0, [int]$currentBounds.X), [Math]::Max(0, [int]$currentBounds.Y))
-        $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
-        $image = Join-Path (Split-Path -Parent $ReportPath) "play-$($size[0])x$($size[1]).png"
-        $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
-    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+    Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
     foreach ($id in @('PhaseInstrument','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
         'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','AudioOptions')) {
         $element = Find-Control $id
@@ -151,6 +155,7 @@ Set-PracticeNumber 'MeterBeats' 64
 Invoke-Control 'ApplyPlaySettings'
 $lastPulse = Find-Control 'MainAccent63'
 Start-Sleep -Milliseconds 500
+Save-PlayScreenshot 'play-many-pulses.png'
 $manyPulseInstrument = Test-InstrumentHierarchy
 if ((Find-Control 'PlayScrollHint').Current.IsOffscreen) { throw 'Long pulse strip has no visible overflow cue.' }
 (Find-Control 'PulseAccentStrip').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).SetScrollPercent(-1, 100)
@@ -172,6 +177,7 @@ foreach ($size in @(@(400, 720), @(320, 900))) {
     $transform.Resize([double]$size[0], [double]$size[1])
     Start-Sleep -Milliseconds 500
     $currentBounds = $window.Current.BoundingRectangle
+    Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
     foreach ($id in 'TransportStartPause','TransportStop','EmergencyMute','AudioOptions') {
         $element = Find-Control $id
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
