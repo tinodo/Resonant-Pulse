@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Numerics;
 using System.Diagnostics;
 using ResonantPulse.App.Localization;
 using ResonantPulse.App.Storage;
@@ -23,55 +22,6 @@ public sealed record TransportSnapshot(
 {
     public long PositionFrame => PlaybackDeadline.PositionFrame(ProcessedFrame, Revision?.EndFrame,
         State == TransportState.Completed);
-}
-
-/// <summary>Immutable, prepared off the real-time callback. No UI document is
-/// shared with the renderer. Initial count-in is never repeated by the loop.</summary>
-public sealed class PlaybackRevision
-{
-    public PulseDocument Document { get; }
-    public RenderPlan Initial { get; }
-    public RenderPlan Body { get; }
-    public bool IsFinite => Document.Program.Count > 0;
-    public long CountInFrames => Initial.CountInFrames;
-    public long? EndFrame { get; }
-    public bool HasPracticeLimit => PlaybackDeadline.IsEnabled(Document.Settings);
-
-    public PlaybackRevision(PulseDocument source, int sampleRate)
-    {
-        Document = LocalWorkspace.Clone(source);
-        var bars = LoopBars(Document);
-        Initial = ScheduleCompiler.Compile(Document, sampleRate, bars, true);
-        Body = ScheduleCompiler.Compile(Document, sampleRate, bars, false);
-        if (Initial.TotalFrames <= 0 || Body.TotalFrames <= 0)
-            throw new ArgumentException("The compiled rhythm has no duration.");
-        EndFrame = PlaybackDeadline.Resolve(Initial, Body, Document.Settings, IsFinite);
-        // Warm any lazily initialized renderer caches here, never in QuantumStarted.
-        Span<float> warmup = stackalloc float[2];
-        PcmRenderer.Fill(warmup, Initial, 0, 2, 0, false, false);
-        PcmRenderer.Fill(warmup, Body, 0, 2, 0, false, false);
-    }
-
-    private static int LoopBars(PulseDocument document)
-    {
-        if (document.Program.Count > 0) return 16;
-        var bar = new Rational(4 * document.Settings.BeatsPerBar, document.Settings.BeatDenominator);
-        BigInteger multiple = 1;
-        void Include(Rational cycle)
-        {
-            var required = (cycle / bar).Numerator;
-            multiple = multiple / BigInteger.GreatestCommonDivisor(multiple, required) * required;
-            if (multiple > 4096) throw new ArgumentException(Text.Get("CycleLimit"));
-        }
-        Include(Rational.FromDouble(document.Settings.BeatUnitQuarters));
-        foreach (var lane in document.Lanes) Include(Rational.FromDouble(lane.CycleQuarters));
-        var gaps = document.Settings.AudibleBars + document.Settings.SilentBars;
-        if (gaps > 0) Include(bar * gaps);
-        // A complete supercycle prevents a 3-quarter lane being restarted at
-        // an arbitrary 16-bar seam. Deterministic realization repeats per loop.
-        var count = (int)multiple;
-        return count * Math.Max(1, (16 + count - 1) / count);
-    }
 }
 
 /// <summary>
@@ -162,9 +112,11 @@ public sealed class AudioTransport : IDisposable
                 return;
             }
             var retained = State is TransportState.Paused or TransportState.Faulted
-                ? Volatile.Read(ref _pendingSound) ?? _revision : null;
+                ? _revision : null;
             if (retained is null) Interlocked.Increment(ref _soundSessionGeneration);
-            var retainedRender = Interlocked.Read(ref _processedFrame);
+            var retainedState = retained is null ? null : new RetainedPlayback(retained,
+                Volatile.Read(ref _previousSound), Volatile.Read(ref _pendingSound),
+                _soundSwitchFrame, Interlocked.Read(ref _processedFrame));
             ReleaseGraph();
             var device = await DeviceInformation.CreateFromIdAsync(outputId);
             CheckCurrent();
@@ -198,15 +150,19 @@ public sealed class AudioTransport : IDisposable
             inputFormat.Subtype = MediaEncodingSubtypes.Float;
             // Compile/preload off the UI thread and entirely before the graph starts.
             var captured = LocalWorkspace.Clone(retained?.Document ?? document);
-            _revision = await Task.Run(() => new PlaybackRevision(captured, (int)inputFormat.SampleRate));
-            _pendingSound = _previousSound = null;
+            var resumed = await Task.Run(() => retainedState?.Rebuild((int)inputFormat.SampleRate) ??
+                new RetainedPlayback(new PlaybackRevision(captured, (int)inputFormat.SampleRate), null, null, 0, 0));
             CheckCurrent();
+            _revision = resumed.Active;
+            _previousSound = resumed.Previous;
+            _pendingSound = resumed.Pending;
+            _soundSwitchFrame = resumed.SwitchFrame;
             _input = _graph.CreateFrameInputNode(inputFormat);
             _input.AddOutgoingConnection(_output);
             _input.QuantumStarted += OnQuantumStarted;
             _input.AudioFrameCompleted += OnFrameCompleted;
             _graph.UnrecoverableErrorOccurred += OnUnrecoverableError;
-            _renderFrame = retained is null ? 0 : (long)Math.Round((double)retainedRender * inputFormat.SampleRate / retained.Initial.SampleRate);
+            _renderFrame = resumed.ProcessedFrame;
             _processedFrame = _renderFrame;
             _fault = 0;
             _lastQuantumTimestamp = Stopwatch.GetTimestamp();

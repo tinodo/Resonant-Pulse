@@ -21,6 +21,7 @@
     <Compile Include="../../src/ResonantPulse.App/TempoCurveState.cs" Link="App/TempoCurveState.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/AudioOutputSelection.cs" Link="App/Audio/AudioOutputSelection.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackDeadline.cs" Link="App/Audio/PlaybackDeadline.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackRevision.cs" Link="App/Audio/PlaybackRevision.cs" />
     <Compile Include="../../src/ResonantPulse.App/Storage/LocalWorkspace.cs" Link="App/Storage/LocalWorkspace.cs" />
     <Compile Include="../../src/ResonantPulse.App/Localization/Text.cs" Link="App/Localization/Text.cs" />
     <Compile Include="../../src/ResonantPulse.App/Localization/ErrorText.cs" Link="App/Localization/ErrorText.cs" />

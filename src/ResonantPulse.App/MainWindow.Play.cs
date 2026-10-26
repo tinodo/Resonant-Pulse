@@ -119,6 +119,11 @@ public sealed partial class MainWindow
         var silent = Number("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
         var blind = Check("Blind", "BlindGaps", settings.BlindGaps);
         var accentButtons = new List<UIElement>();
+        var accentLabels = new List<Action<PulseSettings>>();
+        void RefreshAccentLabels()
+        {
+            foreach (var refresh in accentLabels) refresh(_document.Settings);
+        }
         var effective = AccentPatterns.ExpandEffectiveMain(settings, PrimaryAccentCount(settings));
         for (var beat = 0; beat < PrimaryAccentCount(settings); beat++)
         {
@@ -140,18 +145,23 @@ public sealed partial class MainWindow
                 Identify(button, $"MainAccent{index}", label);
             }
             Describe(current);
+            accentLabels.Add(value => Describe(AccentPatterns.ExpandEffectiveMain(value,
+                Math.Max(index + 1, PrimaryAccentCount(value)))[index]));
             button.Click += async (_, _) => await GuardAsync(async () =>
             {
-                await CommitAsync(doc =>
+                try
                 {
-                    var count = Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings));
-                    var chosen = AccentPatterns.ExpandEffectiveMain(doc.Settings, count)[index];
-                    var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents, count);
-                    pattern[index] = (Accent)(((int)chosen + 1) % 4);
-                    doc.Settings.Accents = pattern;
-                    doc.Settings.ManualAccentIndices = (doc.Settings.ManualAccentIndices ?? []).Append(index).Distinct().Order().ToArray();
-                }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
-                Describe(_document.Settings.Accents[index]);
+                    await CommitAsync(doc =>
+                    {
+                        var count = Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings));
+                        var chosen = AccentPatterns.ExpandEffectiveMain(doc.Settings, count)[index];
+                        var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents, count);
+                        pattern[index] = (Accent)(((int)chosen + 1) % 4);
+                        doc.Settings.Accents = pattern;
+                        doc.Settings.ManualAccentIndices = (doc.Settings.ManualAccentIndices ?? []).Append(index).Distinct().Order().ToArray();
+                    }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
+                }
+                finally { RefreshAccentLabels(); }
             });
             accentButtons.Add(button);
         }
@@ -184,12 +194,15 @@ public sealed partial class MainWindow
                 blind, apply, Copy("GroupAccentRule"),
                 ActionButton("AllNormal", "AllNormalAccents", async () =>
                 {
-                    await CommitAsync(doc =>
+                    try
                     {
-                        doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray();
-                        doc.Settings.AccentOverridesGroups = true;
-                    }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
-                    BuildPage();
+                        await CommitAsync(doc =>
+                        {
+                            doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray();
+                            doc.Settings.AccentOverridesGroups = true;
+                        }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
+                    }
+                    finally { RefreshAccentLabels(); }
                 })));
         var meter = ActionButton("TimeSignature", "QuickMeter", () =>
         {
