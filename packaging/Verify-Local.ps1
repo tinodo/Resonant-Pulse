@@ -5,12 +5,15 @@ param(
     [string]$OutputPath = (Join-Path $PSScriptRoot '..\artifacts\verify-local'),
     # Run on the normal desktop instead of a private one (a window appears and takes the foreground).
     [switch]$Visible,
+    # Also run the real audio scenarios (Start, live sound/tempo/meter edits, counted stops, pause/resume) on the Windows
+    # default output, at an inaudible master gain (0.0001, about -80 dBFS) seeded into the scratch data folder.
+    [switch]$SilentAudio,
     [switch]$InsidePrivateDesktop
 )
-# Owner-authorised local run of the native first-use verifier against your OWN build. Nothing is played, no screen is
-# copied, no keystroke is sent, and the test instance keeps its data in a scratch folder (RESONANT_PULSE_HOME), so the
-# real projects and settings are untouched. By default everything happens on a private desktop, so the person at the
-# machine sees nothing and cannot disturb the run.
+# Owner-authorised local run of the native first-use verifier against your OWN build. Nothing audible is played (see
+# -SilentAudio), no screen is copied, no keystroke is sent, and the test instance keeps its data in a scratch folder
+# (RESONANT_PULSE_HOME), so the real projects and settings are untouched. By default everything happens on a private
+# desktop, so the person at the machine sees nothing and cannot disturb the run.
 $ErrorActionPreference = 'Stop'
 $Exe = [IO.Path]::GetFullPath($Exe)
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
@@ -18,8 +21,9 @@ if (-not (Test-Path -LiteralPath $Exe)) { throw "Build the app first; not found:
 $null = New-Item -ItemType Directory -Force -Path $OutputPath
 if (-not $Visible -and -not $InsidePrivateDesktop) {
     $log = Join-Path $OutputPath 'verify-local.log'
-    & (Join-Path $PSScriptRoot 'Invoke-OnPrivateDesktop.ps1') -Script $PSCommandPath -LogPath $log `
-        -ArgumentList @('-Exe', $Exe, '-OutputPath', $OutputPath, '-InsidePrivateDesktop')
+    $forward = @('-Exe', $Exe, '-OutputPath', $OutputPath, '-InsidePrivateDesktop')
+    if ($SilentAudio) { $forward += '-SilentAudio' }
+    & (Join-Path $PSScriptRoot 'Invoke-OnPrivateDesktop.ps1') -Script $PSCommandPath -LogPath $log -ArgumentList $forward
     $code = $LASTEXITCODE
     Get-Content -LiteralPath $log | Select-Object -Last 25
     exit $code
@@ -63,6 +67,12 @@ if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -For
 $null = New-Item -ItemType Directory -Force -Path $data
 # The verifier looks for English texts; the machine's display language must not change what it finds.
 [IO.File]::WriteAllText((Join-Path $data 'preferences.json'), '{"Language":"en"}', [Text.UTF8Encoding]::new($false))
+if ($SilentAudio) {
+    # An inaudible master gain keeps the real audio engine running without a sound.
+    [IO.File]::WriteAllText((Join-Path $data 'recovery.pulse'),
+        '{"SchemaVersion":1,"Name":"Silent verification","Settings":{"MasterGain":0.0001},"Lanes":[],"Program":[],"Setlist":[],"Seed":1,"ProbabilityAlgorithm":"event-hash-v1"}',
+        [Text.UTF8Encoding]::new($false))
+}
 $info = [Diagnostics.ProcessStartInfo]::new($Exe)
 $info.WorkingDirectory = Split-Path -Parent $Exe
 $info.UseShellExecute = $false
@@ -83,8 +93,9 @@ try {
     Start-Sleep -Milliseconds 500
     # The driver must be a separate process from the one that started the application.
     $shell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $audio = if ($SilentAudio) { '-RunAudio' } else { '-NoAudio' }
     & $shell -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'Verify-FirstUse.ps1') -AppProcessId $app.Id `
-        -ReportPath (Join-Path $OutputPath 'first-use.json') -NoAudio -NoScreenshots -NoKeyboard
+        -ReportPath (Join-Path $OutputPath 'first-use.json') $audio -NoScreenshots -NoKeyboard
     $exit = $LASTEXITCODE
 } finally {
     if (-not $app.HasExited) {

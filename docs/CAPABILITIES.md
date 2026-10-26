@@ -173,13 +173,17 @@ platform skips, and 271 App passes), Windows x64/ARM64 builds and x64
 native/package checks. Hosted audio, live-edit and counted-stop scenarios
 explicitly reported `not-run-no-output`.
 The actual public x64 ZIP checksum and embedded source/version/run were checked.
-On the development PC the source build also passed a silent real-device run: the
-exact verifier started playback on the Windows default output at an inaudible
-master gain (0.0001, in an isolated data folder), published live sound,
-beat-strength, tempo and meter edits without stopping and passed the counted
-stops. The preview.7 build was then installed after a dry run on copies of its
+The build was installed on the development PC after a dry run on copies of its
 saved state: it started responsive and stopped, the saved preferences and
 recovery draft were byte-identical after startup, and the per-user Start menu
-shortcut now targets preview.7. The installed build played no audio, so this does
-not establish acoustic accuracy, live-splice latency, Contrast-theme appearance,
+shortcut now targets preview.7. Scratch instances of that installed binary then
+passed the exact verifier's audio scenarios three times in a row on the Windows
+default output at an inaudible master gain (0.0001, isolated data folder):
+playback advanced, live sound, beat-strength, tempo and meter edits were
+published without stopping, and the counted stops passed. An earlier attempt had
+failed intermittently because the verifier's first-position check raced the
+count-in, whose status text stays fixed for the whole two-second bar; playback
+advanced normally in preview.5, 6 and 7, and the check now waits for the text to
+change. The instance installed for the owner played no audio, so this does not
+establish acoustic accuracy, live-splice latency, Contrast-theme appearance,
 full-product acceptance or Store publication.

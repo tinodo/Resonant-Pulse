@@ -468,8 +468,13 @@ if (-not $playAudio) {
             throw "First Start did not enter Playing: $($status.Current.Name)"
         }
         $firstPlaying = $status.Current.Name
-        Start-Sleep -Seconds 2
-        $advanced = (Find-Control 'TransportStatus').Current.Name
+        # The count-in shows one fixed text for its whole bar (two seconds at 120 BPM), so a fixed sleep races its length.
+        # Wait for the text to move on instead; a position that never advances still fails after the deadline.
+        $advanceDeadline = [DateTime]::UtcNow.AddSeconds(12)
+        do {
+            Start-Sleep -Milliseconds 250
+            $advanced = (Find-Control 'TransportStatus').Current.Name
+        } while ($advanced -eq $firstPlaying -and [DateTime]::UtcNow -lt $advanceDeadline)
         if ($advanced -notlike 'Playing*') {
             throw 'Playback failed after the first Start.'
         }
