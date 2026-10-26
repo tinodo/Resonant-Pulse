@@ -2,6 +2,10 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
+More tempo controls also includes an approximate Italian tempo guide. It follows
+the displayed BPM and selected note value, includes overlapping names where
+appropriate, and never changes timing or starts playback.
+
 Tap-in is under **More tempo controls**. Choose 2–16 consecutive valid taps,
 explicitly arm, then use Tap tempo or T outside input fields. Progress and
 rejections are visible. Stop, Escape, Reset, navigation, output change and sleep
