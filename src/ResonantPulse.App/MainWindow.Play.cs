@@ -292,7 +292,7 @@ public sealed partial class MainWindow
         {
             shortcuts.Width = Math.Min(760, Math.Max(0, args.NewSize.Width));
             heroCard.Width = Math.Min(560, Math.Max(0, args.NewSize.Width - 16));
-            var compact = Root.ActualHeight < 650 && args.NewSize.Width >= 600;
+            var compact = args.NewSize.Height < 400 && args.NewSize.Width >= 600;
             instrument.Width = instrument.Height = compact ? 64 : 128;
             controls.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
             controls.MaxWidth = compact ? 420 : 300;

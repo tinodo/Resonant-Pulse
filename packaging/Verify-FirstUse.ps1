@@ -107,15 +107,6 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
     $transform.Resize([double]$size[0], [double]$size[1])
     Start-Sleep -Milliseconds 500
     $currentBounds = $window.Current.BoundingRectangle
-    foreach ($id in @('Tempo','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
-        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','MasterGain')) {
-        $element = Find-Control $id
-        $rect = $element.Current.BoundingRectangle
-        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($rect) -or
-            ($id -like 'MainAccent*' -and $rect.Height -lt 50)) {
-            throw "Primary control is hidden at $($size[0])x$($size[1]): $id"
-        }
-    }
     Add-Type -AssemblyName System.Drawing
     $bitmap = [Drawing.Bitmap]::new([int]$currentBounds.Width, [int]$currentBounds.Height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
@@ -125,6 +116,15 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
         $image = Join-Path (Split-Path -Parent $ReportPath) "play-$($size[0])x$($size[1]).png"
         $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
     } finally { $graphics.Dispose(); $bitmap.Dispose() }
+    foreach ($id in @('Tempo','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
+        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','MasterGain')) {
+        $element = Find-Control $id
+        $rect = $element.Current.BoundingRectangle
+        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($rect) -or
+            ($id -like 'MainAccent*' -and $rect.Height -lt 50)) {
+            throw "Primary control is hidden at $($size[0])x$($size[1]): $id ($rect)"
+        }
+    }
     $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true}
 }
 $transform.Resize($bounds.Width, $bounds.Height)
