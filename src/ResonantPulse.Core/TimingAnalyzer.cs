@@ -22,13 +22,17 @@ public sealed record TimingReport
 /// <summary>Chronological one-to-one matching: maximize matches within tolerance, then minimize total absolute offset.</summary>
 public static class TimingAnalyzer
 {
+    internal const int MaximumTimestamps = 100_000;
+    internal const long MaximumAlignmentCells = 4_000_000;
+
     public static TimingReport Analyze(IReadOnlyList<double> expectedSeconds, IReadOnlyList<double> observedSeconds,
         double toleranceSeconds = 0.15)
     {
         ArgumentNullException.ThrowIfNull(expectedSeconds); ArgumentNullException.ThrowIfNull(observedSeconds);
         DocumentValidator.FiniteRange(toleranceSeconds, 0, 10, "Timing tolerance seconds");
         int n = expectedSeconds.Count, m = observedSeconds.Count;
-        DocumentValidator.Require(n <= 100_000 && m <= 100_000 && (long)(n + 1) * (m + 1) <= 4_000_000,
+        DocumentValidator.Require(n <= MaximumTimestamps && m <= MaximumTimestamps &&
+            (long)(n + 1) * (m + 1) <= MaximumAlignmentCells,
             "Timing alignment exceeds four million comparison cells. Analyze shorter, nonoverlapping sections.");
         var expected = Ordered(expectedSeconds); var observed = Ordered(observedSeconds);
         int stride = m + 1;

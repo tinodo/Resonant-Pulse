@@ -9,6 +9,37 @@ namespace ResonantPulse.App.Tests;
 public sealed class TextTests
 {
     [TestMethod]
+    public void TimingCsvGuidanceAndFrozenSourceFormatInEverySupportedLanguage()
+    {
+        var previous = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                foreach (var key in new[] { "ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable" })
+                {
+                    Assert.AreNotEqual(key, Text.Get(key), $"{language}: {key}");
+                    Assert.IsFalse(string.IsNullOrWhiteSpace(Text.Get(key)), $"{language}: {key}");
+                }
+                var source = Text.Format("TimingCsvReady", "Project", "Lane", "12:34");
+                StringAssert.Contains(source, "Project");
+                StringAssert.Contains(source, "Lane");
+                StringAssert.Contains(source, "12:34");
+                Assert.IsFalse(source.Contains('{'));
+            }
+        }
+        finally
+        {
+            Text.Select(previous);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void StemExportGuidanceAndSizeConfirmationExistInEverySupportedLanguage()
     {
         var previous = Text.Language;

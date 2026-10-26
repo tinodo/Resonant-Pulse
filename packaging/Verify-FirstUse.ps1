@@ -331,9 +331,23 @@ Wait-TapStatus 'idle'
 if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
     throw 'Returning from stem export controls unexpectedly changed stopped transport.'
 }
+(Find-Control 'DestinationTrain').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+if ((Find-Control 'ExportTimingCsv').Current.IsEnabled) {
+    throw 'Timing CSV export is enabled without a completed measurement.'
+}
+if ([string]::IsNullOrWhiteSpace((Find-Control 'TimingCsvHint').Current.Name)) {
+    throw 'Timing CSV measurement limitations were not exposed.'
+}
+(Find-Control 'DestinationPlay').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+$null = Find-Control 'Tempo'
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Visiting timing report export controls unexpectedly changed stopped transport.'
+}
+Wait-TapStatus 'idle'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;tapIn=$tapIn;
   help='read-only-help-navigation-no-automatic-start';
   stems='size-confirmation-cancelled-without-playback';
+  timingCsv='disabled-without-completed-run-no-automatic-start';
   tempoGuide='initial-overlapping-markings-exposed';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

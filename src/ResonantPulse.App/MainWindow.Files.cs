@@ -86,13 +86,13 @@ public sealed partial class MainWindow
         }
     }
 
-    private async Task<string?> PickSavePathAsync(string extension, string description)
+    private async Task<string?> PickSavePathAsync(string extension, string description, string? suggestedName = null)
     {
         if (_isDialogOpen) return null;
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = SanitizeFileName(_document.Name)
+            SuggestedFileName = SanitizeFileName(suggestedName ?? _document.Name)
         };
         picker.FileTypeChoices.Add(description, [extension]);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));

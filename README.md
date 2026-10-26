@@ -53,6 +53,17 @@ This source feature is not included in published preview.3.
 
 ### CI
 
+The next preview also adds **Export timing report (CSV)** in Train. Finish a
+keyboard Timing Lab run first. The export freezes that completed run's original
+project/target, frame window, tolerance, summary and original-index matches,
+misses and extra attacks, even if the project is subsequently edited.
+It is UTF-8 with a BOM, CRLF rows and eight fixed, invariant-numeric columns.
+Project/target label cells are JSON strings: decode them once to recover exact
+text, including quotes/control characters, without spreadsheet formula cells.
+Unavailable offset/drift/coverage metrics are blank rather than invented zeroes.
+This is keyboard input-arrival analysis, not calibrated acoustic performance,
+microphone capture or automatic practice history. It is not in preview.3.
+
 Use the pinned .NET SDK and a Windows build agent. This repository's owner uses
 a shared local machine: builds/tests run in GitHub Actions, not locally.
 

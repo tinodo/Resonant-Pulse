@@ -10,7 +10,7 @@ evidence separately.
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
 | Play and transport | Native pulse instrument, tempo/meter controls, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment | Safe-boundary live edits; calibrated audible position; tap-in and free-running/no-bar mode. Current edits require Stop + Start. Full visual/usability acceptance remains outstanding |
 | Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
-| Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
+| Train | Finite bar-authored programs, ramps and gaps; immutable completed keyboard-arrival report and CSV export in development | Public CSV delivery/interactive export acceptance; nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export; aligned stereo PCM16 stem ZIP and manifest in development | Public stem delivery and DAW/file-picker acceptance; media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
@@ -210,3 +210,18 @@ tempo-guide exposure; audio/count/tap-in explicitly report `not-run-no-output`.
 The main-only completion gate correctly skipped this stacked base and must
 pass after integration. Actual file-picker/DAW behavior, acoustic/accessibility
 acceptance and public delivery remain unestablished.
+
+Completed timing-report CSV is being added on the next stacked branch, not
+delivered in preview.3. Finishing a keyboard Timing Lab run freezes its original
+frame window, sample rate, target, tolerance, expected/observed timestamps and
+analysis. Original indices distinguish matches, misses and extras. Starting a
+new measurement clears the prior export source; later project edits cannot
+rewrite an already completed source. Active/invalidated runs are not exportable.
+The local file uses atomic replacement, UTF-8/BOM, CRLF, eight fixed columns
+and invariant round-trip numbers. User project/target labels are JSON-string
+cells, preserving arbitrary content without formula or record injection.
+Unmeasurable offset/drift/coverage fields are blank. This is neither automatic
+practice history nor calibrated microphone/MIDI/acoustic timing.
+Hosted numerical/file-integrity/localization checks and native disabled-before-
+completion exposure are pending. Real keyboard-run/file-picker acceptance and
+public delivery remain separate.
