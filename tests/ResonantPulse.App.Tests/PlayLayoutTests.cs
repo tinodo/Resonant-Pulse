@@ -94,7 +94,7 @@ public sealed class PlayLayoutTests
 
     [TestMethod]
     // Measured at 100% text size: tempo buttons 52 + settings row about 119 + three 10 DIP gaps = 201 beside the dial, and
-    // the notice (two rows) about 109 plus its 6 DIP gap = 115.
+    // the notice (two rows) about 109 plus its 6 DIP gap = 115. The strip is 273 wide with labels, 140 with icons only.
     [DataRow(978d, 600d, 201d, 115d, true)]   // the default window
     [DataRow(938d, 554d, 201d, 115d, true)]   // 1000 x 720
     [DataRow(738d, 434d, 201d, 115d, false)]  // 800 x 600: the dial would drop below 200
@@ -103,32 +103,48 @@ public sealed class PlayLayoutTests
     [DataRow(978d, 600d, 260d, 150d, false)]  // enlarged Windows text: taller rows and notice, so it steps aside
     [DataRow(978d, 700d, 260d, 150d, true)]   // and returns when the window has room again
     [DataRow(180d, 900d, 201d, 115d, false)]  // the page is narrower than the dial's minimum
-    [DataRow(458d, 700d, 290d, 136d, true)]   // narrow and stacked, but tall enough
+    [DataRow(458d, 700d, 290d, 136d, true)]   // narrow and stacked: the strip takes a row, and 230 is still left
+    [DataRow(280d, 665d, 290d, 136d, false)]  // the notice pushes the strip into its own row: 239 budgeted, only 195 left
+    [DataRow(280d, 669d, 290d, 136d, false)]  // 243 budgeted, 199 left
+    [DataRow(280d, 670d, 290d, 136d, true)]   // 244 budgeted, exactly 200 left once the strip has its row
     public void TheNoticeOnlyAppearsWhenTheDialKeepsAUsableSize(double pageWidth, double pageHeight, double otherRows,
         double noticeRow, bool fits)
     {
-        Assert.AreEqual(fits, PlayLayout.NoticeFits(pageWidth, pageHeight, otherRows, noticeRow));
+        Assert.AreEqual(fits, PlayLayout.NoticeFits(pageWidth, pageHeight, otherRows, noticeRow, Labelled, Icons));
     }
 
     [TestMethod]
-    public void TheNoticeNeverFlipsBackAndForthAsRoomOrHeightsChange()
+    public void ShowingTheNoticeCanMoveTheStripIntoARowAndThatRowIsPartOfTheBudget()
     {
-        // Monotonic in every input: more room can only show it, and taller rows or a taller notice can only hide it.
-        foreach (var width in new[] { 358d, 458d, 738d, 978d })
-        foreach (var otherRows in new[] { 150d, 201d, 290d, 330d })
+        // Without the notice the strip sits in the corner; with it the dial has less room and the strip needs its own row.
+        const double width = 280, pageHeight = 665, otherRows = 290, noticeRow = 136;
+        Assert.AreEqual(RailPlacement.Corner, PlayLayout.Choose(width, pageHeight - otherRows, Labelled, Icons).Placement);
+        Assert.AreEqual(RailPlacement.Row, PlayLayout.Choose(width, pageHeight - otherRows - noticeRow, Labelled, Icons).Placement);
+        Assert.IsFalse(PlayLayout.NoticeFits(width, pageHeight, otherRows, noticeRow, Labelled, Icons));
+    }
+
+    [TestMethod]
+    public void WheneverTheNoticeIsShownTheDialKeepsItsMinimumAfterTheStripIsPlaced()
+    {
+        // Soundness across many sizes and row heights (including enlarged text): replay the layout the way the page does.
+        foreach (var width in new[] { 180d, 280d, 358d, 458d, 540d, 738d, 978d })
+        foreach (var otherRows in new[] { 150d, 201d, 260d, 290d, 330d })
         foreach (var noticeRow in new[] { 60d, 115d, 136d, 180d })
+        foreach (var height in Enumerable.Range(40, 260).Select(step => step * 5d))
         {
-            var shown = false;
-            for (var height = 100d; height <= 1400; height += 5)
-            {
-                var fits = PlayLayout.NoticeFits(width, height, otherRows, noticeRow);
-                Assert.IsFalse(shown && !fits, $"{width} wide, rows {otherRows}/{noticeRow}: shown lower but hidden at {height}");
-                shown |= fits;
-                if (!fits) continue;
-                Assert.IsTrue(PlayLayout.NoticeFits(width, height, otherRows - 10, noticeRow), "shorter rows must still fit");
-                Assert.IsTrue(PlayLayout.NoticeFits(width, height, otherRows, noticeRow - 10), "a shorter notice must still fit");
-                Assert.IsFalse(PlayLayout.NoticeFits(width, height - 5000, otherRows, noticeRow), "no room can never fit");
-            }
+            if (!PlayLayout.NoticeFits(width, height, otherRows, noticeRow, Labelled, Icons)) continue;
+            var room = height - otherRows - noticeRow;
+            var stripRow = PlayLayout.Choose(width, room, Labelled, Icons).Placement == RailPlacement.Row ? PlayLayout.StripHeight : 0;
+            Assert.IsTrue(PlayLayout.DialSize(width, room - stripRow) >= PlayLayout.MinDialWithNotice,
+                $"{width}x{height}, rows {otherRows}/{noticeRow}: the dial would drop below its minimum");
         }
+    }
+
+    [TestMethod]
+    public void ThereIsRoomForTheNoticeWheneverThePageIsTallEnough()
+    {
+        foreach (var width in new[] { 358d, 458d, 738d, 978d })
+            Assert.IsTrue(PlayLayout.NoticeFits(width, 5000, 330, 180, Labelled, Icons), $"{width} wide, very tall page");
+        Assert.IsFalse(PlayLayout.NoticeFits(978, 100, 201, 115, Labelled, Icons), "no room at all");
     }
 }

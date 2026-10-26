@@ -76,10 +76,19 @@ internal static class PlayLayout
     /// <summary>
     /// True when the notice can sit above the tempo controls and still leave the dial at least
     /// <see cref="MinDialWithNotice"/> across. Every input is measured on the real page, so enlarged Windows text (taller
-    /// rows, a taller notice) is accounted for: <paramref name="otherRows"/> is everything on the page except the dial and
-    /// the notice (strip row, tempo buttons, settings row and the gaps between rows), and <paramref name="noticeRow"/> is
-    /// the notice plus its gap. None of them depends on whether the notice is shown, so the answer cannot oscillate.
+    /// rows, a taller notice) is accounted for: <paramref name="otherRows"/> is everything on the page except the dial, the
+    /// notice and the page-tools strip's own row (tempo buttons, settings row and the gaps between rows), and
+    /// <paramref name="noticeRow"/> is the notice plus its gap. The strip is placed from the room the dial has, and the
+    /// notice takes some of that room, so showing the notice can push the strip into a row of its own; that row is
+    /// subtracted here, from the placement the strip will actually get. None of the inputs depends on whether the notice is
+    /// shown, so the answer cannot oscillate.
     /// </summary>
-    internal static bool NoticeFits(double pageWidth, double pageHeight, double otherRows, double noticeRow) =>
-        DialSize(pageWidth, pageHeight - otherRows - noticeRow) >= MinDialWithNotice;
+    internal static bool NoticeFits(double pageWidth, double pageHeight, double otherRows, double noticeRow,
+        double labelledWidth, double iconsWidth, double stripHeight = StripHeight)
+    {
+        var room = pageHeight - otherRows - noticeRow;
+        var stripRow = Choose(pageWidth, room, labelledWidth, iconsWidth, stripHeight).Placement == RailPlacement.Row
+            ? stripHeight : 0;
+        return DialSize(pageWidth, room - stripRow) >= MinDialWithNotice;
+    }
 }

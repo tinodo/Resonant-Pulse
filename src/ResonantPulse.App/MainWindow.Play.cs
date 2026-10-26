@@ -324,9 +324,11 @@ public sealed partial class MainWindow
             unitNotice.Visibility = Visibility.Visible;
             unitNotice.Measure(new Windows.Foundation.Size(width, double.PositiveInfinity));
             var noticeRow = unitNotice.DesiredSize.Height + tempoArea.Spacing;
-            var otherRows = (railInRow ? rail.ActualHeight : 0) + tempoCluster.ActualHeight + context.ActualHeight +
-                3 * page.RowSpacing;
-            unitNotice.Visibility = PlayLayout.NoticeFits(page.ActualWidth, page.ActualHeight, otherRows, noticeRow)
+            // The strip's own row is not counted here: whether it needs one depends on the room left once the notice is
+            // shown, and NoticeFits works that out from the strip's measured widths.
+            var otherRows = tempoCluster.ActualHeight + context.ActualHeight + 3 * page.RowSpacing;
+            unitNotice.Visibility = PlayLayout.NoticeFits(page.ActualWidth, page.ActualHeight, otherRows, noticeRow,
+                railLabelledWidth, railIconsWidth, Math.Max(PlayLayout.StripHeight, rail.ActualHeight))
                 ? Visibility.Visible : Visibility.Collapsed;
         }
         page.SizeChanged += (_, args) =>
