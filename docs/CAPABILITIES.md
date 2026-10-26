@@ -8,7 +8,7 @@ evidence separately.
 | Family | Implemented source | Not yet delivered or established |
 |---|---|---|
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
-| Play and transport | Native pulse instrument, tempo/meter controls, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment | Safe-boundary live edits; calibrated audible position; tap-in and free-running/no-bar mode. Current edits require Stop + Start. Full visual/usability acceptance remains outstanding |
+| Play and transport | Native pulse instrument, tempo/meter controls, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; prepared live main-sound and per-pulse accent updates | Safe-boundary structural edits; calibrated audible position; tap-in and free-running/no-bar mode. Structural tempo/rhythm edits require Stop + Start. Full visual/usability acceptance remains outstanding |
 | Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
 | Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
@@ -21,6 +21,21 @@ No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
 MIDI clock, a static concept is not an app screenshot, and a development MSIX is
 not a signed Store release.
+
+The urgent Play repair moves every settings-group entry into the fixed page
+header, reduces the instrument to a bounded preview, aligns meter/sound fields
+and stops stretching Start. Bounded flyouts expose advanced controls without
+requiring a taller screen; any remaining page overflow has a persistent cue.
+Sound/pulse-only edits prepare immutable replacement plans off the callback,
+publish at a subsequent audio quantum and preserve prior attack tails. They
+retain the current cursor, loop, count-in, program and stop boundaries.
+Explicit pulse edits take precedence over automatic grouping emphasis only for
+edited slots; unedited boundaries retain their phase across bars. Per-slot
+`ManualAccentIndices` and the explicit All Normal override are saved in projects.
+Count-in still uses its own cue accents; structural tempo/rhythm edits still
+require Stop + Start. Revision-specific source, native and review evidence is
+recorded in [PR 14](https://github.com/tinodo/Resonant-Pulse/pull/14); release
+downloads identify the delivered source. Preview.3 predates this repair.
 
 First use resolves the Windows default render endpoint, rather than taking the
 first enumerated device. The selection is then remembered. Losing a saved device

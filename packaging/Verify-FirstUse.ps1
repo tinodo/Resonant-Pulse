@@ -58,7 +58,12 @@ function Set-PracticeNumber([string]$id, [int]$value) {
     }
 }
 function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
-    (Find-Control 'PracticeTimer').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::AutomationIdProperty, 'PracticeSeconds')
+    $currentWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+    if ($null -eq $currentWindow.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)) {
+        Invoke-Control 'PracticeTimer'
+    }
     Set-PracticeNumber 'PracticeSeconds' $seconds
     Set-PracticeNumber 'PracticeBeats' $beats
     Set-PracticeNumber 'PracticeBars' $bars
@@ -84,19 +89,72 @@ do {
 if ($status.Current.Name -notlike 'Stopped*') { throw 'First-use initialization did not reach Stopped.' }
 $bounds = $window.Current.BoundingRectangle
 $controls = @()
-foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'AudioOutputPicker', 'TransportStartPause', 'MasterGain')) {
+foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0', 'RhythmOptions',
+    'TempoOptions', 'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOutputPicker', 'TransportStartPause', 'MasterGain')) {
     $element = Find-Control $id
     $rect = $element.Current.BoundingRectangle
     if ($element.Current.IsOffscreen -or $rect.IsEmpty -or -not $bounds.Contains($rect)) {
         throw "Primary control is not visible in the first-use window: $id ($rect)"
     }
-    $controls += @{id=$id;name=$element.Current.Name;visible=$true}
+    if ($id -like 'MainAccent*' -and $rect.Height -lt 50) { throw "Pulse control is clipped: $id ($rect)" }
+    $controls += @{id=$id;name=$element.Current.Name;visible=$true;width=$rect.Width;height=$rect.Height}
+}
+$startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
+if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
+$resizeEvidence = @()
+$transform = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
+foreach ($size in @(@(800, 600), @(1000, 720))) {
+    $transform.Resize([double]$size[0], [double]$size[1])
+    Start-Sleep -Milliseconds 500
+    $currentBounds = $window.Current.BoundingRectangle
+    Add-Type -AssemblyName System.Drawing
+    $bitmap = [Drawing.Bitmap]::new([int]$currentBounds.Width, [int]$currentBounds.Height)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $origin = [Drawing.Point]::new([Math]::Max(0, [int]$currentBounds.X), [Math]::Max(0, [int]$currentBounds.Y))
+        $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
+        $image = Join-Path (Split-Path -Parent $ReportPath) "play-$($size[0])x$($size[1]).png"
+        $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+    foreach ($id in @('Tempo','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
+        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','MasterGain')) {
+        $element = Find-Control $id
+        $rect = $element.Current.BoundingRectangle
+        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($rect) -or
+            ($id -like 'MainAccent*' -and $rect.Height -lt 50)) {
+            throw "Primary control is hidden at $($size[0])x$($size[1]): $id ($rect)"
+        }
+    }
+    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true}
+}
+$transform.Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 500
+foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
+    @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'))) {
+    Invoke-Control $option[0]
+    $element = Find-Control $option[1]
+    if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
+    Add-Type -AssemblyName System.Windows.Forms
+    $close = Find-Control ($option[0] + 'Close')
+    $close.SetFocus()
+    if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
+        throw 'Popup shortcut verification does not own keyboard focus.'
+    }
+    $muteName = (Find-Control 'EmergencyMute').Current.Name
+    [Windows.Forms.SendKeys]::SendWait('^m')
+    Start-Sleep -Milliseconds 250
+    if ((Find-Control 'EmergencyMute').Current.Name -eq $muteName) { throw "Ctrl+M did not reach the popup: $($option[0])" }
+    [Windows.Forms.SendKeys]::SendWait('^m')
+    Start-Sleep -Milliseconds 250
+    if ((Find-Control 'EmergencyMute').Current.Name -ne $muteName) { throw "Ctrl+M did not restore mute state: $($option[0])" }
+    Invoke-Control ($option[0] + 'Close')
 }
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
+$liveSound = 'not-run-no-output'
 if ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
 } else {
@@ -120,6 +178,33 @@ if ($selection.Count -eq 0) {
         }
         if ($advanced -eq $firstPlaying) { throw 'Playback state changed but the audio position did not advance.' }
         $playback = 'started-and-audio-position-advanced'
+        $null = Wait-Transport 'Playing' $true
+        $soundPicker = Find-Control 'MainSound'
+        $soundPicker.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        $glass = $window.FindFirst([Windows.Automation.TreeScope]::Descendants,
+            [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'Glass'))
+        if ($null -eq $glass) { throw 'Glass sound option is missing.' }
+        $glass.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        $deadline = [DateTime]::UtcNow.AddSeconds(10)
+        do {
+            $activeSound = (Find-Control 'TransportStatus').Current.ItemStatus
+            if ($activeSound -like 'sound=Glass;*') { break }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($activeSound -notlike 'sound=Glass;*') { throw 'Selected sound never reached the active audio revision.' }
+        foreach ($accent in @(0,1,2,3)) {
+            Invoke-Control 'MainAccent0'
+            $deadline = [DateTime]::UtcNow.AddSeconds(10)
+            do {
+                $activeSound = (Find-Control 'TransportStatus').Current.ItemStatus
+                if ($activeSound -like "sound=Glass;accents=$accent,*") { break }
+                Start-Sleep -Milliseconds 50
+            } while ([DateTime]::UtcNow -lt $deadline)
+            if ($activeSound -notlike "sound=Glass;accents=$accent,*") { throw "Pulse choice did not reach active audio: $accent" }
+            if ($activeSound -notmatch ';manual=0(?:,|$)') { throw 'Manual accent precedence did not reach active audio.' }
+            if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live sound edit interrupted playback.' }
+        }
+        $liveSound = 'sound-and-all-four-pulse-choices-published-without-stop'
     } finally {
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
             Invoke-Control 'TransportStop'
@@ -176,6 +261,7 @@ if ($selection.Count -eq 0) {
     }
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
+  resize=$resizeEvidence;liveSound=$liveSound;popupShortcuts='ctrl-m-in-all-five-panels';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 Write-Output "First-use controls are visible; playback result: $playback"

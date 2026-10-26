@@ -17,6 +17,24 @@ internal static class AccentPatterns
     internal static Accent[] ExpandMain(Accent[] source, int count) =>
         Enumerable.Range(0, count).Select(index => MainAt(source, index)).ToArray();
 
+    internal static Accent[] ExpandEffectiveMain(PulseSettings settings, int count)
+    {
+        var pattern = ExpandMain(settings.Accents, count);
+        if (settings.AccentOverridesGroups) return pattern;
+        int boundary = 0;
+        var unit = Rational.FromDouble(settings.BeatUnitQuarters);
+        foreach (int group in settings.Groups)
+        {
+            var position = new Rational(4 * boundary, settings.BeatDenominator);
+            for (int index = 0; index < count; index++)
+                if (!(settings.ManualAccentIndices?.Contains(index) ?? false) &&
+                    unit * index == position)
+                    pattern[index] = Accent.Strong;
+            boundary += group;
+        }
+        return pattern;
+    }
+
     internal static Accent[] ExpandLane(Accent[] source, int count) =>
         Enumerable.Range(0, count).Select(index => LaneAt(source, index)).ToArray();
 }

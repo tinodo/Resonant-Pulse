@@ -36,6 +36,10 @@ public static class DocumentValidator
         Require(s.PracticeBeats is >= 0 and <= 6_400_000, "Practice beats must be 0..6400000.");
         Require(s.PracticeBars is >= 0 and <= 100_000, "Practice bars must be 0..100000.");
         Pattern(s.Accents, 256, "Main accents");
+        Require(s.ManualAccentIndices is null ||
+            (s.ManualAccentIndices.Length <= 256 && s.ManualAccentIndices.All(index => index is >= 0 and < 256) &&
+             s.ManualAccentIndices.Distinct().Count() == s.ManualAccentIndices.Length),
+            "Manual accent indices must be unique pulse positions from 0..255.");
         Require(s.Groups is not null && s.Groups.Length <= 64, "Groups must be an array of at most 64 entries.");
         Require(s.Groups.Length == 0 || (s.Groups.All(x => x > 0 && x <= 64) && s.Groups.Sum() == s.BeatsPerBar),
             "Additive groups must be positive denominator-unit counts summing to BeatsPerBar.");

@@ -7,7 +7,8 @@ internal enum EditorChangeKind
     Document,
     MasterGainOnly,
     GlobalTempoOnly,
-    PracticeTimerOnly
+    PracticeTimerOnly,
+    SoundAndAccentsOnly
 }
 
 internal static class EditorRevisionPolicy
@@ -15,7 +16,8 @@ internal static class EditorRevisionPolicy
     // Only these global scalar changes leave every Studio form/index valid.
     // Lane volume and program-step tempo edits remain Document changes.
     private static bool PreservesDrafts(EditorChangeKind change) =>
-        change is EditorChangeKind.MasterGainOnly or EditorChangeKind.GlobalTempoOnly or EditorChangeKind.PracticeTimerOnly;
+        change is EditorChangeKind.MasterGainOnly or EditorChangeKind.GlobalTempoOnly or
+            EditorChangeKind.PracticeTimerOnly or EditorChangeKind.SoundAndAccentsOnly;
 
     public static int Advance(int revision, EditorChangeKind change = EditorChangeKind.Document) =>
         PreservesDrafts(change) ? revision : unchecked(revision + 1);
