@@ -12,7 +12,7 @@ and [release operations](docs/RELEASING.md).
 
 ## Downloads
 
-**Published preview:** [0.1.0-preview.1](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.1),
+**Published previews:** [GitHub downloads](https://github.com/tinodo/Resonant-Pulse/releases),
 with x64/ARM64 downloads and SHA-256 checksums. This is not the completed full product.
 
 Verified preview ZIPs are published to [GitHub Releases](https://github.com/tinodo/Resonant-Pulse/releases)
