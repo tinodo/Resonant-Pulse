@@ -142,7 +142,7 @@ public sealed partial class MainWindow
         SetTimingArmed(false);
         var endFrame = TimingRunRules.EndFrame(_timingStartFrame,
             Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalSeconds, revision.Initial.SampleRate,
-            revision.IsFinite ? revision.Initial.TotalFrames : null, completedFrame);
+            revision.EndFrame, completedFrame);
         var seconds = (double)(endFrame - _timingStartFrame) / revision.Initial.SampleRate;
         var expected = new List<double>();
         void Append(RenderPlan plan, long origin, long excludeBefore)

@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ResonantPulse.App.Audio;
 using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Tests;
@@ -74,6 +75,35 @@ public sealed class TimingRunRulesTests
         var observed = expected.Append(seconds + 0.1).Where(time => time < seconds).ToArray();
         var report = TimingAnalyzer.Analyze(expected, observed, 0.15);
         Assert.AreEqual(expected.Length, report.Matched);
+        Assert.AreEqual(0, report.Missed);
+        Assert.AreEqual(0, report.Extra);
+    }
+
+    [TestMethod]
+    [DataRow(0, 240000L, 6)]
+    [DataRow(1, 192000L, 4)]
+    [DataRow(4, 240000L, 6)]
+    public void ManualFinishAfterTimerExpiryExcludesUnrenderedTargetsWithoutCompletionRefresh(
+        int programBars, long expectedEnd, int expectedTargets)
+    {
+        const int sampleRate = 48000;
+        var document = new PulseDocument
+        {
+            Settings = new PulseSettings { CountInBars = 1, Tempo = 120, PracticeSeconds = 3 },
+            Program = programBars == 0 ? [] :
+                [new ProgramStep { Bars = programBars, Repeats = 1, StartTempo = 120, EndTempo = 120 }]
+        };
+        var plan = ScheduleCompiler.Compile(document, sampleRate, 16, true);
+        var deadline = PlaybackDeadline.Resolve(sampleRate, plan.CountInFrames,
+            document.Settings.PracticeSeconds, programBars == 0 ? null : plan.TotalFrames);
+        var endFrame = TimingRunRules.EndFrame(plan.CountInFrames, 10, sampleRate, deadline, null);
+        Assert.AreEqual(expectedEnd, endFrame);
+        var expected = plan.Targets.Where(onset => onset.LaneIndex == -1 &&
+                onset.Frame >= plan.CountInFrames && onset.Frame < endFrame)
+            .Select(onset => (double)(onset.Frame - plan.CountInFrames) / sampleRate).ToArray();
+        Assert.AreEqual(expectedTargets, expected.Length);
+        var report = TimingAnalyzer.Analyze(expected, expected, 0.15);
+        Assert.AreEqual(expectedTargets, report.Matched);
         Assert.AreEqual(0, report.Missed);
         Assert.AreEqual(0, report.Extra);
     }
