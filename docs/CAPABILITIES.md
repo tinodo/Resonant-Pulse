@@ -192,5 +192,21 @@ even when there are no performer targets. The existing mixed-WAV and stem
 paths share the same streaming PCM16 writer.
 The UI confirms track count/uncompressed size before choosing a ZIP. Per-track
 peak protection and PCM16 rounding do not promise bit-identical recombination.
-Hosted tests/native preflight confirmation/cancellation, actual file-picker/DAW behavior and
-public delivery are not yet established for this addition.
+Source `5e65447` passed hosted
+[run 40266107491](https://github.com/tinodo/Resonant-Pulse/actions/runs/40266107491):
+236 Core passes of 241 cases (five Windows-only skips), 150 App passes,
+34 Windows export-integrity passes, eight Windows workspace passes and
+x64/ARM64 build/package gates. Existing mixed-WAV tests still pass through
+the extracted writer. The first Windows run exposed an overly narrow test
+expectation: sharing denial can be IOException or UnauthorizedAccessException.
+The regression now requires the actual denial codes, retained destination,
+temporary cleanup and successful retry after unlocking.
+Copilot identified indistinguishable concurrent audio fixtures; requests now
+vary tempo, gain and pan and must have distinct durations. Review 5647171396
+on `5e65447` reports no open issues, not human/prerequisite acceptance.
+CodeQL 40266107475 passed. The hosted native report records
+`stems=size-confirmation-cancelled-without-playback`, Help navigation and
+tempo-guide exposure; audio/count/tap-in explicitly report `not-run-no-output`.
+The main-only completion gate correctly skipped this stacked base and must
+pass after integration. Actual file-picker/DAW behavior, acoustic/accessibility
+acceptance and public delivery remain unestablished.
