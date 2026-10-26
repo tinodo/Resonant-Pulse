@@ -134,6 +134,19 @@ foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUn
     Invoke-Control $option[0]
     $element = Find-Control $option[1]
     if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
+    Add-Type -AssemblyName System.Windows.Forms
+    $close = Find-Control ($option[0] + 'Close')
+    $close.SetFocus()
+    if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
+        throw 'Popup shortcut verification does not own keyboard focus.'
+    }
+    $muteName = (Find-Control 'EmergencyMute').Current.Name
+    [Windows.Forms.SendKeys]::SendWait('^m')
+    Start-Sleep -Milliseconds 250
+    if ((Find-Control 'EmergencyMute').Current.Name -eq $muteName) { throw "Ctrl+M did not reach the popup: $($option[0])" }
+    [Windows.Forms.SendKeys]::SendWait('^m')
+    Start-Sleep -Milliseconds 250
+    if ((Find-Control 'EmergencyMute').Current.Name -ne $muteName) { throw "Ctrl+M did not restore mute state: $($option[0])" }
     Invoke-Control ($option[0] + 'Close')
 }
 $picker = Find-Control 'AudioOutputPicker'
@@ -248,7 +261,7 @@ if ($selection.Count -eq 0) {
     }
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
-  resize=$resizeEvidence;liveSound=$liveSound;
+  resize=$resizeEvidence;liveSound=$liveSound;popupShortcuts='ctrl-m-in-all-five-panels';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 Write-Output "First-use controls are visible; playback result: $playback"

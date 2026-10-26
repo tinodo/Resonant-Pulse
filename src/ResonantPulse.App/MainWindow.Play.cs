@@ -315,18 +315,7 @@ public sealed partial class MainWindow
         var scroll = Scroll(content);
         scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
         var panel = new Grid { RowSpacing = 12 };
-        var mute = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
-        {
-            Key = Windows.System.VirtualKey.M,
-            Modifiers = Windows.System.VirtualKeyModifiers.Control
-        };
-        mute.Invoked += (_, args) =>
-        {
-            _transport.IsMuted = !_transport.IsMuted;
-            RefreshSnapshot();
-            args.Handled = true;
-        };
-        panel.KeyboardAccelerators.Add(mute);
+        panel.KeyDown += OnKeyDown;
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.Children.Add(close);
