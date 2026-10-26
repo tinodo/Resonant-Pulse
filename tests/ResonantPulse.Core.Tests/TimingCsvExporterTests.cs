@@ -130,6 +130,18 @@ public sealed class TimingCsvExporterTests
     }
 
     [TestMethod]
+    public async Task Export_CoincidentTargetDriftIsBlankButMeasuredZeroIsNumeric()
+    {
+        using var temp = new TempDirectory();
+        var coincident = new TimingSession(Context(), [1, 1, 1, 1], [1, 1, 1, 1], 0);
+        await TimingCsvExporter.ExportAsync(temp.File("coincident.csv"), coincident);
+        Assert.AreEqual("", Value(await ReadAsync(temp.File("coincident.csv")), "drift_milliseconds_per_second"));
+        var separated = new TimingSession(Context(), [0, 1, 2, 3], [0, 1, 2, 3], 0);
+        await TimingCsvExporter.ExportAsync(temp.File("separated.csv"), separated);
+        Assert.AreEqual("0", Value(await ReadAsync(temp.File("separated.csv")), "drift_milliseconds_per_second"));
+    }
+
+    [TestMethod]
     public async Task Export_RoundTripNumericPrecisionIsInvariantUnderCommaDecimalCulture()
     {
         using var temp = new TempDirectory();

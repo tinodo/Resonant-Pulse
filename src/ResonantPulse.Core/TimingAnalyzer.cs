@@ -16,6 +16,7 @@ public sealed record TimingReport
     public double Coverage { get; init; }
     public int AmbiguousExpected { get; init; }
     public double DriftMillisecondsPerSecond { get; init; }
+    public bool HasDriftEstimate { get; init; }
     public IReadOnlyList<TimingMatch> Matches { get; init; } = Array.Empty<TimingMatch>();
 }
 
@@ -83,19 +84,24 @@ public static class TimingAnalyzer
             if (right - left > 1) ambiguous++;
         }
         double drift = 0;
+        bool hasDriftEstimate = false;
         if (matches.Count >= 4)
         {
             int half = matches.Count / 2;
             var first = matches.Take(half).ToArray(); var last = matches.Skip(matches.Count - half).ToArray();
             double delta = Median(last.Select(p => p.ExpectedSeconds).ToArray()) - Median(first.Select(p => p.ExpectedSeconds).ToArray());
             if (delta > 0)
+            {
                 drift = (Median(last.Select(p => p.OffsetMilliseconds).ToArray()) - Median(first.Select(p => p.OffsetMilliseconds).ToArray())) / delta;
+                hasDriftEstimate = double.IsFinite(drift);
+            }
         }
         return new()
         {
             Matched = matches.Count, Missed = n - matches.Count, Extra = m - matches.Count,
             MedianOffsetMilliseconds = median, SpreadMilliseconds = spread, Coverage = n == 0 ? 0 : (double)matches.Count / n,
-            AmbiguousExpected = ambiguous, DriftMillisecondsPerSecond = drift, Matches = matches.AsReadOnly()
+            AmbiguousExpected = ambiguous, DriftMillisecondsPerSecond = drift, HasDriftEstimate = hasDriftEstimate,
+            Matches = matches.AsReadOnly()
         };
     }
     private static bool Better(int aCount, double aCost, int bCount, double bCost) => aCount > bCount || (aCount == bCount && aCost < bCost);

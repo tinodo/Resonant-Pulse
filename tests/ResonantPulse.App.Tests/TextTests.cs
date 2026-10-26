@@ -19,7 +19,7 @@ public sealed class TextTests
             foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
             {
                 Text.Select(language);
-                foreach (var key in new[] { "ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable" })
+                foreach (var key in new[] { "ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable", "TimingDriftUnavailable" })
                 {
                     Assert.AreNotEqual(key, Text.Get(key), $"{language}: {key}");
                     Assert.IsFalse(string.IsNullOrWhiteSpace(Text.Get(key)), $"{language}: {key}");

@@ -58,7 +58,7 @@ public static class TimingCsvExporter
         yield return Fact("summary", "spread_milliseconds", report.Matched == 0 ? "" : Number(report.SpreadMilliseconds));
         yield return Fact("summary", "coverage", session.ExpectedSeconds.Count == 0 ? "" : Number(report.Coverage));
         yield return Fact("summary", "ambiguous_expected", Number(report.AmbiguousExpected));
-        yield return Fact("summary", "drift_milliseconds_per_second", report.Matched < 4 ? "" : Number(report.DriftMillisecondsPerSecond));
+        yield return Fact("summary", "drift_milliseconds_per_second", report.HasDriftEstimate ? Number(report.DriftMillisecondsPerSecond) : "");
         var matchedExpected = new HashSet<int>();
         var matchedObserved = new HashSet<int>();
         foreach (var match in report.Matches)

@@ -187,7 +187,7 @@ public sealed partial class MainWindow
             ? Text.Format("TimingNoMatches", report.Missed, report.Extra)
             : Text.Format("TimingReport", report.Matched, report.Missed, report.Extra,
                 report.MedianOffsetMilliseconds, report.SpreadMilliseconds, report.Coverage) +
-              "\n" + (report.Matched >= 4
+              "\n" + (report.HasDriftEstimate
                   ? Text.Format("TimingAdditional", report.DriftMillisecondsPerSecond, report.AmbiguousExpected)
                   : Text.Get("TimingDriftUnavailable"));
         _lastTimingSession = session;
