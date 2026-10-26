@@ -106,13 +106,23 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
     $transform.Resize([double]$size[0], [double]$size[1])
     Start-Sleep -Milliseconds 500
     $currentBounds = $window.Current.BoundingRectangle
-    foreach ($id in @('RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause')) {
+    foreach ($id in @('Tempo','TapTempo','QuickMeter','MainSound','MainAccent0','MainAccent3',
+        'RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause','MasterGain')) {
         $element = Find-Control $id
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
-            throw "Settings/transport entry is hidden at $($size[0])x$($size[1]): $id"
+            throw "Primary control is hidden at $($size[0])x$($size[1]): $id"
         }
     }
-    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true}
+    Add-Type -AssemblyName System.Drawing
+    $bitmap = [Drawing.Bitmap]::new([int]$currentBounds.Width, [int]$currentBounds.Height)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $origin = [Drawing.Point]::new([Math]::Max(0, [int]$currentBounds.X), [Math]::Max(0, [int]$currentBounds.Y))
+        $graphics.CopyFromScreen($origin, [Drawing.Point]::Empty, $bitmap.Size)
+        $image = Join-Path (Split-Path -Parent $ReportPath) "play-$($size[0])x$($size[1]).png"
+        $bitmap.Save($image, [Drawing.Imaging.ImageFormat]::Png)
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true}
 }
 $transform.Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 500
