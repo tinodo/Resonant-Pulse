@@ -41,6 +41,17 @@ editing/JSON models. Do not mutate them concurrently with compilation or saving;
 the app owns revision synchronization. Compiled plans do not reference mutable
 editing collections. Stage a whole new plan at a safe audio boundary.
 
+`PulseSettings.PracticeSeconds` is a live-transport limit, not an export or
+compiler duration override. Zero disables it; valid nonzero durations are
+1..86400 seconds after count-in. The native adapter uses processed audio frames,
+so pauses do not consume practice time. A finite program can finish earlier.
+The adapter renders no audio at or after the exclusive deadline and fades the
+last five milliseconds to avoid an abrupt waveform cut. This is not a guarantee
+about downstream device buffers or calibrated acoustic presentation.
+Disabled timers are omitted from JSON so ordinary projects retain the previous
+shape. A nonzero timer requires a timer-capable reader; older strict readers
+reject the new property rather than silently dropping the stop condition.
+
 ## Musical coordinates and projection
 
 `Rational` is a reduced arbitrary-precision fraction; default is zero. Arithmetic,

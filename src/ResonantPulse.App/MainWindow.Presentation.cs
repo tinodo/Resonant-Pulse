@@ -44,10 +44,10 @@ public sealed partial class MainWindow
         var elapsed = plan is null ? TimeSpan.Zero : TimeSpan.FromSeconds((double)snapshot.ProcessedFrame / plan.SampleRate);
         var time = elapsed.ToString(elapsed.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss", Text.Culture);
         long barOffset = 0;
-        if (snapshot.Revision is { IsFinite: false } revision && snapshot.ProcessedFrame >= revision.Initial.TotalFrames)
+        if (snapshot.Revision is { IsFinite: false } revision && snapshot.PositionFrame >= revision.Initial.TotalFrames)
         {
             var barsPerLoop = revision.Body.SectionBoundaries.Sum(boundary => boundary.Bars);
-            var completedLoops = 1 + (snapshot.ProcessedFrame - revision.Initial.TotalFrames) / revision.Body.TotalFrames;
+            var completedLoops = 1 + (snapshot.PositionFrame - revision.Initial.TotalFrames) / revision.Body.TotalFrames;
             barOffset = completedLoops * barsPerLoop;
         }
         var state = Text.Get(snapshot.State switch
@@ -80,6 +80,12 @@ public sealed partial class MainWindow
             (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : "") +
             (!HasSelectedOutput && !_isOutputMissing ? $"\n{Text.Get("ChooseOutput")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
+        if (!blind && snapshot.Revision is { Document.Settings.PracticeSeconds: > 0, EndFrame: { } endFrame } timed)
+        {
+            var remaining = Math.Max(0, endFrame - Math.Max(snapshot.ProcessedFrame, timed.CountInFrames));
+            var duration = TimeSpan.FromSeconds(Math.Ceiling((double)remaining / timed.Initial.SampleRate));
+            TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
+        }
         StartButton.IsEnabled = !_isBusy && (snapshot.State == TransportState.Playing || HasSelectedOutput);
         StopButton.IsEnabled = snapshot.State != TransportState.Stopped;
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";

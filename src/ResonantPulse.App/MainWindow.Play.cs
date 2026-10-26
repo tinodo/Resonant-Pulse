@@ -179,6 +179,21 @@ public sealed partial class MainWindow
                 ActionButton("RenameProject", "ApplyDocumentName", () => CommitAsync(doc => doc.Name = name.Text, false)),
                 CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync)))
         };
+        var practiceSeconds = Number("PracticeSeconds", "PracticeSeconds", settings.PracticeSeconds, 0, 86400);
+        var practice = new Expander
+        {
+            Header = Text.Get("PracticeTimer"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = Column(practiceSeconds, Copy("PracticeTimerHint"),
+                ActionButton("Apply", "ApplyPracticeTimer", async () =>
+                {
+                    var seconds = Integer(practiceSeconds);
+                    await CommitAsync(doc => doc.Settings.PracticeSeconds = seconds,
+                        editorChange: EditorChangeKind.PracticeTimerOnly);
+                }))
+        };
+        Identify(practice, "PracticeTimer", Text.Get("PracticeTimer"));
         var help = new Expander
         {
             Header = Text.Get("Help"),
@@ -189,7 +204,7 @@ public sealed partial class MainWindow
         var heroCard = new Border { Style = (Style)Application.Current.Resources["InstrumentCardStyle"], Child = hero };
         return Scroll(Column(Heading(Text.Get("Metronome")), heroCard,
             Flow(Column(Copy("TimeSignature"), meter), sound), accents,
-            rhythmOptions, tempoOptions, project, help));
+            rhythmOptions, tempoOptions, practice, project, help));
     }
 
     private static int PrimaryAccentCount(PulseSettings settings) =>

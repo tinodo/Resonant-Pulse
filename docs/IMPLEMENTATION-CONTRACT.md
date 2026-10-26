@@ -13,6 +13,7 @@ can be added without changing these application-facing types.
 - `PulseSettings`: `double Tempo = 120`, `int BeatsPerBar = 4`,
   `int BeatDenominator = 4`, `double BeatUnitQuarters = 1`,
   `int Subdivision = 1`, `double Swing = 0.5`, `int CountInBars = 1`,
+  `int PracticeSeconds = 0` (0 disables; live duration after count-in, up to 86400),
   `Accent[] Accents` default strong/normal/normal/normal,
   `int AudibleBars = 0`, `int SilentBars = 0`, `bool BlindGaps = true`,
   `float MasterGain = 0.5f`, `string Sound = "Wood"`.

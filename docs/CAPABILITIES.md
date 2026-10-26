@@ -48,3 +48,10 @@ successfully and remained open.
 [Store candidate run 40245073254](https://github.com/tinodo/Resonant-Pulse/actions/runs/40245073254)
 passed installed activation with the reserved product identity; submission was
 explicitly disabled. A candidate is not a certified or published Store app.
+
+Unreleased practice-timer work adds a 0..86400-second live duration, localized
+controls/countdown and an audio-frame deadline after count-in. Pauses preserve
+remaining practice time; a finite program can end sooner. It does not truncate
+the authored preview or exports. This source is not in preview 0.1.0-preview.1;
+hosted regression/native verification and delivery evidence are required before
+it is described as delivered.
