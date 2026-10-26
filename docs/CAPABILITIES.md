@@ -79,4 +79,17 @@ No Store submission or acoustic/full-product acceptance is implied.
 Beat/bar stopping is being extended in source: written meter beats and complete
 authored bars, independent of audible clicks and BPM units. Enabled seconds,
 beats, bars and finite-program limits compete; the earliest wins. This extension
-is not in preview.2 and requires its own hosted/native verification and release.
+is not in preview.2 and is not yet a public counted-stop release.
+
+Source `e0f1443` passed hosted run 40251307317: 224 Core passes with four
+platform skips and 98 App passes; Windows x64/ARM64/native-package gates passed.
+Its x64 candidate was exercised on the real saved output: four beats won over
+eight seconds and two bars, a 17-bar stop crossed the actual 16-bar loop seam
+and froze on bar 17/beat 4 at 00:36 including count-in, and a paused 16-beat run
+resumed to completion at 00:10. Original preview.2 and preferences were restored.
+The native first-use verifier now repeats these scenarios when an output exists,
+and reports `practiceStops=not-run-no-output` otherwise. This is not acoustic or
+full-product acceptance.
+The exact verifier also passed on the real-output PC. Its read-only searches
+reacquire the window and wait for temporarily rebuilt peers, and commands wait
+for enabled controls. Actions are not blindly retried.
