@@ -26,12 +26,12 @@
         </Grid.ColumnDefinitions>
         <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" MinWidth="112" MaxWidth="168" MinHeight="44"
                 AutomationProperties.AutomationId="TransportStartPause" HorizontalAlignment="Left" IsEnabled="False" />
-        <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" AutomationProperties.AutomationId="TransportStop" />
+        <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" HorizontalAlignment="Left" AutomationProperties.AutomationId="TransportStop" />
         <Button x:Name="MuteButton" Grid.Column="2" MinWidth="100" MaxWidth="180" HorizontalAlignment="Left"
                 AutomationProperties.AutomationId="EmergencyMute" />
         <TextBlock x:Name="TransportStatus" Grid.Column="3" TextWrapping="Wrap" VerticalAlignment="Center"
                    Margin="8,0" AutomationProperties.AutomationId="TransportStatus" Foreground="{ThemeResource MutedBrush}" />
-        <Button x:Name="AudioOptionsButton" Grid.Column="4" MinWidth="88"
+        <Button x:Name="AudioOptionsButton" Grid.Column="4" MinWidth="88" HorizontalAlignment="Left"
                 AutomationProperties.AutomationId="AudioOptions">
           <Button.Flyout>
             <Flyout x:Name="AudioOptionsFlyout">

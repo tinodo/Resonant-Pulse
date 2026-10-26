@@ -168,6 +168,27 @@ while ((Find-Control 'QuickMeter').Current.Name -notlike '*4/4*' -and [DateTime]
     Start-Sleep -Milliseconds 100
 }
 if ((Find-Control 'QuickMeter').Current.Name -notlike '*4/4*') { throw 'Meter did not restore after long-strip verification.' }
+foreach ($size in @(@(400, 720), @(320, 900))) {
+    $transform.Resize([double]$size[0], [double]$size[1])
+    Start-Sleep -Milliseconds 500
+    $currentBounds = $window.Current.BoundingRectangle
+    foreach ($id in 'TransportStartPause','TransportStop','EmergencyMute','AudioOptions') {
+        $element = Find-Control $id
+        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
+            throw "Transport command is inaccessible at $($size[0])x$($size[1]): $id"
+        }
+    }
+    $quick = Find-Control 'PlayQuickControls'
+    [object]$quickPattern = $null
+    if ($quick.TryGetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern, [ref]$quickPattern) -and
+        $quickPattern.Current.VerticallyScrollable) { $quickPattern.SetScrollPercent(-1, 100) }
+    Start-Sleep -Milliseconds 200
+    $soundControl = Find-Control 'MainSound'
+    if ($soundControl.Current.IsOffscreen -or -not $currentBounds.Contains($soundControl.Current.BoundingRectangle) -or
+        $soundControl.Current.BoundingRectangle.Height -lt 44) {
+        throw "Sound selector is not fully reachable at $($size[0])x$($size[1])."
+    }
+}
 $transform.Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 500
 foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
