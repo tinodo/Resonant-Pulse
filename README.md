@@ -51,7 +51,7 @@ The archive uses .NET's supported
 [ZipArchive API](https://learn.microsoft.com/dotnet/api/system.io.compression.ziparchive?view=net-10.0).
 This source feature is not included in published preview.3.
 
-### CI
+### Timing-report export in development
 
 The next preview also adds **Export timing report (CSV)** in Train. Finish a
 keyboard Timing Lab run first. The export freezes that completed run's original
@@ -63,6 +63,8 @@ text, including quotes/control characters, without spreadsheet formula cells.
 Unavailable offset/drift/coverage metrics are blank rather than invented zeroes.
 This is keyboard input-arrival analysis, not calibrated acoustic performance,
 microphone capture or automatic practice history. It is not in preview.3.
+
+### CI
 
 Use the pinned .NET SDK and a Windows build agent. This repository's owner uses
 a shared local machine: builds/tests run in GitHub Actions, not locally.

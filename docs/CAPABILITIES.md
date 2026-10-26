@@ -222,6 +222,22 @@ and invariant round-trip numbers. User project/target labels are JSON-string
 cells, preserving arbitrary content without formula or record injection.
 Unmeasurable offset/drift/coverage fields are blank. This is neither automatic
 practice history nor calibrated microphone/MIDI/acoustic timing.
-Hosted numerical/file-integrity/localization checks and native disabled-before-
-completion exposure are pending. Real keyboard-run/file-picker acceptance and
-public delivery remain separate.
+Source `cf6a90b` passed hosted
+[run 40267917396](https://github.com/tinodo/Resonant-Pulse/actions/runs/40267917396):
+253 Core passes of 259 cases (six Windows-only skips), 151 App passes,
+51 Windows file-integrity passes, eight workspace passes and x64/ARM64
+build/package gates. Independent CSV parsing covers original/duplicate indices,
+signed offsets, invariant precision, JSON-label round trips, unavailable
+statistics, cancellation, concurrent replacement and real Windows sharing denial.
+Copilot review 5647295460 identified coincident-target drift being shown as zero.
+The analyzer now exposes shared drift availability; Train and CSV both require
+positive target-group time separation. Regressions distinguish unavailable
+coincident drift from genuine measured zero. Substantive follow-up review
+5647332117 reports no open issues, not human/interactive acceptance.
+The native report records
+`timingCsv=disabled-without-completed-run-no-automatic-start`; audio/count/tap-in
+explicitly report `not-run-no-output`. This does not exercise a real completed
+keyboard run or the save picker. Public preview.3 remains unchanged and stopped;
+local keyboard acceptance is still blocked by Windows LockApp owning focus.
+Final follow-up gates, real keyboard-run/file-picker acceptance and public
+delivery remain separate.

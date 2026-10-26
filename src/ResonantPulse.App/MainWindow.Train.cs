@@ -242,7 +242,7 @@ public sealed partial class MainWindow
             throw new InvalidOperationException(Text.Get("TimingCsvUnavailable"));
         var path = await PickSavePathAsync(".csv", Text.Get("ExportTimingCsv"), session.Context.ProjectName + "-timing");
         if (path is null) return;
-        await TimingCsvExporter.ExportAsync(path, session);
+        await Task.Run(() => TimingCsvExporter.ExportAsync(path, session));
         ShowNotice("Saved");
     }
 }
