@@ -9,6 +9,9 @@ cancel intent. Program section tempos scale proportionally, preserving the
 selected BPM note unit, count-in and rhythm; out-of-range results are rejected.
 Playback starts after saving and audio preparation, not at a calibrated phase.
 Arming never survives restart. Normal tap tempo still changes BPM without starting.
+Selected-output removal or updates cancel tap-in without needing Refresh.
+Reconnection does not rearm it. If endpoint monitoring is unavailable, tap-in
+shows retry guidance while normal manual Start remains independent.
 
 The practice timer is in Play's **Practice timer and auto-stop** expander. Set a duration in
 seconds and choose Apply; zero disables it. Stop and Start to use a changed

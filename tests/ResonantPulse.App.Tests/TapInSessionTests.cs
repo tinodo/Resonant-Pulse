@@ -116,20 +116,26 @@ public sealed class TapInSessionTests
     }
 
     [TestMethod]
-    public void LostOutputIntentCannotReturnWithReconnectedEndpoint()
+    [DataRow(false)]
+    [DataRow(true)]
+    public void LostOutputIntentCannotReturnWithReconnectedEndpoint(bool pendingStart)
     {
         var session = new TapInSession();
-        session.Arm(2, "output"); session.Tap(0); session.Tap(0.5);
+        session.Arm(2, "output"); session.Tap(0);
+        if (pendingStart) session.Tap(0.5);
         var pending = session.Generation;
         void DeviceChanged(string id)
         {
             if (session.IsAffectedByOutput(id)) session.Cancel();
         }
         DeviceChanged("other-output");
-        Assert.IsTrue(session.IsPending);
+        Assert.AreEqual(pendingStart, session.IsPending);
+        Assert.AreEqual(!pendingStart, session.IsArmed);
         DeviceChanged("OUTPUT");
         Assert.IsFalse(session.IsCurrent(pending));
         Assert.IsFalse(session.IsArmed);
+        Assert.IsFalse(session.IsPending);
+        Assert.IsNull(session.Bpm);
         Assert.ThrowsExactly<InvalidOperationException>(() => session.Tap(1));
         Assert.IsFalse(session.IsAffectedByOutput("output"));
         session.Arm(2, "output");
@@ -137,5 +143,21 @@ public sealed class TapInSessionTests
         Assert.IsTrue(session.Tap(2.5));
         Assert.IsTrue(session.IsCurrent(session.Generation));
         Assert.IsFalse(session.IsCurrent(pending));
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow(" ")]
+    public void InvalidOutputDoesNotDestroyArmedSession(string outputId)
+    {
+        var session = new TapInSession();
+        session.Arm(4, "output"); session.Tap(0);
+        var generation = session.Generation;
+        Assert.ThrowsExactly<ArgumentException>(() => session.Arm(2, outputId));
+        Assert.AreEqual(generation, session.Generation);
+        Assert.IsTrue(session.IsArmed);
+        Assert.IsTrue(session.IsAffectedByOutput("output"));
+        Assert.AreEqual(4, session.RequiredTaps);
+        Assert.AreEqual(1, session.ValidTaps);
     }
 }

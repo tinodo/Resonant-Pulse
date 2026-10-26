@@ -123,5 +123,23 @@ Tap-in is now being implemented in source, not in preview.3: explicitly armed
 2–16 consecutive valid taps, visible progress/rejection, proportional program
 tempo scaling, cancellation and no restored arming. The existing count-in is
 preserved. Publication/recovery and audio preparation precede playback; there
-is no phase-alignment or acoustic-start guarantee. Hosted and native evidence
-for this change is still required before delivery.
+is no phase-alignment or acoustic-start guarantee. Active render-endpoint
+monitoring cancels selected-device removal/update intent without requiring
+manual refresh; reconnecting cannot rearm it. Monitoring failure disables
+tap-in with visible guidance, independently of manual Start.
+
+Tap-in source `f2c81f3` passed all eight required gates, including hosted
+[run 40259904811](https://github.com/tinodo/Resonant-Pulse/actions/runs/40259904811):
+224 Core passes of 228 cases (four platform skips), 124 App passes, and
+Windows x64/ARM64 native/package checks. Automated review 5646802630 reported
+no open issues; it did not establish human/product acceptance.
+The checksum/provenance-verified identical-tree x64 candidate `ef501ef`
+passed real-output playback, counted limits and rejected-tap checks. The
+editing-field Escape check remains blocked because Windows is locked and
+LockApp owns keyboard focus. No keyboard input was sent to another process.
+The public preview.3 and original preferences were restored after each attempt.
+The verifier now targets the NumberBox's actual text editor and waits for
+that exact owned element's focus identity, rather than assuming a focusable
+wrapper or immediate focus transfer. Fresh full native completion, including
+automatic tap-in playback, is still required before delivery. Physical
+unplug/reconnect acceptance has not been established.

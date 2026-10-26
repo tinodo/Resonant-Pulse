@@ -212,9 +212,28 @@ if ($selection.Count -eq 0) {
         Invoke-Control 'ArmTapIn'
         $keyboard = New-Object -ComObject WScript.Shell
         if (-not $keyboard.AppActivate($AppProcessId)) { throw 'Could not activate the owned native app for Escape verification.' }
-        (Find-Control 'TapInCount').SetFocus()
-        if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
-            throw 'Editing focus is not in the owned app; no keyboard input was sent.'
+        $editCondition = [Windows.Automation.PropertyCondition]::new(
+            [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)
+        $countEditor = (Find-Control 'TapInCount').FindFirst(
+            [Windows.Automation.TreeScope]::Descendants, $editCondition)
+        if ($null -eq $countEditor -or -not $countEditor.Current.IsKeyboardFocusable) {
+            throw 'Tap-in count did not expose a focusable text editor.'
+        }
+        $countEditor.SetFocus()
+        $editorId = $countEditor.GetRuntimeId() -join ':'
+        $focusDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        do {
+            $focused = [Windows.Automation.AutomationElement]::FocusedElement
+            $ownsFocus = $null -ne $focused -and (($focused.GetRuntimeId() -join ':') -eq $editorId)
+            if ($ownsFocus) { break }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $focusDeadline)
+        if (-not $ownsFocus) {
+            $focusedProcess = if ($null -eq $focused) { 'none' } else { $focused.Current.ProcessId }
+            if ($null -ne $focused -and (Get-Process -Id $focusedProcess).ProcessName -eq 'LockApp') {
+                throw 'Windows is locked; editing-field Escape cannot be verified. No keyboard input was sent.'
+            }
+            throw "The owned editor did not receive focus (editor process $($countEditor.Current.ProcessId), focused process $focusedProcess); no keyboard input was sent."
         }
         $keyboard.SendKeys('{ESC}')
         Wait-TapStatus 'idle'
