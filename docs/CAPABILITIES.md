@@ -8,14 +8,14 @@ evidence separately.
 | Family | Implemented source | Not yet delivered or established |
 |---|---|---|
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
-| Play and transport | Native pulse instrument with an exact-tempo editor, live -/TAP/+, sheet-music time-signature picker with a custom builder, beat-strength strip, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; live sound, beat-strength, tempo, meter, tempo-unit, subdivision, swing, group and gap-bar edits spliced at the next pulse | Acoustic/hardware confirmation of live splices (no audio has been played by the automated checks); structural edits during a finite program (they need Stop + Start); calibrated audible position; tap-in and free-running/no-bar mode. Full visual/usability acceptance remains outstanding |
+| Play and transport | Native pulse instrument with an exact-tempo editor, live -/TAP/+, sheet-music time-signature picker with a custom builder, beat-strength strip, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; live sound, beat-strength, tempo, meter, tempo-unit, subdivision, swing, group and gap-bar edits spliced at the next pulse | Acoustic/hardware confirmation of live splices (automated checks have not played audible sound; a silent real-device run has passed); structural edits during a finite program (they need Stop + Start); calibrated audible position; tap-in and free-running/no-bar mode. Full visual/usability acceptance remains outstanding |
 | Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
 | Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.3 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.7 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -144,5 +144,46 @@ On the real saved output, the exact verifier passed first Start/position advance
 competing limits, the 17-bar loop seam, counted pause/resume and acknowledged
 final reset. Original preferences were restored byte-for-byte, diagnostic
 recovery removed, and preview.3 reopened responsive and stopped with limits off.
-The per-user Start menu shortcut targets preview.3. This does not establish
+The per-user Start menu shortcut then targeted preview.3. This does not establish
 acoustic accuracy, full-product acceptance or Store publication.
+
+[Preview 0.1.0-preview.6](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.6)
+delivers the Play redesign and live edits from protected main `44a60d6`. Main
+build 40371460154 and CodeQL 40371460083 passed; release 40372330283 passed fresh
+hosted tests (232 Core passes of 236 cases, four platform skips, and 260 App
+passes), Windows x64/ARM64 builds and x64 native/package checks. Hosted audio,
+live-edit and counted-stop scenarios explicitly reported `not-run-no-output`.
+The actual public x64 ZIP checksum and embedded source/version/run were checked.
+The build was then installed on the development PC after a dry run on copies of
+its saved state: it started responsive and stopped, the saved preferences and
+recovery draft were byte-identical after startup, and the per-user Start menu
+shortcut then targeted preview.6. No audio was played, so this does not establish
+acoustic accuracy, live-splice latency, full-product acceptance or Store
+publication. A review of its source listed three findings that preview.7 fixes.
+
+[Preview 0.1.0-preview.7](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.7)
+fixes three findings from Copilot's re-review of the Play redesign, which listed
+them as previously missed while reporting no open inline issues: the position
+readout could pair a pre-splice frame with the new revision, a live gap-bar edit
+could leave up to 50 ms of the previous click ringing into a bar that is now
+silent, and the caption icons ignored Windows Contrast themes. Protected main
+`0050cdc`: main build 40380680897 and CodeQL 40380680942 passed; release
+40381406205 passed fresh hosted tests (234 Core passes of 238 cases, four
+platform skips, and 271 App passes), Windows x64/ARM64 builds and x64
+native/package checks. Hosted audio, live-edit and counted-stop scenarios
+explicitly reported `not-run-no-output`.
+The actual public x64 ZIP checksum and embedded source/version/run were checked.
+The build was installed on the development PC after a dry run on copies of its
+saved state: it started responsive and stopped, the saved preferences and
+recovery draft were byte-identical after startup, and the per-user Start menu
+shortcut now targets preview.7. Scratch instances of that installed binary then
+passed the exact verifier's audio scenarios three times in a row on the Windows
+default output at an inaudible master gain (0.0001, isolated data folder):
+playback advanced, live sound, beat-strength, tempo and meter edits were
+published without stopping, and the counted stops passed. An earlier attempt had
+failed intermittently because the verifier's first-position check raced the
+count-in, whose status text stays fixed for the whole two-second bar; playback
+advanced normally in preview.5, 6 and 7, and the check now waits for the text to
+change. The instance installed for the owner played no audio, so this does not
+establish acoustic accuracy, live-splice latency, Contrast-theme appearance,
+full-product acceptance or Store publication.
