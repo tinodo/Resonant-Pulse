@@ -89,6 +89,7 @@ public sealed partial class MainWindow : Window
         StartButton.Click += async (_, _) => await GuardAsync(TogglePlaybackAsync);
         StopButton.Click += (_, _) =>
         {
+            CancelTapIn();
             _transportIntent++;
             InvalidateTiming();
             _transport.Stop();
@@ -137,6 +138,7 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _isClosed = true;
+            CancelTapIn();
             _refresh.Stop();
             RemovePowerHook(hwnd);
             _transport.Dispose();
@@ -202,6 +204,10 @@ public sealed partial class MainWindow : Window
 
     private void BuildPage()
     {
+        CancelTapIn();
+        _tapStatus = null;
+        _tapInArm = _tapInCancel = null;
+        _tapInCount = _playTempo = null;
         _instrument = null;
         _position = null;
         _stageTempo = null;
@@ -228,6 +234,7 @@ public sealed partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
+        CancelTapIn();
         if (_isBusy || !_isReady) return;
         InvalidateTiming();
         if (_transport.State == TransportState.Playing)
@@ -409,7 +416,17 @@ public sealed partial class MainWindow : Window
         var focused = FocusManager.GetFocusedElement(Root.XamlRoot);
         if (focused is TextBox or PasswordBox or NumberBox or ComboBox or Slider) return;
         // NumberBox focuses its inner TextBox; do not intercept normal typing.
-        if (args.Key == VirtualKey.F && _isTimingArmed)
+        if (!ctrl && args.Key == VirtualKey.T && _view == "Play")
+        {
+            if (!args.KeyStatus.WasKeyDown) _ = GuardAsync(TapTempoAsync);
+            args.Handled = true;
+        }
+        else if (args.Key == VirtualKey.Escape && (_tapIn.IsArmed || _tapIn.IsPending))
+        {
+            CancelTapIn();
+            args.Handled = true;
+        }
+        else if (args.Key == VirtualKey.F && _isTimingArmed)
         {
             if (!args.KeyStatus.WasKeyDown) RecordAttack();
             args.Handled = true;

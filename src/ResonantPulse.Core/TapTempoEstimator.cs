@@ -12,6 +12,8 @@ public sealed class TapTempoEstimator
     public int RejectedTaps { get; private set; }
     public double? CurrentBpm { get; private set; }
     public bool LastTapAccepted { get; private set; }
+    /// <summary>Apply the existing outlier gate after the first interval for explicitly armed tap-in.</summary>
+    public bool RejectEarlyOutliers { get; init; }
     /// <summary>Idle reset threshold. Increase this explicitly when measuring extremely slow taps.</summary>
     public double IdleResetSeconds { get; init; } = 4;
     public double? Tap(double timestampSeconds)
@@ -28,7 +30,7 @@ public sealed class TapTempoEstimator
         // Ignore contact bounce without shifting the reference timestamp.
         if (delta < 0.06) { RejectedTaps++; return CurrentBpm; }
         if (delta > 60) { Reset(); last = timestampSeconds; LastTapAccepted = true; return null; }
-        if (count >= 3 && Math.Abs(delta - median) > Math.Max(0.025, median * 0.30))
+        if (count >= (RejectEarlyOutliers ? 1 : 3) && Math.Abs(delta - median) > Math.Max(0.025, median * 0.30))
         {
             // An anomalous interval is excluded; advance reference so a missed tap does not poison later intervals.
             if (candidateCount > 0 && Math.Abs(delta - candidateMean) <= Math.Max(0.025, candidateMean * 0.1))

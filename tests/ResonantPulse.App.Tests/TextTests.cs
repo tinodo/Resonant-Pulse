@@ -9,6 +9,34 @@ namespace ResonantPulse.App.Tests;
 public sealed class TextTests
 {
     [TestMethod]
+    public void TapInFeedbackIsPresentAndFormatsInEverySupportedLanguage()
+    {
+        var previous = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                foreach (var key in new[] { "TapReady", "TapEstimateUnknown", "TapEstimate", "TapInCount",
+                    "ArmTapIn", "CancelTapIn", "TapInProgress", "TapInRejected", "TapInPreparing",
+                    "TapInStopFirst", "TapInCancelled", "TapInRange", "TapInHint" })
+                    Assert.AreNotEqual(key, Text.Get(key), $"{language}: {key}");
+                Assert.IsFalse(Text.Format("TapInProgress", 2, 4, "120").Contains('{'));
+                Assert.IsFalse(Text.Format("TapInRejected", 0, 4, "120").Contains('{'));
+                Assert.IsFalse(Text.Format("TapEstimate", 120d, 3, 1).Contains('{'));
+            }
+        }
+        finally
+        {
+            Text.Select(previous);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void SelectingSystemRestoresInitialLanguageAfterExplicitSelections()
     {
         var previousLanguage = Text.Language;

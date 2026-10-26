@@ -33,6 +33,7 @@ public sealed partial class MainWindow
             {
                 try
                 {
+                    CancelTapIn();
                     InvalidateTiming();
                     _transportIntent++;
                     _transport.Stop();

@@ -2,6 +2,14 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
+Tap-in is under **More tempo controls**. Choose 2–16 consecutive valid taps,
+explicitly arm, then use Tap tempo or T outside input fields. Progress and
+rejections are visible. Stop, Escape, Reset, navigation, output change and sleep
+cancel intent. Program section tempos scale proportionally, preserving the
+selected BPM note unit, count-in and rhythm; out-of-range results are rejected.
+Playback starts after saving and audio preparation, not at a calibrated phase.
+Arming never survives restart. Normal tap tempo still changes BPM without starting.
+
 The practice timer is in Play's **Practice timer and auto-stop** expander. Set a duration in
 seconds and choose Apply; zero disables it. Stop and Start to use a changed
 duration. Count-in and pauses do not consume practice time, and a shorter finite

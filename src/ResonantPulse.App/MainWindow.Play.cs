@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -18,13 +17,15 @@ public sealed partial class MainWindow
         var instrument = new PulseInstrument();
         _instrument = instrument;
         var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000);
+        _playTempo = tempo;
         tempo.FontSize = 32;
         tempo.ValueChanged += async (_, args) =>
         {
             // The document can lag behind queued validation. Compare the UI
             // event pair so a rapid 120 -> 132 -> 120 retains both edits.
             var proposed = args.NewValue;
-            if (!TempoEdits.IsChange(args.OldValue, proposed)) return;
+            if (_isSynchronizingTempo || !TempoEdits.IsChange(args.OldValue, proposed)) return;
+            CancelTapIn();
             await GuardAsync(() => CommitAsync(doc => doc.Settings.Tempo = proposed,
                 editorChange: EditorChangeKind.GlobalTempoOnly));
         };
@@ -38,14 +39,14 @@ public sealed partial class MainWindow
             await CommitAsync(doc => doc.Settings.BeatUnitQuarters = double.Parse(Selected(unit), CultureInfo.InvariantCulture));
             BuildPage();
         });
-        var tap = ActionButton("Tap", "TapTempo", () =>
-        {
-            var estimate = _tap.Tap((double)Stopwatch.GetTimestamp() / Stopwatch.Frequency);
-            // NumberBox.ValueChanged is the single commit path. An unchanged
-            // estimate must not add a redundant undo entry or recovery write.
-            if (TempoEdits.TryApplyTap(tempo.Value, estimate, out var proposed))
-                tempo.Value = proposed;
-        });
+        var tap = ActionButton("Tap", "TapTempo", TapTempoAsync);
+        _tapStatus = Body(Text.Get("TapReady"));
+        Identify(_tapStatus, "TapStatus", _tapStatus.Text);
+        var tapCount = Number("TapInCount", "TapInCount", _tapInRequiredTaps, 2, 16);
+        _tapInCount = tapCount;
+        tapCount.ValueChanged += (_, _) => CancelTapIn();
+        _tapInArm = ActionButton("ArmTapIn", "ArmTapIn", () => ArmTapIn(Integer(tapCount)));
+        _tapInCancel = ActionButton("CancelTapIn", "CancelTapIn", CancelTapIn);
         var decrease = ActionButton("TempoDown", "TempoDown", () => { tempo.Value = Math.Max(1, tempo.Value - 1); });
         var increase = ActionButton("TempoUp", "TempoUp", () => { tempo.Value = Math.Min(1000, tempo.Value + 1); });
         decrease.Content = "-1";
@@ -68,9 +69,15 @@ public sealed partial class MainWindow
             Content = Column(unit, CommandFlow(
                 ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, tempo.Value / 2); }),
                 ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, tempo.Value * 2); }),
-                ActionButton("ResetTap", "ResetTap", () => _tap.Reset())))
+                ActionButton("ResetTap", "ResetTap", () =>
+                {
+                    CancelTapIn();
+                    _tap.Reset();
+                    RefreshSnapshot();
+                })), tapCount, CommandFlow(_tapInArm, _tapInCancel), Copy("TapInHint"))
         };
-        var controls = Column(tempo, tempoCommands, Copy("FirstUseHint"));
+        Identify(tempoOptions, "TempoOptions", Text.Get("TempoOptions"));
+        var controls = Column(tempo, tempoCommands, _tapStatus, Copy("FirstUseHint"));
         var instrumentArea = instrument;
         var hero = new Grid { ColumnSpacing = 24, RowSpacing = 20 };
         hero.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

@@ -1,10 +1,52 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Tests;
 
 [TestClass]
 public sealed class TempoEditsTests
 {
+    [TestMethod]
+    [DataRow(0.5)]
+    [DataRow(1.0)]
+    [DataRow(1.5)]
+    [DataRow(3.0)]
+    public void TapInUsesSelectedUnitAndScalesWholeProgramWithoutRewritingRhythm(double unit)
+    {
+        var document = new PulseDocument
+        {
+            Settings = new() { BeatUnitQuarters = unit, CountInBars = 2, PracticeBeats = 12 },
+            Program = [
+                new() { StartTempo = 80, EndTempo = 120 },
+                new() { StartTempo = 120, EndTempo = 160 }
+            ]
+        };
+        TempoEdits.ApplyTapIn(document, 120);
+        Assert.AreEqual(120d, document.Settings.Tempo);
+        Assert.AreEqual(unit, document.Settings.BeatUnitQuarters);
+        Assert.AreEqual(2, document.Settings.CountInBars);
+        Assert.AreEqual(12, document.Settings.PracticeBeats);
+        Assert.AreEqual(120d, document.Program[0].StartTempo);
+        Assert.AreEqual(180d, document.Program[0].EndTempo);
+        Assert.AreEqual(180d, document.Program[1].StartTempo);
+        Assert.AreEqual(240d, document.Program[1].EndTempo);
+    }
+
+    [TestMethod]
+    [DataRow(1000.0, 100.0, 200.0)]
+    [DataRow(1.0, 100.0, 50.0)]
+    [DataRow(double.NaN, 100.0, 100.0)]
+    [DataRow(double.PositiveInfinity, 100.0, 100.0)]
+    [DataRow(0.5, 100.0, 100.0)]
+    public void InvalidTapInScaleRejectsBeforeAnyDocumentMutation(double tempo, double start, double end)
+    {
+        var document = new PulseDocument { Program = [new() { StartTempo = start, EndTempo = end }] };
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => TempoEdits.ApplyTapIn(document, tempo));
+        Assert.AreEqual(120d, document.Settings.Tempo);
+        Assert.AreEqual(start, document.Program[0].StartTempo);
+        Assert.AreEqual(end, document.Program[0].EndTempo);
+    }
+
     [TestMethod]
     public async Task RapidReturnUsesUiEventPairWhilePublishedDocumentIsStillDelayed()
     {

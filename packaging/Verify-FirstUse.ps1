@@ -75,6 +75,15 @@ function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Practice-limit Apply did not confirm successful publication and recovery: $expected (observed $committed)"
 }
+function Wait-TapStatus([string]$expected) {
+    $limit = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        $text = (Find-Control 'TapStatus').Current.ItemStatus
+        if ($text -like $expected) { return }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "Expected tap-in status $expected, observed $text"
+}
 $deadline = [DateTime]::UtcNow.AddSeconds(20)
 do {
     $status = Find-Control 'TransportStatus'
@@ -97,6 +106,7 @@ $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pa
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
+$tapIn = 'not-run-no-output'
 if ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
 } else {
@@ -174,8 +184,55 @@ if ($selection.Count -eq 0) {
         $null = Wait-Transport 'Stopped'
         Set-PracticeLimits 0 0 0
     }
+    try {
+        (Find-Control 'TempoOptions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        Set-PracticeNumber 'TapInCount' 4
+        Invoke-Control 'ArmTapIn'
+        Wait-TapStatus 'armed:0:4:False'
+        Invoke-Control 'TapTempo'
+        Wait-TapStatus 'armed:1:4:False'
+        Start-Sleep -Milliseconds 500
+        Invoke-Control 'TapTempo'
+        Wait-TapStatus 'armed:2:4:False'
+        Start-Sleep -Milliseconds 100
+        Invoke-Control 'TapTempo'
+        Wait-TapStatus 'armed:0:4:True'
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
+            throw 'A rejected tap unexpectedly started playback.'
+        }
+        Invoke-Control 'TransportStop'
+        Wait-TapStatus 'idle'
+        $null = Wait-Transport 'Stopped'
+        Invoke-Control 'ArmTapIn'
+        Invoke-Control 'TapTempo'
+        Wait-TapStatus 'armed:1:4:False'
+        (Find-Control 'DestinationStudio').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        (Find-Control 'DestinationPlay').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        Wait-TapStatus 'idle'
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
+            throw 'Navigating away from tap-in unexpectedly started playback.'
+        }
+        (Find-Control 'TempoOptions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        Set-PracticeNumber 'TapInCount' 2
+        Invoke-Control 'ArmTapIn'
+        Wait-TapStatus 'armed:0:2:False'
+        Invoke-Control 'TapTempo'
+        Wait-TapStatus 'armed:1:2:False'
+        Start-Sleep -Milliseconds 500
+        Invoke-Control 'TapTempo'
+        $null = Wait-Transport 'Playing' $true
+        Wait-TapStatus 'idle'
+        $tapIn = 'rejected-tap-stop-navigation-cancel-and-two-tap-start-passed'
+    } finally {
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*' -or
+            (Find-Control 'TapStatus').Current.ItemStatus -ne 'idle') {
+            Invoke-Control 'TransportStop'
+        }
+        $null = Wait-Transport 'Stopped'
+        Wait-TapStatus 'idle'
+    }
 }
-@{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
+@{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;tapIn=$tapIn;
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 Write-Output "First-use controls are visible; playback result: $playback"

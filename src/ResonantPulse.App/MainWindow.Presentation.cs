@@ -88,7 +88,8 @@ public sealed partial class MainWindow
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }
         StartButton.IsEnabled = !_isBusy && (snapshot.State == TransportState.Playing || HasSelectedOutput);
-        StopButton.IsEnabled = snapshot.State != TransportState.Stopped;
+        StopButton.IsEnabled = snapshot.State != TransportState.Stopped || _tapIn.IsArmed || _tapIn.IsPending;
+        RefreshTapControls(snapshot.State);
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
         {

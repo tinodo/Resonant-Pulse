@@ -68,7 +68,18 @@ can be added without changing these application-facing types.
   `double MedianOffsetMilliseconds`, `double SpreadMilliseconds`,
   `double Coverage`.
 - `TapTempoEstimator.Tap(double timestampSeconds)` returns `double?` BPM;
-  `Reset()` clears history.
+  `Reset()` clears history. Optional `RejectEarlyOutliers` applies the same
+  interval gate after one interval instead of three; regular tap behavior is unchanged.
+
+Tap-in is explicit one-shot intent, never persisted or restored. Two to sixteen
+consecutive accepted taps trigger publication/recovery before audio preparation.
+Rejected taps break the consecutive run; idle resets it. The selected BPM note
+unit is preserved. For a program, all section endpoint tempos scale by
+`estimatedBpm / firstSection.StartTempo`; no meter, ramp domain, repeat or count-in
+is rewritten. Out-of-range tempo scaling or failed validation/recovery never starts
+playback. Stop, manual transport, Reset/Escape, navigation, output changes and
+power transitions invalidate pending intent. This is not phase-aligned or
+acoustically calibrated start.
 
 Prefer optional additions over breaking these APIs. Inform the coordinator about
 any essential contract correction before changing it.

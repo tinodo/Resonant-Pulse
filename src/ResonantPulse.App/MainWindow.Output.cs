@@ -42,6 +42,7 @@ public sealed partial class MainWindow
     private async Task SelectOutputAsync(OutputDevice device)
     {
         if (_preferences.OutputId == device.Id && !_isOutputMissing) return;
+        CancelTapIn();
         InvalidateTiming();
         _transportIntent++;
         _transport.SuspendForEndpointChange();

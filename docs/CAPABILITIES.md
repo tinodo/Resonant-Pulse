@@ -118,3 +118,10 @@ final reset. Original preferences were restored byte-for-byte, diagnostic
 recovery removed, and preview.3 reopened responsive and stopped with limits off.
 The per-user Start menu shortcut targets preview.3. This does not establish
 acoustic accuracy, full-product acceptance or Store publication.
+
+Tap-in is now being implemented in source, not in preview.3: explicitly armed
+2–16 consecutive valid taps, visible progress/rejection, proportional program
+tempo scaling, cancellation and no restored arming. The existing count-in is
+preserved. Publication/recovery and audio preparation precede playback; there
+is no phase-alignment or acoustic-start guarantee. Hosted and native evidence
+for this change is still required before delivery.
