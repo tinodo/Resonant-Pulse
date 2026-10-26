@@ -6,6 +6,7 @@ using ResonantPulse.Core;
 namespace ResonantPulse.App.Tests;
 
 [TestClass]
+[DoNotParallelize]
 public sealed class LiveSoundEditsTests
 {
     [TestMethod]

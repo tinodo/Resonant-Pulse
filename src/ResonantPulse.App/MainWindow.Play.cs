@@ -15,7 +15,7 @@ public sealed partial class MainWindow
     {
         var settings = _document.Settings;
         var name = Input("Name", "DocumentName", _document.Name);
-        var instrument = new PulseInstrument { Width = 156, Height = 156, VerticalAlignment = VerticalAlignment.Center };
+        var instrument = new PulseInstrument { Width = 128, Height = 128, VerticalAlignment = VerticalAlignment.Center };
         _instrument = instrument;
         var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000);
         tempo.FontSize = 24;
@@ -208,6 +208,8 @@ public sealed partial class MainWindow
             Column(Copy("FirstUseHint"), Copy("LiveSoundHint"), Copy("EditBoundary"), Copy("PresentationLimits"), Copy("KeyboardHelp"), Copy("Horizon")));
         sound.Header = null;
         sound.Width = 220;
+        AutomationProperties.SetHelpText(sound, Text.Get("LiveSoundHint"));
+        ToolTipService.SetToolTip(sound, Text.Get("LiveSoundHint"));
         var meterSound = new Grid { ColumnSpacing = 16 };
         meterSound.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         meterSound.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -234,26 +236,40 @@ public sealed partial class MainWindow
             Grid.SetColumn(soundField, narrow ? 0 : 1);
             Grid.SetRow(soundField, narrow ? 1 : 0);
         };
-        var heroCard = new Border { Style = (Style)Application.Current.Resources["InstrumentCardStyle"], Child = hero };
+        var heroCard = new Border
+        {
+            Style = (Style)Application.Current.Resources["InstrumentCardStyle"], Child = hero,
+            Width = 560, HorizontalAlignment = HorizontalAlignment.Left
+        };
         var content = new StackPanel { Spacing = 12 };
         content.Children.Add(heroCard);
         content.Children.Add(meterSound);
         content.Children.Add(accents);
-        content.Children.Add(Copy("LiveSoundHint"));
         var scroll = Scroll(content);
         scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
         var cue = Copy("ScrollControlsHint");
         Identify(cue, "PlayScrollHint", cue.Text);
         cue.Visibility = Visibility.Collapsed;
-        scroll.LayoutUpdated += (_, _) => cue.Visibility = scroll.ScrollableHeight > 1 ? Visibility.Visible : Visibility.Collapsed;
+        scroll.LayoutUpdated += (_, _) =>
+        {
+            var cueSpace = cue.Visibility == Visibility.Visible ? cue.ActualHeight + 8 : 0;
+            cue.Visibility = scroll.ScrollableHeight > cueSpace + 1 ? Visibility.Visible : Visibility.Collapsed;
+        };
         var heading = Heading(Text.Get("Metronome"));
         heading.FontSize = 24;
         var shortcuts = WrapControls(115, rhythmOptions, tempoOptions, practice, project, help);
+        shortcuts.Width = 760;
+        shortcuts.HorizontalAlignment = HorizontalAlignment.Left;
         var header = new StackPanel { Spacing = 8 };
         header.Children.Add(heading);
         header.Children.Add(shortcuts);
         header.Children.Add(cue);
         var page = new Grid { RowSpacing = 12 };
+        page.SizeChanged += (_, args) =>
+        {
+            shortcuts.Width = Math.Min(760, Math.Max(0, args.NewSize.Width));
+            heroCard.Width = Math.Min(560, Math.Max(0, args.NewSize.Width - 16));
+        };
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         page.Children.Add(header);
@@ -279,6 +295,15 @@ public sealed partial class MainWindow
         {
             scroll.MaxHeight = Math.Max(100, Root.ActualHeight - 200);
             panel.Width = Math.Clamp(Root.ActualWidth - 100, 240, 640);
+            flyout.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
+            {
+                Setters =
+                {
+                    new Setter(FrameworkElement.MaxWidthProperty, Math.Max(280, Root.ActualWidth - 32)),
+                    new Setter(FrameworkElement.MaxHeightProperty, Math.Max(180, Root.ActualHeight - 32)),
+                    new Setter(Control.PaddingProperty, new Thickness(12))
+                }
+            };
         };
         var button = new Button { Flyout = flyout, HorizontalContentAlignment = HorizontalAlignment.Center };
         LabelButton(button, key);

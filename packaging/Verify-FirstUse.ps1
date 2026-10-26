@@ -98,6 +98,29 @@ foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0',
     }
     $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
     if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
+    $resizeEvidence = @()
+    $transform = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
+    foreach ($size in @(@(800, 600), @(1000, 720))) {
+        $transform.Resize([double]$size[0], [double]$size[1])
+        Start-Sleep -Milliseconds 500
+        $currentBounds = $window.Current.BoundingRectangle
+        foreach ($id in @('RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause')) {
+            $element = Find-Control $id
+            if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
+                throw "Settings/transport entry is hidden at $($size[0])x$($size[1]): $id"
+            }
+        }
+        $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true}
+    }
+    $transform.Resize($bounds.Width, $bounds.Height)
+    Start-Sleep -Milliseconds 500
+    foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
+        @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'))) {
+        Invoke-Control $option[0]
+        $element = Find-Control $option[1]
+        if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
+        Invoke-Control ($option[0] + 'Close')
+    }
     $controls += @{id=$id;name=$element.Current.Name;visible=$true}
 }
 $picker = Find-Control 'AudioOutputPicker'
@@ -105,6 +128,7 @@ $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pa
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
+$liveSound = 'not-run-no-output'
 if ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
 } else {
@@ -128,6 +152,32 @@ if ($selection.Count -eq 0) {
         }
         if ($advanced -eq $firstPlaying) { throw 'Playback state changed but the audio position did not advance.' }
         $playback = 'started-and-audio-position-advanced'
+        $null = Wait-Transport 'Playing' $true
+        $soundPicker = Find-Control 'MainSound'
+        $soundPicker.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        $glass = $window.FindFirst([Windows.Automation.TreeScope]::Descendants,
+            [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'Glass'))
+        if ($null -eq $glass) { throw 'Glass sound option is missing.' }
+        $glass.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        $deadline = [DateTime]::UtcNow.AddSeconds(10)
+        do {
+            $activeSound = (Find-Control 'TransportStatus').Current.ItemStatus
+            if ($activeSound -like 'sound=Glass;*') { break }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($activeSound -notlike 'sound=Glass;*') { throw 'Selected sound never reached the active audio revision.' }
+        foreach ($accent in @(0,1,2,3)) {
+            Invoke-Control 'MainAccent0'
+            $deadline = [DateTime]::UtcNow.AddSeconds(10)
+            do {
+                $activeSound = (Find-Control 'TransportStatus').Current.ItemStatus
+                if ($activeSound -like "sound=Glass;accents=$accent,*") { break }
+                Start-Sleep -Milliseconds 50
+            } while ([DateTime]::UtcNow -lt $deadline)
+            if ($activeSound -notlike "sound=Glass;accents=$accent,*") { throw "Pulse choice did not reach active audio: $accent" }
+            if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live sound edit interrupted playback.' }
+        }
+        $liveSound = 'sound-and-all-four-pulse-choices-published-without-stop'
     } finally {
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
             Invoke-Control 'TransportStop'
@@ -184,6 +234,7 @@ if ($selection.Count -eq 0) {
     }
 }
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
+  resize=$resizeEvidence;liveSound=$liveSound;
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 Write-Output "First-use controls are visible; playback result: $playback"
