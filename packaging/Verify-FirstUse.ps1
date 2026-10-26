@@ -109,6 +109,9 @@ $practiceStops = 'not-run-no-output'
 $tapIn = 'not-run-no-output'
 if ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
+    (Find-Control 'TempoOptions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    if ((Find-Control 'ArmTapIn').Current.IsEnabled) { throw 'Tap-in arming is enabled without a selected output.' }
+    Wait-TapStatus 'idle'
 } else {
     if (-not $start.Current.IsEnabled) { throw 'Start is disabled despite a selected output.' }
     try {

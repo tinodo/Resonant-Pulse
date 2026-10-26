@@ -35,8 +35,9 @@ internal static class TempoEdits
         document.Settings.Tempo = tempo;
         for (var index = 0; index < scaled.Length; index++)
         {
-            document.Program[index].StartTempo = scaled[index].Start.ToDouble();
-            document.Program[index].EndTempo = scaled[index].End.ToDouble();
+            // Exact bounds were already checked; normalize only conversion roundoff.
+            document.Program[index].StartTempo = Math.Clamp(scaled[index].Start.ToDouble(), 1, 1000);
+            document.Program[index].EndTempo = Math.Clamp(scaled[index].End.ToDouble(), 1, 1000);
         }
     }
 }

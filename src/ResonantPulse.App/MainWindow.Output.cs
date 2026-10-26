@@ -22,6 +22,7 @@ public sealed partial class MainWindow
             (_preferences.OutputId != selected.Id || _preferences.OutputName != selected.Name);
         _outputDevices = devices;
         _isOutputMissing = !string.IsNullOrWhiteSpace(_preferences.OutputId) && selected is null;
+        if (selected is null) CancelTapIn();
         if (selected is not null)
         {
             _preferences.OutputId = selected.Id;

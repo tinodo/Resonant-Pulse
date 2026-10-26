@@ -114,4 +114,21 @@ public sealed class TapInSessionTests
         Assert.IsTrue(session.Tap(5));
         Assert.AreEqual(80d, session.Bpm);
     }
+
+    [TestMethod]
+    public void LostOutputIntentCannotReturnWithReconnectedEndpoint()
+    {
+        var session = new TapInSession();
+        session.Arm(2); session.Tap(0); session.Tap(0.5);
+        var pending = session.Generation;
+        session.Cancel();
+        Assert.IsFalse(session.IsCurrent(pending));
+        Assert.IsFalse(session.IsArmed);
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.Tap(1));
+        session.Arm(2);
+        Assert.IsFalse(session.Tap(2));
+        Assert.IsTrue(session.Tap(2.5));
+        Assert.IsTrue(session.IsCurrent(session.Generation));
+        Assert.IsFalse(session.IsCurrent(pending));
+    }
 }
