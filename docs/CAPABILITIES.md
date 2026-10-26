@@ -98,4 +98,9 @@ of asynchronous Apply. The verifier now waits for a fresh success generation
 containing the requested three values, exposed only after publication and
 recovery saving return successfully. The same surface visibly confirms saved
 limits in all five languages; failed or locked edits do not report success.
-This synchronization change requires fresh hosted and native candidate evidence.
+Synchronization source `0e4676a` passed all eight required gates, including
+hosted run 40253517046. Its identical-tree x64 candidate `403c6e6` passed the
+exact repository verifier on the real saved output, including all three counted
+scenarios and acknowledgment of the final reset. Original preview.2 was reopened
+stopped after exact preference restoration. Review 5646381643 reported no open
+issues; it was a commented automated review, not human/full-product acceptance.
