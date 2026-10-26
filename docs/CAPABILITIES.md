@@ -49,11 +49,11 @@ successfully and remained open.
 passed installed activation with the reserved product identity; submission was
 explicitly disabled. A candidate is not a certified or published Store app.
 
-Unreleased practice-timer work adds a 0..86400-second live duration, localized
+Practice-timer source adds a 0..86400-second live duration, localized
 controls/countdown and an audio-frame deadline after count-in. Pauses preserve
 remaining practice time; a finite program can end sooner. It does not truncate
 the authored preview or exports. This source is not in preview 0.1.0-preview.1;
-it is not yet a public timer release.
+that version must not be described as including a timer.
 
 Timer source `0a821dc` passed hosted
 [run 40247889344](https://github.com/tinodo/Resonant-Pulse/actions/runs/40247889344):
