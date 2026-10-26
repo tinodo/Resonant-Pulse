@@ -110,8 +110,26 @@ public static class PcmRenderer
         }
         if (limitPeaks)
             for (int i = 0; i < interleaved.Length; i++) interleaved[i] = Math.Clamp(interleaved[i], -1f, 1f);
-        // A gap is an output mask, not just omission of new attacks: prior click tails must not leak into blind silence.
+        ApplyGapMask(interleaved, plan, startFrame, channels, loop);
+    }
+
+    /// <summary>
+    /// Clears the frames of <paramref name="interleaved"/> (output starting at plan frame <paramref name="startFrame"/>)
+    /// that the plan's gap mask marks silent. A gap is an output mask, not just omission of new attacks: prior click
+    /// tails must not leak into blind silence. <see cref="Fill"/> applies it itself; callers that sum a partition
+    /// rendered from another plan (a live splice's ringing tails) apply the plan that governs the output to it.
+    /// Allocates nothing and takes no locks.
+    /// </summary>
+    public static void ApplyGapMask(Span<float> interleaved, RenderPlan plan, long startFrame, int channels = 2, bool loop = true)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (channels is not (1 or 2)) throw new ArgumentException("Core supports mono/stereo only; multichannel routing requires an adapter.", nameof(channels));
+        if (interleaved.Length % channels != 0) throw new ArgumentException("Buffer must contain whole frames.", nameof(interleaved));
+        if (startFrame < 0 || startFrame > long.MaxValue - interleaved.Length) throw new ArgumentOutOfRangeException(nameof(startFrame));
+        if (interleaved.IsEmpty || plan.SilentRanges.Count == 0) return;
+        long end = startFrame + interleaved.Length / channels;
         long firstOutputCycle = loop ? startFrame / plan.TotalFrames : 0;
+        long lastCycle = loop ? (end - 1) / plan.TotalFrames : 0;
         for (long cycle = firstOutputCycle; cycle <= lastCycle; cycle++)
         {
             long origin = cycle * plan.TotalFrames;

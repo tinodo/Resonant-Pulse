@@ -53,6 +53,7 @@ public sealed partial class MainWindow
         _instrument?.RefreshTheme();
         _beatStrip?.RefreshTheme();
         _tempoCurve?.RefreshTheme();
+        ApplyCaptionTheme();
     }
 
     private void RemovePowerHook(nint hwnd)

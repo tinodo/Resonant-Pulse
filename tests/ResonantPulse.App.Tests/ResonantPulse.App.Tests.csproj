@@ -12,6 +12,7 @@
     <!-- Exercise the actual UI-independent App sources without bootstrapping
          WinUI or requiring package identity/audio on the test host. -->
     <Compile Include="../../src/ResonantPulse.App/AccentPatterns.cs" Link="App/AccentPatterns.cs" />
+    <Compile Include="../../src/ResonantPulse.App/CaptionPalette.cs" Link="App/CaptionPalette.cs" />
     <Compile Include="../../src/ResonantPulse.App/MeterPresets.cs" Link="App/MeterPresets.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoFormat.cs" Link="App/TempoFormat.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoReadout.cs" Link="App/TempoReadout.cs" />
@@ -25,6 +26,7 @@
     <Compile Include="../../src/ResonantPulse.App/TimingRunRules.cs" Link="App/TimingRunRules.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoCurveState.cs" Link="App/TempoCurveState.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/AudioOutputSelection.cs" Link="App/Audio/AudioOutputSelection.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/ConsistentRead.cs" Link="App/Audio/ConsistentRead.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackDeadline.cs" Link="App/Audio/PlaybackDeadline.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackRevision.cs" Link="App/Audio/PlaybackRevision.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/LiveEditOutcome.cs" Link="App/Audio/LiveEditOutcome.cs" />
