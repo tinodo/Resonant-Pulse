@@ -93,3 +93,9 @@ full-product acceptance.
 The exact verifier also passed on the real-output PC. Its read-only searches
 reacquire the window and wait for temporarily rebuilt peers, and commands wait
 for enabled controls. Actions are not blindly retried.
+Subsequent review found that enabled controls alone do not establish completion
+of asynchronous Apply. The verifier now waits for a fresh success generation
+containing the requested three values, exposed only after publication and
+recovery saving return successfully. The same surface visibly confirms saved
+limits in all five languages; failed or locked edits do not report success.
+This synchronization change requires fresh hosted and native candidate evidence.

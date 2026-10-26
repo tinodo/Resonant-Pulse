@@ -62,7 +62,18 @@ function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
     Set-PracticeNumber 'PracticeSeconds' $seconds
     Set-PracticeNumber 'PracticeBeats' $beats
     Set-PracticeNumber 'PracticeBars' $bars
+    $before = (Find-Control 'PracticeLimitsStatus').Current.ItemStatus
     Invoke-Control 'ApplyPracticeTimer'
+    $expected = ':{0}:{1}:{2}' -f $seconds, $beats, $bars
+    $limit = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $committed = (Find-Control 'PracticeLimitsStatus').Current.ItemStatus
+        if ($committed -ne $before -and $committed.EndsWith($expected, [StringComparison]::Ordinal)) {
+            return
+        }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "Practice-limit Apply did not confirm successful publication and recovery: $expected (observed $committed)"
 }
 $deadline = [DateTime]::UtcNow.AddSeconds(20)
 do {
