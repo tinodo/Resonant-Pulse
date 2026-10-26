@@ -131,6 +131,8 @@ public sealed class RenderPlan
     public IReadOnlyList<(long StartFrame, long EndFrame)> SilentRanges { get; }
     public IReadOnlyList<TargetOnset> Targets { get; }
     public long CountInFrames { get; }
+    /// <summary>Authored lanes, including lanes with no audible attacks or targets.</summary>
+    public int LaneCount { get; }
     public float DefaultMasterGain { get; }
     public double BeatUnitQuarters { get; }
     public int Seed { get; }
@@ -142,10 +144,11 @@ public sealed class RenderPlan
     internal int TailFrames { get; }
     internal RenderPlan(int rate, long total, ScheduledOnset[] onsets, TempoSegment[] tempos,
         (long, long)[] silence, TargetOnset[] targets, long countIn, float gain,
-        MusicalOnset[] musical, ResolvedSection[] sections, double beatUnit, int seed, string probabilityAlgorithm)
+        MusicalOnset[] musical, ResolvedSection[] sections, double beatUnit, int seed, string probabilityAlgorithm, int laneCount)
     {
         SampleRate = rate; TotalFrames = total; CountInFrames = countIn; DefaultMasterGain = gain;
         BeatUnitQuarters = beatUnit; Seed = seed; ProbabilityAlgorithm = probabilityAlgorithm;
+        LaneCount = laneCount;
         Onsets = Array.AsReadOnly(onsets); TempoSegments = Array.AsReadOnly(tempos);
         SilentRanges = Array.AsReadOnly(silence); Targets = Array.AsReadOnly(targets);
         MusicalOnsets = musical; Sections = sections;

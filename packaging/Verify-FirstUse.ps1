@@ -287,8 +287,24 @@ if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
     throw 'Returning from Help unexpectedly changed stopped transport.'
 }
 Wait-TapStatus 'idle'
+(Find-Control 'DestinationLibrary').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+foreach ($id in @('ExportWavStems', 'StemExportHint')) {
+    if ([string]::IsNullOrWhiteSpace((Find-Control $id).Current.Name)) {
+        throw "Stem export control did not expose its accessible text: $id"
+    }
+}
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Visiting stem export controls unexpectedly changed stopped transport.'
+}
+(Find-Control 'DestinationPlay').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+$null = Find-Control 'Tempo'
+Wait-TapStatus 'idle'
+if ((Find-Control 'TransportStatus').Current.Name -ne $beforeHelp) {
+    throw 'Returning from stem export controls unexpectedly changed stopped transport.'
+}
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;tapIn=$tapIn;
   help='read-only-help-navigation-no-automatic-start';
+  stems='library-controls-exposed-no-automatic-start';
   tempoGuide='initial-overlapping-markings-exposed';
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
