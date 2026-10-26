@@ -22,11 +22,13 @@ internal static class AccentPatterns
         var pattern = ExpandMain(settings.Accents, count);
         if (settings.AccentOverridesGroups) return pattern;
         int boundary = 0;
+        var unit = Rational.FromDouble(settings.BeatUnitQuarters);
         foreach (int group in settings.Groups)
         {
+            var position = new Rational(4 * boundary, settings.BeatDenominator);
             for (int index = 0; index < count; index++)
                 if (!(settings.ManualAccentIndices?.Contains(index) ?? false) &&
-                    Rational.FromDouble(settings.BeatUnitQuarters) * index == new Rational(4 * boundary, settings.BeatDenominator))
+                    unit * index == position)
                     pattern[index] = Accent.Strong;
             boundary += group;
         }

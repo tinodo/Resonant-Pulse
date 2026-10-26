@@ -119,10 +119,12 @@ public sealed partial class MainWindow
         var silent = Number("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
         var blind = Check("Blind", "BlindGaps", settings.BlindGaps);
         var accentButtons = new List<UIElement>();
-        var accentLabels = new List<Action<PulseSettings>>();
+        var accentLabels = new List<Action<Accent>>();
         void RefreshAccentLabels()
         {
-            foreach (var refresh in accentLabels) refresh(_document.Settings);
+            var pattern = AccentPatterns.ExpandEffectiveMain(_document.Settings,
+                Math.Max(accentLabels.Count, PrimaryAccentCount(_document.Settings)));
+            for (int index = 0; index < accentLabels.Count; index++) accentLabels[index](pattern[index]);
         }
         var effective = AccentPatterns.ExpandEffectiveMain(settings, PrimaryAccentCount(settings));
         for (var beat = 0; beat < PrimaryAccentCount(settings); beat++)
@@ -145,8 +147,7 @@ public sealed partial class MainWindow
                 Identify(button, $"MainAccent{index}", label);
             }
             Describe(current);
-            accentLabels.Add(value => Describe(AccentPatterns.ExpandEffectiveMain(value,
-                Math.Max(index + 1, PrimaryAccentCount(value)))[index]));
+            accentLabels.Add(Describe);
             button.Click += async (_, _) => await GuardAsync(async () =>
             {
                 try

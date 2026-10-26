@@ -78,4 +78,22 @@ public sealed class LiveSoundEditsTests
             System.Globalization.CultureInfo.CurrentUICulture = uiCulture;
         }
     }
+
+    [TestMethod]
+    public void MaximumPulseDisplayPreservesEveryGroupAndOnlyTheManuallyEditedSlot()
+    {
+        var settings = new PulseSettings
+        {
+            BeatsPerBar = 64, BeatDenominator = 2, BeatUnitQuarters = 0.5,
+            Groups = Enumerable.Repeat(1, 64).ToArray(), Accents = [Accent.Normal]
+        };
+        var original = AccentPatterns.ExpandEffectiveMain(settings, 256);
+        for (int index = 0; index < original.Length; index++)
+            Assert.AreEqual(index % 4 == 0 ? Accent.Strong : Accent.Normal, original[index]);
+        settings.Accents = [Accent.Soft, Accent.Normal, Accent.Normal, Accent.Normal];
+        settings.ManualAccentIndices = [0];
+        var edited = AccentPatterns.ExpandEffectiveMain(settings, 256);
+        Assert.AreEqual(Accent.Soft, edited[0]);
+        for (int index = 1; index < edited.Length; index++) Assert.AreEqual(original[index], edited[index]);
+    }
 }
