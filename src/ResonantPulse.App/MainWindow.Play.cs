@@ -91,11 +91,28 @@ public sealed partial class MainWindow
         var swing = Number("Swing", "Swing", settings.Swing, 0.5, 0.9, 0.01);
         var countIn = Number("CountIn", "CountInBars", settings.CountInBars, 0, 32);
         var sound = Select("Sound", "MainSound", settings.Sound, "Wood", "Glass", "Click", "Kick", "HiHat");
+        var restoringSound = false;
         sound.SelectionChanged += async (_, _) =>
         {
+            if (restoringSound) return;
             var selectedSound = Selected(sound);
-            await GuardAsync(() => CommitAsync(doc => doc.Settings.Sound = selectedSound,
-                editorChange: EditorChangeKind.SoundAndAccentsOnly));
+            await GuardAsync(async () =>
+            {
+                try
+                {
+                    await CommitAsync(doc => doc.Settings.Sound = selectedSound,
+                        editorChange: EditorChangeKind.SoundAndAccentsOnly);
+                }
+                finally
+                {
+                    if (Selected(sound) != _document.Settings.Sound)
+                    {
+                        restoringSound = true;
+                        try { sound.SelectedItem = sound.Items.OfType<Choice>().Single(choice => choice.Value == _document.Settings.Sound); }
+                        finally { restoringSound = false; }
+                    }
+                }
+            });
         };
         var audible = Number("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
         var silent = Number("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
@@ -106,11 +123,19 @@ public sealed partial class MainWindow
         {
             var index = beat;
             var current = effective[index];
-            var button = new Button { Margin = new Thickness(0, 0, 8, 8), VerticalAlignment = VerticalAlignment.Top };
+            var button = new Button
+            {
+                Margin = new Thickness(0, 0, 8, 8), VerticalAlignment = VerticalAlignment.Top,
+                HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 52
+            };
             void Describe(Accent accent)
             {
                 var label = Text.Format("BeatAccent", index + 1, Text.Get(accent.ToString()));
-                button.Content = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap };
+                button.Content = new TextBlock
+                {
+                    Text = Text.Format("PulseNumber", index + 1) + "\n" + Text.Get(accent.ToString()),
+                    TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap
+                };
                 Identify(button, $"MainAccent{index}", label);
             }
             Describe(current);
@@ -118,11 +143,12 @@ public sealed partial class MainWindow
             {
                 await CommitAsync(doc =>
                 {
-                    var pattern = AccentPatterns.ExpandEffectiveMain(doc.Settings,
-                        Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings)));
-                    pattern[index] = (Accent)(((int)pattern[index] + 1) % 4);
+                    var count = Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings));
+                    var chosen = AccentPatterns.ExpandEffectiveMain(doc.Settings, count)[index];
+                    var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents, count);
+                    pattern[index] = (Accent)(((int)chosen + 1) % 4);
                     doc.Settings.Accents = pattern;
-                    doc.Settings.AccentOverridesGroups = true;
+                    doc.Settings.ManualAccentIndices = (doc.Settings.ManualAccentIndices ?? []).Append(index).Distinct().Order().ToArray();
                 }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
                 Describe(_document.Settings.Accents[index]);
             });
@@ -284,6 +310,18 @@ public sealed partial class MainWindow
         var scroll = Scroll(content);
         scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
         var panel = new Grid { RowSpacing = 12 };
+        var mute = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
+        {
+            Key = Windows.System.VirtualKey.M,
+            Modifiers = Windows.System.VirtualKeyModifiers.Control
+        };
+        mute.Invoked += (_, args) =>
+        {
+            _transport.IsMuted = !_transport.IsMuted;
+            RefreshSnapshot();
+            args.Handled = true;
+        };
+        panel.KeyboardAccelerators.Add(mute);
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.Children.Add(close);

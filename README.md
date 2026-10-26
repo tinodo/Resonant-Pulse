@@ -38,7 +38,9 @@ content-sized buttons; remaining overflow has an explicit scroll cue.
 Main click sound and pulse accents (including Silent) now publish prepared
 audio revisions during playback without restarting the musical clock. Existing
 click tails finish in their original sound. A manual pulse choice overrides
-automatic group emphasis while preserving the written groups. Count-in retains
+automatic group emphasis only for that pulse slot; unedited group boundaries
+keep their original emphasis, including across dotted-unit bars. The written
+groups are preserved. Count-in retains
 its own cue accents. Other tempo/rhythm edits still require Stop + Start.
 This repair is being validated; it is not in published preview.3.
 

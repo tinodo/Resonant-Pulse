@@ -54,6 +54,7 @@ public static class ScheduleCompiler
                 Accent accent = s.Accents.Length == 0 ? Accent.Normal : s.Accents[pulseIndex % s.Accents.Length];
                 if (section.CountIn) accent = withinBar == 0 ? Accent.Strong : Accent.Normal;
                 if (!section.CountIn && !s.AccentOverridesGroups && s.Groups.Length > 0 &&
+                    !(s.ManualAccentIndices?.Contains(pulseIndex) ?? false) &&
                     section.Numerator == s.BeatsPerBar && section.Denominator == s.BeatDenominator)
                 {
                     int boundary = 0;

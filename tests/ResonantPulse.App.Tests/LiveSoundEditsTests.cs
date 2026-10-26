@@ -16,6 +16,7 @@ public sealed class LiveSoundEditsTests
         var requested = new PulseSettings
         {
             Sound = "Glass", Accents = [Accent.Silent, Accent.Soft], AccentOverridesGroups = true,
+            ManualAccentIndices = [0],
             Tempo = 600, BeatsPerBar = 7, PracticeSeconds = 99, MasterGain = 0
         };
         var copy = LiveSoundEdits.Apply(active, requested);
@@ -27,9 +28,11 @@ public sealed class LiveSoundEditsTests
         Assert.AreEqual(active.Settings.PracticeSeconds, copy.Settings.PracticeSeconds);
         Assert.AreEqual(active.Settings.MasterGain, copy.Settings.MasterGain);
         copy.Settings.Accents[0] = Accent.Strong;
+        copy.Settings.ManualAccentIndices![0] = 1;
         copy.Lanes.Clear();
         copy.Program[0].Bars = 1;
         Assert.AreEqual(Accent.Silent, requested.Accents[0]);
+        Assert.AreEqual(0, requested.ManualAccentIndices![0]);
         Assert.AreEqual(1, active.Lanes.Count);
         Assert.AreEqual(8, active.Program[0].Bars);
     }
@@ -42,11 +45,13 @@ public sealed class LiveSoundEditsTests
         CollectionAssert.AreEqual(new[] { Accent.Strong, Accent.Normal, Accent.Strong, Accent.Normal }, displayed);
         for (int index = 0; index < 12; index++)
         {
-            var pattern = AccentPatterns.ExpandEffectiveMain(settings, 4);
-            pattern[0] = (Accent)(((int)pattern[0] + 1) % 4);
+            var current = AccentPatterns.ExpandEffectiveMain(settings, 4)[0];
+            var pattern = AccentPatterns.ExpandMain(settings.Accents, 4);
+            pattern[0] = (Accent)(((int)current + 1) % 4);
             settings.Accents = pattern;
-            settings.AccentOverridesGroups = true;
+            settings.ManualAccentIndices = [0];
             Assert.AreEqual((Accent)(index % 4), AccentPatterns.ExpandEffectiveMain(settings, 4)[0]);
+            Assert.AreEqual(Accent.Strong, AccentPatterns.ExpandEffectiveMain(settings, 4)[2]);
         }
     }
 
@@ -62,7 +67,7 @@ public sealed class LiveSoundEditsTests
             {
                 Text.Select(language);
                 foreach (string key in new[] { "RhythmTab", "TempoTab", "PracticeTab", "ProjectTab",
-                    "HelpTab", "CloseOptions", "ScrollControlsHint", "LiveSoundHint" })
+                    "HelpTab", "CloseOptions", "ScrollControlsHint", "LiveSoundHint", "PulseNumber", "SoundSessionChanged" })
                     Assert.AreNotEqual(key, Text.Get(key), $"{language}/{key}");
             }
         }

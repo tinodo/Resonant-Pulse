@@ -101,6 +101,7 @@ public sealed class AudioTransport : IDisposable
     private int _fault;
     private long _lastQuantumTimestamp;
     private int _generation;
+    private int _soundSessionGeneration;
     private bool _isDisposed;
 
     public event EventHandler<Exception>? Failed;
@@ -127,10 +128,11 @@ public sealed class AudioTransport : IDisposable
         {
             var active = Volatile.Read(ref _revision);
             if (active is null || State is TransportState.Stopped or TransportState.Completed) return;
-            var generation = Volatile.Read(ref _generation);
+            var session = Volatile.Read(ref _soundSessionGeneration);
             var captured = LiveSoundEdits.Apply(active.Document, requested);
             var prepared = await Task.Run(() => new PlaybackRevision(captured, active.Initial.SampleRate));
-            if (generation != Volatile.Read(ref _generation) || _isDisposed) return;
+            if (session != Volatile.Read(ref _soundSessionGeneration) || _isDisposed)
+                throw new InvalidOperationException(Text.Get("SoundSessionChanged"));
             if (prepared.Initial.TotalFrames != active.Initial.TotalFrames ||
                 prepared.Body.TotalFrames != active.Body.TotalFrames || prepared.EndFrame != active.EndFrame)
                 throw new InvalidOperationException("A live sound edit must preserve the musical clock and stop boundary.");
@@ -161,6 +163,7 @@ public sealed class AudioTransport : IDisposable
             }
             var retained = State is TransportState.Paused or TransportState.Faulted
                 ? Volatile.Read(ref _pendingSound) ?? _revision : null;
+            if (retained is null) Interlocked.Increment(ref _soundSessionGeneration);
             var retainedRender = Interlocked.Read(ref _processedFrame);
             ReleaseGraph();
             var device = await DeviceInformation.CreateFromIdAsync(outputId);
@@ -249,6 +252,7 @@ public sealed class AudioTransport : IDisposable
 
     public void Stop()
     {
+        Interlocked.Increment(ref _soundSessionGeneration);
         Interlocked.Increment(ref _generation);
         Volatile.Write(ref _state, (int)TransportState.Stopped);
         ReleaseGraph();
@@ -295,6 +299,8 @@ public sealed class AudioTransport : IDisposable
         if (revision is null) return;
         var byteCount = checked((uint)(frameCount * 2 * sizeof(float)));
         var cursor = Interlocked.Read(ref _renderFrame);
+        var gain = Gain;
+        var muted = IsMuted;
         if (_previousSound is not null && cursor >= _soundSwitchFrame + (long)Math.Ceiling(revision.Initial.SampleRate * 0.05))
             _previousSound = null;
         if (_previousSound is null && Interlocked.Exchange(ref _pendingSound, null) is { } replacement)
@@ -347,14 +353,14 @@ public sealed class AudioTransport : IDisposable
                         var renderAt = initial ? local : absolute - revision.Initial.TotalFrames + plan.TotalFrames;
                         var destination = samples.Slice(written * 2, count * 2);
                         var boundary = _soundSwitchFrame - (initial ? 0 : revision.Initial.TotalFrames - plan.TotalFrames);
-                        PcmRenderer.Fill(destination, plan, renderAt, 2, Gain, IsMuted, !initial,
+                        PcmRenderer.Fill(destination, plan, renderAt, 2, gain, muted, !initial,
                             attacksFromFrame: _previousSound is null ? null : boundary,
                             limitPeaks: _previousSound is null);
                         if (_previousSound is { } previous)
                         {
                             var oldPlan = initial ? previous.Initial : previous.Body;
                             var tail = _tailMix.AsSpan(0, count * 2);
-                            PcmRenderer.Fill(tail, oldPlan, renderAt, 2, Gain, IsMuted, !initial,
+                            PcmRenderer.Fill(tail, oldPlan, renderAt, 2, gain, muted, !initial,
                                 attacksBeforeFrame: boundary, limitPeaks: false);
                             for (int index = 0; index < destination.Length; index++)
                                 destination[index] = Math.Clamp(destination[index] + tail[index], -1f, 1f);

@@ -96,32 +96,32 @@ foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0',
     if ($element.Current.IsOffscreen -or $rect.IsEmpty -or -not $bounds.Contains($rect)) {
         throw "Primary control is not visible in the first-use window: $id ($rect)"
     }
-    $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
-    if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
-    $resizeEvidence = @()
-    $transform = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
-    foreach ($size in @(@(800, 600), @(1000, 720))) {
-        $transform.Resize([double]$size[0], [double]$size[1])
-        Start-Sleep -Milliseconds 500
-        $currentBounds = $window.Current.BoundingRectangle
-        foreach ($id in @('RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause')) {
-            $element = Find-Control $id
-            if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
-                throw "Settings/transport entry is hidden at $($size[0])x$($size[1]): $id"
-            }
-        }
-        $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true}
-    }
-    $transform.Resize($bounds.Width, $bounds.Height)
-    Start-Sleep -Milliseconds 500
-    foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
-        @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'))) {
-        Invoke-Control $option[0]
-        $element = Find-Control $option[1]
-        if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
-        Invoke-Control ($option[0] + 'Close')
-    }
     $controls += @{id=$id;name=$element.Current.Name;visible=$true}
+}
+$startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
+if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
+$resizeEvidence = @()
+$transform = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
+foreach ($size in @(@(800, 600), @(1000, 720))) {
+    $transform.Resize([double]$size[0], [double]$size[1])
+    Start-Sleep -Milliseconds 500
+    $currentBounds = $window.Current.BoundingRectangle
+    foreach ($id in @('RhythmOptions','TempoOptions','PracticeTimer','ProjectOptions','PlayHelp','TransportStartPause')) {
+        $element = Find-Control $id
+        if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
+            throw "Settings/transport entry is hidden at $($size[0])x$($size[1]): $id"
+        }
+    }
+    $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true}
+}
+$transform.Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 500
+foreach ($option in @(@('RhythmOptions','MeterBeats'), @('TempoOptions','TempoUnit'),
+    @('PracticeTimer','PracticeSeconds'), @('ProjectOptions','DocumentName'), @('PlayHelp','PlayHelpClose'))) {
+    Invoke-Control $option[0]
+    $element = Find-Control $option[1]
+    if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($option[1])" }
+    Invoke-Control ($option[0] + 'Close')
 }
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
@@ -175,6 +175,7 @@ if ($selection.Count -eq 0) {
                 Start-Sleep -Milliseconds 50
             } while ([DateTime]::UtcNow -lt $deadline)
             if ($activeSound -notlike "sound=Glass;accents=$accent,*") { throw "Pulse choice did not reach active audio: $accent" }
+            if ($activeSound -notmatch ';manual=0(?:,|$)') { throw 'Manual accent precedence did not reach active audio.' }
             if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live sound edit interrupted playback.' }
         }
         $liveSound = 'sound-and-all-four-pulse-choices-published-without-stop'

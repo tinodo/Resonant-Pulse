@@ -29,7 +29,9 @@ requiring a taller screen; any remaining page overflow has a persistent cue.
 Sound/pulse-only edits prepare immutable replacement plans off the callback,
 publish at a subsequent audio quantum and preserve prior attack tails. They
 retain the current cursor, loop, count-in, program and stop boundaries.
-Explicit pulse edits take precedence over automatic grouping emphasis.
+Explicit pulse edits take precedence over automatic grouping emphasis only for
+edited slots; unedited boundaries retain their phase across bars. Per-slot
+`ManualAccentIndices` and the explicit All Normal override are saved in projects.
 Count-in still uses its own cue accents; structural tempo/rhythm edits still
 require Stop + Start. Source/native/release evidence for this repair is pending.
 

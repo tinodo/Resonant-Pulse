@@ -61,4 +61,60 @@ public sealed class LiveRenderingTests
         document.Settings.Accents = [Accent.Normal];
         Assert.IsTrue(Check.Plan(document).Onsets.All(onset => onset.Accent == Accent.Normal));
     }
+
+    [TestMethod]
+    public void EditingOneDottedUnitPulsePreservesOtherGroupBoundariesAcrossBars()
+    {
+        var document = Check.Document();
+        document.Settings.BeatUnitQuarters = 1.5;
+        document.Settings.Groups = [2, 2];
+        document.Settings.Accents = [Accent.Normal, Accent.Normal, Accent.Normal];
+        var baseline = Check.Plan(document, bars: 3);
+        document.Settings.ManualAccentIndices = [2];
+        document.Settings.Accents[2] = Accent.Soft;
+        var edited = Check.Plan(document, bars: 3);
+        Assert.AreEqual(baseline.Onsets.Count, edited.Onsets.Count);
+        for (int index = 0; index < baseline.Onsets.Count; index++)
+        {
+            var before = baseline.Onsets[index];
+            var after = edited.Onsets[index];
+            Assert.AreEqual(before.Frame, after.Frame);
+            var withinBar = (index * 1.5) % 4;
+            Assert.AreEqual((int)(withinBar / 1.5) == 2 ? Accent.Soft : before.Accent, after.Accent,
+                $"Pulse {index} at {index * 1.5} quarters");
+        }
+        Assert.IsTrue(edited.Onsets.Count > 6, "The fixture must span multiple bars.");
+    }
+
+    [TestMethod]
+    public void PerPulseOverrideCanSilenceGroupBoundaryWithoutChangingOtherBoundaries()
+    {
+        var document = Check.Document();
+        document.Settings.Groups = [2, 2];
+        document.Settings.Accents = [Accent.Silent, Accent.Normal, Accent.Normal, Accent.Normal];
+        document.Settings.ManualAccentIndices = [0];
+        var plan = Check.Plan(document);
+        Assert.IsFalse(plan.Onsets.Any(onset => onset.Frame == 0));
+        Assert.IsTrue(plan.Onsets.Any(onset => onset.Accent == Accent.Strong));
+        document.Settings.CountInBars = 1;
+        Assert.AreEqual(Accent.Strong, Check.Plan(document, countIn: true).Onsets[0].Accent);
+    }
+
+    [TestMethod]
+    [DataRow(-1)]
+    [DataRow(256)]
+    public void InvalidManualAccentIndicesAreRejected(int index)
+    {
+        var document = Check.Document();
+        document.Settings.ManualAccentIndices = [index];
+        Assert.ThrowsExactly<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
+
+    [TestMethod]
+    public void DuplicateManualAccentIndicesAreRejected()
+    {
+        var document = Check.Document();
+        document.Settings.ManualAccentIndices = [0, 0];
+        Assert.ThrowsExactly<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
 }

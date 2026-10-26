@@ -81,7 +81,7 @@ public sealed partial class MainWindow
             (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemStatus(TransportStatus,
-            $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups}");
+            $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])}");
         if (!blind && snapshot.Revision is { HasPracticeLimit: true, EndFrame: { } endFrame } timed)
         {
             var remaining = Math.Max(0, endFrame - Math.Max(snapshot.ProcessedFrame, timed.CountInFrames));

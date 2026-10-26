@@ -25,7 +25,8 @@ internal static class AccentPatterns
         foreach (int group in settings.Groups)
         {
             for (int index = 0; index < count; index++)
-                if (Rational.FromDouble(settings.BeatUnitQuarters) * index == new Rational(4 * boundary, settings.BeatDenominator))
+                if (!(settings.ManualAccentIndices?.Contains(index) ?? false) &&
+                    Rational.FromDouble(settings.BeatUnitQuarters) * index == new Rational(4 * boundary, settings.BeatDenominator))
                     pattern[index] = Accent.Strong;
             boundary += group;
         }
