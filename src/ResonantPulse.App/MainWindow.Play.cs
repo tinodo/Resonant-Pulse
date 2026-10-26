@@ -180,16 +180,25 @@ public sealed partial class MainWindow
                 CommandFlow(ActionButton("Save", "PlaySave", SaveProjectAsync), ActionButton("Open", "PlayOpen", OpenProjectAsync)))
         };
         var practiceSeconds = Number("PracticeSeconds", "PracticeSeconds", settings.PracticeSeconds, 0, 86400);
+        var practiceBeats = Number("PracticeBeats", "PracticeBeats", settings.PracticeBeats, 0, 6_400_000);
+        var practiceBars = Number("PracticeBars", "PracticeBars", settings.PracticeBars, 0, 100_000);
         var practice = new Expander
         {
             Header = Text.Get("PracticeTimer"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Content = Column(practiceSeconds, Copy("PracticeTimerHint"),
+            Content = Column(practiceSeconds, practiceBeats, practiceBars, Copy("PracticeTimerHint"), Copy("CountedStopHint"),
                 ActionButton("Apply", "ApplyPracticeTimer", async () =>
                 {
                     var seconds = Integer(practiceSeconds);
-                    await CommitAsync(doc => doc.Settings.PracticeSeconds = seconds,
+                    var beatsToPlay = Integer(practiceBeats);
+                    var barsToPlay = Integer(practiceBars);
+                    await CommitAsync(doc =>
+                    {
+                        doc.Settings.PracticeSeconds = seconds;
+                        doc.Settings.PracticeBeats = beatsToPlay;
+                        doc.Settings.PracticeBars = barsToPlay;
+                    },
                         editorChange: EditorChangeKind.PracticeTimerOnly);
                 }))
         };

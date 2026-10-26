@@ -75,3 +75,8 @@ That released binary preserved three practice seconds during count-in, completed
 at zero and held its position, then stopped. Test settings were removed and saved
 preferences restored exactly before leaving the new release open and stopped.
 No Store submission or acoustic/full-product acceptance is implied.
+
+Beat/bar stopping is being extended in source: written meter beats and complete
+authored bars, independent of audible clicks and BPM units. Enabled seconds,
+beats, bars and finite-program limits compete; the earliest wins. This extension
+is not in preview.2 and requires its own hosted/native verification and release.

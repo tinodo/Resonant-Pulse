@@ -8,13 +8,19 @@ namespace ResonantPulse.Core.Tests;
 public sealed class DocumentStoreTests
 {
     [TestMethod]
-    public async Task Save_DisabledPracticeTimerOmitsNewFieldAndLegacyImportsDefaultToDisabled()
+    public async Task Save_DisabledPracticeLimitsOmitNewFieldsAndLegacyImportsDefaultToDisabled()
     {
         using var temp = new TempDirectory();
         await DocumentStore.SaveAsync(temp.File(), new PulseDocument());
-        Assert.IsFalse((await File.ReadAllTextAsync(temp.File())).Contains("\"PracticeSeconds\"", StringComparison.Ordinal));
+        var json = await File.ReadAllTextAsync(temp.File());
+        Assert.IsFalse(json.Contains("\"PracticeSeconds\"", StringComparison.Ordinal));
+        Assert.IsFalse(json.Contains("\"PracticeBeats\"", StringComparison.Ordinal));
+        Assert.IsFalse(json.Contains("\"PracticeBars\"", StringComparison.Ordinal));
         await File.WriteAllTextAsync(temp.File(), "{\"SchemaVersion\":1}");
-        Assert.AreEqual(0, (await DocumentStore.LoadAsync(temp.File())).Settings.PracticeSeconds);
+        var loaded = await DocumentStore.LoadAsync(temp.File());
+        Assert.AreEqual(0, loaded.Settings.PracticeSeconds);
+        Assert.AreEqual(0, loaded.Settings.PracticeBeats);
+        Assert.AreEqual(0, loaded.Settings.PracticeBars);
         temp.NoTemps();
     }
 
@@ -47,7 +53,7 @@ public sealed class DocumentStoreTests
         {
             Name = "Étude ♩", Seed = -2026,
             Settings = new() { Tempo = 80, BeatsPerBar = 6, BeatDenominator = 8, BeatUnitQuarters = 1.5,
-                Subdivision = 2, Swing = 0.75, CountInBars = 2, PracticeSeconds = 60, Accents = [Accent.Strong, Accent.Soft],
+                Subdivision = 2, Swing = 0.75, CountInBars = 2, PracticeSeconds = 60, PracticeBeats = 17, PracticeBars = 3, Accents = [Accent.Strong, Accent.Soft],
                 Groups = [3, 3], AudibleBars = 2, SilentBars = 1, BlindGaps = false, MasterGain = 0.3f, Sound = "Kick" },
             Lanes = [new() { Name = "Triplets", Pulses = 3, CycleQuarters = 3, OffsetQuarters = -0.5,
                 Volume = 0.4f, Pan = -0.25f, Muted = true, Solo = true, Probability = 0.75, Sound = "HiHat",
@@ -65,6 +71,8 @@ public sealed class DocumentStoreTests
         Assert.AreEqual(-2026, loaded.Seed); Assert.AreEqual("event-hash-v1", loaded.ProbabilityAlgorithm);
         var s = loaded.Settings;
         Assert.AreEqual(60, s.PracticeSeconds);
+        Assert.AreEqual(17, s.PracticeBeats);
+        Assert.AreEqual(3, s.PracticeBars);
         Assert.AreEqual((80d, 6, 8, 1.5, 2, 0.75, 2), (s.Tempo, s.BeatsPerBar, s.BeatDenominator, s.BeatUnitQuarters, s.Subdivision, s.Swing, s.CountInBars));
         Check.Sequence(new[] { Accent.Strong, Accent.Soft }, s.Accents); Check.Sequence(new[] { 3, 3 }, s.Groups);
         Assert.AreEqual((2, 1, false, 0.3f, "Kick"), (s.AudibleBars, s.SilentBars, s.BlindGaps, s.MasterGain, s.Sound));

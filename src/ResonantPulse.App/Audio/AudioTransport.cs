@@ -35,6 +35,7 @@ public sealed class PlaybackRevision
     public bool IsFinite => Document.Program.Count > 0;
     public long CountInFrames => Initial.CountInFrames;
     public long? EndFrame { get; }
+    public bool HasPracticeLimit => PlaybackDeadline.IsEnabled(Document.Settings);
 
     public PlaybackRevision(PulseDocument source, int sampleRate)
     {
@@ -44,8 +45,7 @@ public sealed class PlaybackRevision
         Body = ScheduleCompiler.Compile(Document, sampleRate, bars, false);
         if (Initial.TotalFrames <= 0 || Body.TotalFrames <= 0)
             throw new ArgumentException("The compiled rhythm has no duration.");
-        EndFrame = PlaybackDeadline.Resolve(sampleRate, CountInFrames, Document.Settings.PracticeSeconds,
-            IsFinite ? Initial.TotalFrames : null);
+        EndFrame = PlaybackDeadline.Resolve(Initial, Body, Document.Settings, IsFinite);
         // Warm any lazily initialized renderer caches here, never in QuantumStarted.
         Span<float> warmup = stackalloc float[2];
         PcmRenderer.Fill(warmup, Initial, 0, 2, 0, false, false);
@@ -310,7 +310,7 @@ public sealed class AudioTransport : IDisposable
                         // finite intro is rendered once, never recurring count-in.
                         var renderAt = initial ? local : absolute - revision.Initial.TotalFrames + plan.TotalFrames;
                         PcmRenderer.Fill(samples.Slice(written * 2, count * 2), plan, renderAt, 2, Gain, IsMuted, !initial);
-                        if (revision.Document.Settings.PracticeSeconds > 0 && revision.EndFrame is { } end)
+                        if (revision.HasPracticeLimit && revision.EndFrame is { } end)
                             PlaybackDeadline.FadeAtEnd(samples.Slice(written * 2, count * 2), absolute,
                                 plan.SampleRate, end);
                         written += count;

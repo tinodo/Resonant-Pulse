@@ -42,7 +42,8 @@ public sealed partial class MainWindow
             curve.Present(presentation.Plan, presentation.Frame, presentation.IsBlind);
         }
         var elapsed = plan is null ? TimeSpan.Zero : TimeSpan.FromSeconds((double)snapshot.ProcessedFrame / plan.SampleRate);
-        var time = elapsed.ToString(elapsed.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss", Text.Culture);
+        var time = elapsed.ToString(elapsed.TotalDays >= 1 ? "g" :
+            elapsed.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss", Text.Culture);
         long barOffset = 0;
         if (snapshot.Revision is { IsFinite: false } revision && snapshot.PositionFrame >= revision.Initial.TotalFrames)
         {
@@ -80,7 +81,7 @@ public sealed partial class MainWindow
             (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : "") +
             (!HasSelectedOutput && !_isOutputMissing ? $"\n{Text.Get("ChooseOutput")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
-        if (!blind && snapshot.Revision is { Document.Settings.PracticeSeconds: > 0, EndFrame: { } endFrame } timed)
+        if (!blind && snapshot.Revision is { HasPracticeLimit: true, EndFrame: { } endFrame } timed)
         {
             var remaining = Math.Max(0, endFrame - Math.Max(snapshot.ProcessedFrame, timed.CountInFrames));
             var duration = TimeSpan.FromSeconds(Math.Ceiling((double)remaining / timed.Initial.SampleRate));
