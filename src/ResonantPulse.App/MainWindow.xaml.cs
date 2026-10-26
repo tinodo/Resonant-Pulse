@@ -265,6 +265,8 @@ public sealed partial class MainWindow : Window
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
             await ValidateAsync(revised);
+            if (editorChange == EditorChangeKind.SoundAndAccentsOnly)
+                await _transport.UpdateSoundAsync(revised.Settings);
             _undo.Push(_document);
             if (_undo.Count > 64)
             {
@@ -276,7 +278,8 @@ public sealed partial class MainWindow : Window
             _document = revised;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
-            if (affectsPlayback && _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
+            if (editorChange != EditorChangeKind.SoundAndAccentsOnly && affectsPlayback &&
+                _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
                 _hasPendingEdits = true;
             // Edits are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.

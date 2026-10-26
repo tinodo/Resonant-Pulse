@@ -31,6 +31,17 @@ and API authorization remain required; update automation is separately guarded.
 
 ## Development and verification
 
+The Play-layout repair keeps Rhythm, Tempo, Practice, Project and Help commands
+visible above the scrolling instrument area. Each opens a bounded, scrollable
+panel instead of hiding entire groups below the fold. The transport uses
+content-sized buttons; remaining overflow has an explicit scroll cue.
+Main click sound and pulse accents (including Silent) now publish prepared
+audio revisions during playback without restarting the musical clock. Existing
+click tails finish in their original sound. A manual pulse choice overrides
+automatic group emphasis while preserving the written groups. Count-in retains
+its own cue accents. Other tempo/rhythm edits still require Stop + Start.
+This repair is being validated; it is not in published preview.3.
+
 Use the pinned .NET SDK and a Windows build agent. This repository's owner uses
 a shared local machine: builds/tests run in GitHub Actions, not locally.
 

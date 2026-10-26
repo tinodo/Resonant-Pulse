@@ -58,7 +58,12 @@ function Set-PracticeNumber([string]$id, [int]$value) {
     }
 }
 function Set-PracticeLimits([int]$seconds, [int]$beats, [int]$bars) {
-    (Find-Control 'PracticeTimer').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::AutomationIdProperty, 'PracticeSeconds')
+    $currentWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+    if ($null -eq $currentWindow.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)) {
+        Invoke-Control 'PracticeTimer'
+    }
     Set-PracticeNumber 'PracticeSeconds' $seconds
     Set-PracticeNumber 'PracticeBeats' $beats
     Set-PracticeNumber 'PracticeBars' $bars
@@ -84,12 +89,15 @@ do {
 if ($status.Current.Name -notlike 'Stopped*') { throw 'First-use initialization did not reach Stopped.' }
 $bounds = $window.Current.BoundingRectangle
 $controls = @()
-foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'AudioOutputPicker', 'TransportStartPause', 'MasterGain')) {
+foreach ($id in @('Tempo', 'TapTempo', 'QuickMeter', 'MainSound', 'MainAccent0', 'RhythmOptions',
+    'TempoOptions', 'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOutputPicker', 'TransportStartPause', 'MasterGain')) {
     $element = Find-Control $id
     $rect = $element.Current.BoundingRectangle
     if ($element.Current.IsOffscreen -or $rect.IsEmpty -or -not $bounds.Contains($rect)) {
         throw "Primary control is not visible in the first-use window: $id ($rect)"
     }
+    $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
+    if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
     $controls += @{id=$id;name=$element.Current.Name;visible=$true}
 }
 $picker = Find-Control 'AudioOutputPicker'

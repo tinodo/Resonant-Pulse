@@ -22,6 +22,17 @@ keyboard analysis is not microphone calibration, MIDI file export is not live
 MIDI clock, a static concept is not an app screenshot, and a development MSIX is
 not a signed Store release.
 
+The urgent Play repair moves every settings-group entry into the fixed page
+header, reduces the instrument to a bounded preview, aligns meter/sound fields
+and stops stretching Start. Bounded flyouts expose advanced controls without
+requiring a taller screen; any remaining page overflow has a persistent cue.
+Sound/pulse-only edits prepare immutable replacement plans off the callback,
+publish at a subsequent audio quantum and preserve prior attack tails. They
+retain the current cursor, loop, count-in, program and stop boundaries.
+Explicit pulse edits take precedence over automatic grouping emphasis.
+Count-in still uses its own cue accents; structural tempo/rhythm edits still
+require Stop + Start. Source/native/release evidence for this repair is pending.
+
 First use resolves the Windows default render endpoint, rather than taking the
 first enumerated device. The selection is then remembered. Losing a saved device
 never routes playback elsewhere automatically. Start is unavailable until an

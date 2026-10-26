@@ -7,7 +7,8 @@ internal enum EditorChangeKind
     Document,
     MasterGainOnly,
     GlobalTempoOnly,
-    PracticeTimerOnly
+    PracticeTimerOnly,
+    SoundAndAccentsOnly
 }
 
 internal static class EditorRevisionPolicy

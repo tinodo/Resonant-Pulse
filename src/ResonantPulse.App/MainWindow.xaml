@@ -23,12 +23,12 @@
       </Grid.RowDefinitions>
       <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" MinWidth="100"
-                AutomationProperties.AutomationId="TransportStartPause" HorizontalAlignment="Stretch" IsEnabled="False" />
+        <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" MinWidth="112" MaxWidth="168" MinHeight="44"
+                AutomationProperties.AutomationId="TransportStartPause" HorizontalAlignment="Left" IsEnabled="False" />
         <Button x:Name="StopButton" Grid.Column="1" MinWidth="76" AutomationProperties.AutomationId="TransportStop" />
-        <Button x:Name="MuteButton" Grid.Column="2" MinWidth="100" MaxWidth="180"
+        <Button x:Name="MuteButton" Grid.Column="2" MinWidth="100" MaxWidth="180" HorizontalAlignment="Left"
                 AutomationProperties.AutomationId="EmergencyMute" />
       </Grid>
       <TextBlock x:Name="TransportStatus" Grid.Row="1" TextWrapping="Wrap"

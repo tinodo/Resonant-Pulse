@@ -24,6 +24,8 @@ public sealed record PulseSettings
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int PracticeBars { get; set; }
     public Accent[] Accents { get; set; } = [Accent.Strong, Accent.Normal, Accent.Normal, Accent.Normal];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AccentOverridesGroups { get; set; }
     public int AudibleBars { get; set; }
     public int SilentBars { get; set; }
     public bool BlindGaps { get; set; } = true;
