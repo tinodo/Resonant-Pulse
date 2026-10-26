@@ -50,6 +50,7 @@ public sealed partial class MainWindow
         var increase = ActionButton("TempoUp", "TempoUp", () => { tempo.Value = Math.Min(1000, tempo.Value + 1); });
         decrease.Content = "-1";
         increase.Content = "+1";
+        decrease.VerticalAlignment = increase.VerticalAlignment = tap.VerticalAlignment = VerticalAlignment.Stretch;
         var tempoCommands = new Grid { ColumnSpacing = 8 };
         tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         tempoCommands.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -117,7 +118,7 @@ public sealed partial class MainWindow
         var audible = Number("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
         var silent = Number("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
         var blind = Check("Blind", "BlindGaps", settings.BlindGaps);
-        var accents = AccentFlow(140, 60);
+        var accentButtons = new List<UIElement>();
         var effective = AccentPatterns.ExpandEffectiveMain(settings, PrimaryAccentCount(settings));
         for (var beat = 0; beat < PrimaryAccentCount(settings); beat++)
         {
@@ -125,7 +126,7 @@ public sealed partial class MainWindow
             var current = effective[index];
             var button = new Button
             {
-                Margin = new Thickness(0, 0, 8, 8), VerticalAlignment = VerticalAlignment.Top,
+                VerticalAlignment = VerticalAlignment.Top,
                 HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 52
             };
             void Describe(Accent accent)
@@ -152,8 +153,11 @@ public sealed partial class MainWindow
                 }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
                 Describe(_document.Settings.Accents[index]);
             });
-            accents.Children.Add(button);
+            accentButtons.Add(button);
         }
+        var accents = WrapControls(120, accentButtons.ToArray());
+        accents.Width = Math.Min(560, accentButtons.Count * 140);
+        accents.HorizontalAlignment = HorizontalAlignment.Left;
         var apply = ActionButton("ApplyRhythm", "ApplyPlaySettings", async () =>
         {
             await CommitAsync(doc =>
@@ -292,6 +296,7 @@ public sealed partial class MainWindow
         {
             shortcuts.Width = Math.Min(760, Math.Max(0, args.NewSize.Width));
             heroCard.Width = Math.Min(560, Math.Max(0, args.NewSize.Width - 16));
+            accents.Width = Math.Min(Math.Min(560, accentButtons.Count * 140), Math.Max(0, args.NewSize.Width - 16));
             var compact = args.NewSize.Height < 400 && args.NewSize.Width >= 600;
             instrument.Width = instrument.Height = compact ? 64 : 128;
             controls.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;

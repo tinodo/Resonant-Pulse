@@ -158,14 +158,14 @@ public sealed partial class MainWindow
 
     private static string Selected(ComboBox combo) => ((Choice)combo.SelectedItem).Value;
 
-    private static VariableSizedWrapGrid AccentFlow(double width = 155, double height = 76)
+    private static VariableSizedWrapGrid AccentFlow()
     {
         var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
         var panel = new VariableSizedWrapGrid
         {
-            Orientation = Orientation.Horizontal, ItemWidth = width * Math.Sqrt(scale), ItemHeight = height * scale
+            Orientation = Orientation.Horizontal, ItemWidth = 155 * Math.Sqrt(scale), ItemHeight = 76 * scale
         };
-        panel.SizeChanged += (_, args) => panel.ItemWidth = Math.Min(Math.Max(100, args.NewSize.Width), width * Math.Sqrt(scale));
+        panel.SizeChanged += (_, args) => panel.ItemWidth = Math.Min(Math.Max(100, args.NewSize.Width), 155 * Math.Sqrt(scale));
         return panel;
     }
 
