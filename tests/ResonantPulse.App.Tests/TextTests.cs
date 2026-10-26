@@ -21,7 +21,8 @@ public sealed class TextTests
                 Text.Select(language);
                 foreach (var key in new[] { "TapReady", "TapEstimateUnknown", "TapEstimate", "TapInCount",
                     "ArmTapIn", "CancelTapIn", "TapInProgress", "TapInRejected", "TapInPreparing",
-                    "TapInStopFirst", "TapInCancelled", "TapInRange", "TapInHint" })
+                    "TapInStopFirst", "TapInCancelled", "TapInRange", "TapInHint", "TapInMonitoringUnavailable",
+                    "TapInOutputChanged" })
                     Assert.AreNotEqual(key, Text.Get(key), $"{language}: {key}");
                 Assert.IsFalse(Text.Format("TapInProgress", 2, 4, "120").Contains('{'));
                 Assert.IsFalse(Text.Format("TapInRejected", 0, 4, "120").Contains('{'));

@@ -12,7 +12,7 @@ public sealed class TapInSessionTests
     public void OnlyChosenNumberOfValidTapsCreatesOnePendingStart(int required)
     {
         var session = new TapInSession();
-        session.Arm(required);
+        session.Arm(required, "output");
         for (var tap = 0; tap < required; tap++)
         {
             Assert.AreEqual(tap == required - 1, session.Tap(tap * 0.75));
@@ -32,7 +32,7 @@ public sealed class TapInSessionTests
     public void BounceAndEarlyOutlierBreakConsecutiveRunAndNeverStart()
     {
         var session = new TapInSession();
-        session.Arm(4);
+        session.Arm(4, "output");
         Assert.IsFalse(session.Tap(0));
         Assert.IsFalse(session.Tap(0.5));
         Assert.IsFalse(session.Tap(0.5));
@@ -52,7 +52,7 @@ public sealed class TapInSessionTests
     public void IdleStartsNewRunRatherThanFinishingOldIntent()
     {
         var session = new TapInSession();
-        session.Arm(4);
+        session.Arm(4, "output");
         session.Tap(0); session.Tap(0.5); session.Tap(1);
         Assert.IsFalse(session.Tap(6));
         Assert.AreEqual(1, session.ValidTaps);
@@ -66,7 +66,7 @@ public sealed class TapInSessionTests
     public async Task CancelOrRearmInvalidatesDelayedStartAndOldCompletion()
     {
         var session = new TapInSession();
-        session.Arm(2); session.Tap(0); session.Tap(0.5);
+        session.Arm(2, "output"); session.Tap(0); session.Tap(0.5);
         var old = session.Generation;
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         async Task<bool> DelayedStart()
@@ -76,7 +76,7 @@ public sealed class TapInSessionTests
         }
         var start = DelayedStart();
         session.Cancel();
-        session.Arm(4);
+        session.Arm(4, "output");
         session.Tap(1);
         session.Finish(old);
         release.SetResult();
@@ -92,8 +92,8 @@ public sealed class TapInSessionTests
     public void InvalidTargetDoesNotDestroyArmedSession(int required)
     {
         var session = new TapInSession();
-        session.Arm(4); session.Tap(0);
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => session.Arm(required));
+        session.Arm(4, "output"); session.Tap(0);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => session.Arm(required, "output"));
         Assert.IsTrue(session.IsArmed);
         Assert.AreEqual(1, session.ValidTaps);
     }
@@ -102,7 +102,7 @@ public sealed class TapInSessionTests
     public void IntentionalNewTempoStillRequiresConsecutiveAcceptedTaps()
     {
         var session = new TapInSession();
-        session.Arm(4);
+        session.Arm(4, "output");
         session.Tap(0); session.Tap(0.5);
         Assert.IsFalse(session.Tap(1.25));
         Assert.IsFalse(session.Tap(2));
@@ -119,13 +119,20 @@ public sealed class TapInSessionTests
     public void LostOutputIntentCannotReturnWithReconnectedEndpoint()
     {
         var session = new TapInSession();
-        session.Arm(2); session.Tap(0); session.Tap(0.5);
+        session.Arm(2, "output"); session.Tap(0); session.Tap(0.5);
         var pending = session.Generation;
-        session.Cancel();
+        void DeviceChanged(string id)
+        {
+            if (session.IsAffectedByOutput(id)) session.Cancel();
+        }
+        DeviceChanged("other-output");
+        Assert.IsTrue(session.IsPending);
+        DeviceChanged("OUTPUT");
         Assert.IsFalse(session.IsCurrent(pending));
         Assert.IsFalse(session.IsArmed);
         Assert.ThrowsExactly<InvalidOperationException>(() => session.Tap(1));
-        session.Arm(2);
+        Assert.IsFalse(session.IsAffectedByOutput("output"));
+        session.Arm(2, "output");
         Assert.IsFalse(session.Tap(2));
         Assert.IsTrue(session.Tap(2.5));
         Assert.IsTrue(session.IsCurrent(session.Generation));

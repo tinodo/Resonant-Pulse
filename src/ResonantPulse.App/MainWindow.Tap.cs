@@ -27,7 +27,8 @@ public sealed partial class MainWindow
             return;
         }
         if (!HasSelectedOutput) { PromptForOutput(); return; }
-        _tapIn.Arm(requiredTaps);
+        if (!_isOutputMonitoring) { ShowNotice("TapInMonitoringUnavailable"); return; }
+        _tapIn.Arm(requiredTaps, _preferences.OutputId);
         _tapInRequiredTaps = requiredTaps;
         _transportIntent++;
         _transport.Stop();
@@ -125,7 +126,7 @@ public sealed partial class MainWindow
     private void RefreshTapControls(TransportState state)
     {
         if (_tapInArm is not null)
-            _tapInArm.IsEnabled = !_isBusy && !_isLocked && HasSelectedOutput &&
+            _tapInArm.IsEnabled = !_isBusy && !_isLocked && HasSelectedOutput && _isOutputMonitoring &&
                 state is TransportState.Stopped or TransportState.Completed;
         if (_tapInCancel is not null) _tapInCancel.IsEnabled = _tapIn.IsArmed || _tapIn.IsPending;
         if (_tapInCount is not null) _tapInCount.IsEnabled = !_isBusy;
@@ -134,6 +135,7 @@ public sealed partial class MainWindow
         _tapStatus.Text = _tapIn.IsPending ? Text.Get("TapInPreparing") :
             _tapIn.IsArmed ? Text.Format(_tapIn.LastTapRejected ? "TapInRejected" : "TapInProgress",
                 _tapIn.ValidTaps, _tapIn.RequiredTaps, estimate) :
+            HasSelectedOutput && !_isOutputMonitoring ? Text.Get("TapInMonitoringUnavailable") :
             _tap.CurrentBpm is { } bpm ? Text.Format("TapEstimate", bpm, _tap.AcceptedIntervals, _tap.RejectedTaps) :
             Text.Get("TapReady");
         AutomationProperties.SetName(_tapStatus, _tapStatus.Text);

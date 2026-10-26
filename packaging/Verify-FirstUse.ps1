@@ -197,7 +197,10 @@ if ($selection.Count -eq 0) {
         Start-Sleep -Milliseconds 500
         Invoke-Control 'TapTempo'
         Wait-TapStatus 'armed:2:4:False'
-        Start-Sleep -Milliseconds 100
+        $estimate = [regex]::Match((Find-Control 'TapStatus').Current.Name, 'estimate ([0-9.]+) BPM')
+        if (-not $estimate.Success) { throw 'Native tap-in did not expose its tempo estimate.' }
+        $period = 60 / [double]::Parse($estimate.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
+        Start-Sleep -Milliseconds ([int](1700 * $period))
         Invoke-Control 'TapTempo'
         Wait-TapStatus 'armed:0:4:True'
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {

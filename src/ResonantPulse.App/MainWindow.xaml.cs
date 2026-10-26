@@ -140,6 +140,8 @@ public sealed partial class MainWindow : Window
             _isClosed = true;
             CancelTapIn();
             _refresh.Stop();
+            try { StopOutputMonitoring(); }
+            catch (Exception exception) { Diagnostics.Write("Output monitor shutdown", exception); }
             RemovePowerHook(hwnd);
             _transport.Dispose();
             Diagnostics.Write("Native window closed");

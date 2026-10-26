@@ -80,6 +80,13 @@ is rewritten. Out-of-range tempo scaling or failed validation/recovery never sta
 playback. Stop, manual transport, Reset/Escape, navigation, output changes and
 power transitions invalidate pending intent. This is not phase-aligned or
 acoustically calibrated start.
+An app-lifetime WinRT DeviceWatcher observes render endpoints and dispatches
+selected-endpoint removal/update cancellation even without manual refresh.
+Reconnection never rearms. A stopped/unavailable watcher disables tap-in with
+visible retry guidance; manual Start remains independent. Watcher handlers are
+detached and monitoring stopped on close. This follows the
+[documented DeviceWatcher event pattern](https://learn.microsoft.com/windows/apps/develop/devices-sensors/gatt-client#query-for-nearby-devices);
+the app uses the audio-render selector, not a Bluetooth query.
 
 Prefer optional additions over breaking these APIs. Inform the coordinator about
 any essential contract correction before changing it.

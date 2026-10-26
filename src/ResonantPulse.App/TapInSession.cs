@@ -7,6 +7,7 @@ namespace ResonantPulse.App;
 internal sealed class TapInSession
 {
     private readonly TapTempoEstimator _estimate = new() { RejectEarlyOutliers = true };
+    private string _outputId = "";
     public long Generation { get; private set; }
     public bool IsArmed { get; private set; }
     public bool IsPending { get; private set; }
@@ -15,13 +16,18 @@ internal sealed class TapInSession
     public bool LastTapRejected { get; private set; }
     public double? Bpm => _estimate.CurrentBpm;
 
-    public void Arm(int requiredTaps)
+    public void Arm(int requiredTaps, string outputId)
     {
         if (requiredTaps is < 2 or > 16) throw new ArgumentOutOfRangeException(nameof(requiredTaps));
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputId);
         Cancel();
         RequiredTaps = requiredTaps;
+        _outputId = outputId;
         IsArmed = true;
     }
+
+    public bool IsAffectedByOutput(string id) => (IsArmed || IsPending) &&
+        string.Equals(_outputId, id, StringComparison.OrdinalIgnoreCase);
 
     public bool Tap(double timestamp)
     {
@@ -49,6 +55,7 @@ internal sealed class TapInSession
         Generation++;
         IsArmed = IsPending = LastTapRejected = false;
         ValidTaps = 0;
+        _outputId = "";
         _estimate.Reset();
     }
 }
