@@ -115,8 +115,9 @@ is specified in `metronome-design.md` and is not changed here.
   *Edit in Studio*. Without a program: what programs are for, and *Build a program* (Studio) / *Ready-made rhythms* (Library).
   A change made in Studio while the metronome plays is heard from the next Start, so the status, progress and chart follow
   the program that plays (even one that was removed from the project, until Stop) and a note says that the steps listed are
-  the changed program (or that the program was removed); the page is built again when the run ends, by Stop or by itself
-  (a completed run keeps its revision until Stop, but nothing plays any more).
+  the changed program (or that the program was removed); the card's content is swapped in place when the run ends, by Stop
+  or by itself (a completed run keeps its revision until Stop, but nothing plays any more), so the timing check beside it
+  keeps its controls and the choices made in them.
 - **Live view:** the dial and position.
 - **Timing check** (was "Timing Lab"): states plainly what it does: it compares the moment each key press or Hit
   arrives with the moment each click was scheduled; it does not hear your instrument and does not measure speaker delay.

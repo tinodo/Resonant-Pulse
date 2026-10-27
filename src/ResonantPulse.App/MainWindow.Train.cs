@@ -28,7 +28,43 @@ public sealed partial class MainWindow
     private readonly TempoCurveState _tempoCurveState = new();
 
     private TrainProgramView _trainProgramView;
-    private bool _trainRebuilding;
+
+    /// <summary>
+    /// The program card's content. It is swapped in place when what it says changes, so the rest of the page (the timing check
+    /// above all) keeps its controls and the choices not yet used.
+    /// </summary>
+    private ContentControl? _programHost;
+
+    /// <summary>
+    /// What the program card says: the readouts of a program (status, progress, chart), a note when the program that plays is
+    /// not the one in the project, and the project's steps; or, with no program anywhere, what a program is for.
+    /// </summary>
+    private UIElement BuildProgramBody(TrainProgramView view)
+    {
+        _trainProgramView = view;
+        // The chart, progress bar and step status only mean something when there is a program to follow.
+        _tempoCurve = view.Readouts ? new TempoCurve() : null;
+        _progress = view.Readouts ? new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 } : null;
+        _programStatus = view.Readouts ? Body("") : null;
+        if (_progress is not null) Identify(_progress, "ProgramProgress", Text.Get("Program"));
+        if (!view.Readouts)
+        {
+            return EmptyState("\uEC4A", "ProgramEmptyTitle", "ProgramEmpty",
+                ActionButton("BuildProgram", "EditProgram", () => SelectView("Studio"), "\uE9E9", ButtonKind.Primary),
+                ActionButton("Presets", "OpenPresets", () => SelectView("Library"), "\uE8F1"));
+        }
+        var body = new StackPanel { Spacing = 12 };
+        body.Children.Add(_programStatus!);
+        body.Children.Add(_progress!);
+        body.Children.Add(Note("TempoChartAxis"));
+        body.Children.Add(_tempoCurve!);
+        // The readouts above follow what plays; the steps below are the project's program. When they differ, the page says so.
+        if (view.Note != ProgramNote.None)
+            body.Children.Add(Note(view.Note == ProgramNote.Removed ? "TrainProgramRemoved" : "TrainProgramChanged"));
+        if (_document.Program.Count > 0) body.Children.Add(SettingRows(_document.Program.Select(ProgramStepRow).ToArray()));
+        body.Children.Add(CommandRow(ActionButton("EditInStudio", "EditProgram", () => SelectView("Studio"), "\uE70F")));
+        return body;
+    }
 
     private UIElement BuildTrain()
     {
@@ -40,37 +76,13 @@ public sealed partial class MainWindow
         // What plays can be a program the project no longer holds (a Studio edit is heard from the next Start), so the readouts
         // follow the revision that plays as well as the project.
         var current = _transport.Snapshot();
-        var view = TrainProgramView.Of(_document.Program, current.Revision?.Document.Program, current.State == TransportState.Completed);
-        _trainProgramView = view;
-        var hasProgram = view.Readouts;
-        // The chart, progress bar and step status only mean something when there is a program to follow.
-        _tempoCurve = hasProgram ? new TempoCurve() : null;
-        _progress = hasProgram ? new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 } : null;
-        _programStatus = hasProgram ? Body("") : null;
-        if (_progress is not null) Identify(_progress, "ProgramProgress", Text.Get("Program"));
-
-        UIElement programBody;
-        if (!hasProgram)
+        _programHost = new ContentControl
         {
-            programBody = EmptyState("\uEC4A", "ProgramEmptyTitle", "ProgramEmpty",
-                ActionButton("BuildProgram", "EditProgram", () => SelectView("Studio"), "\uE9E9", ButtonKind.Primary),
-                ActionButton("Presets", "OpenPresets", () => SelectView("Library"), "\uE8F1"));
-        }
-        else
-        {
-            var body = new StackPanel { Spacing = 12 };
-            body.Children.Add(_programStatus!);
-            body.Children.Add(_progress!);
-            body.Children.Add(Note("TempoChartAxis"));
-            body.Children.Add(_tempoCurve!);
-            // The readouts above follow what plays; the steps below are the project's program. When they differ, the page says so.
-            if (view.Note != ProgramNote.None)
-                body.Children.Add(Note(view.Note == ProgramNote.Removed ? "TrainProgramRemoved" : "TrainProgramChanged"));
-            if (_document.Program.Count > 0) body.Children.Add(SettingRows(_document.Program.Select(ProgramStepRow).ToArray()));
-            body.Children.Add(CommandRow(ActionButton("EditInStudio", "EditProgram", () => SelectView("Studio"), "\uE70F")));
-            programBody = body;
-        }
-        var program = Card("TrainProgramTitle", programBody, "TrainProgramHelp", id: "ProgramCard");
+            IsTabStop = false, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top,
+            Content = BuildProgramBody(TrainProgramView.Of(_document.Program, current.Revision?.Document.Program,
+                current.State == TransportState.Completed))
+        };
+        var program = Card("TrainProgramTitle", _programHost, "TrainProgramHelp", id: "ProgramCard");
         var live = Card("NowPlaying", new StackPanel { Spacing = 8, Children = { _instrument, _position } }, id: "LiveCard");
 
         var targets = new List<Choice> { new("-1", Text.Get("MainTarget")) };

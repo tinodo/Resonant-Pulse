@@ -17,15 +17,13 @@ public sealed partial class MainWindow
         var snapshot = _transport.Snapshot();
         _transport.FinishCompleted();
         // The program card of the Train page follows what plays as well as the project. When that changes (a run ends, so a
-        // program that was removed in Studio is no longer playing) the page is built again.
-        if (_view == "Train" && !_trainRebuilding &&
-            _trainProgramView != TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program,
-                snapshot.State == TransportState.Completed))
+        // program that was removed in Studio is no longer playing) the card is built again, in place: the rest of the page,
+        // the timing check with the choices made in it, is left alone.
+        if (_view == "Train" && _programHost is not null)
         {
-            _trainRebuilding = true;
-            try { BuildPage(); }
-            finally { _trainRebuilding = false; }
-            return;
+            var view = TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program,
+                snapshot.State == TransportState.Completed);
+            if (view != _trainProgramView) _programHost.Content = BuildProgramBody(view);
         }
         var active = snapshot.Revision?.Document ?? _document;
         var plan = snapshot.Plan;

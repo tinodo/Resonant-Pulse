@@ -279,6 +279,7 @@ public sealed partial class MainWindow : Window
         _stageNotesCaption = null;
         _programStatus = null;
         _progress = null;
+        _programHost = null;
         _timingStatus = null;
         _timingTarget = null;
         _timingToleranceInput = null;
