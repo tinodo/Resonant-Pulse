@@ -155,6 +155,22 @@ function Save-PlayScreenshot([string]$name) {
         return $image
     } finally { $graphics.Dispose(); $bitmap.Dispose() }
 }
+# A flyout slides into place for about 400 ms, and the geometry of its controls changes with every frame until it stops
+# (an ease-out whose last one-pixel step lands about 125 ms after the previous one). Two reads that straddle a frame
+# differ by the distance travelled, so a panel is measured only after its control has been still for a while.
+function Wait-Settled([string]$id, [int]$stillMilliseconds = 500, [int]$seconds = 8) {
+    $element = Find-Control $id
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    $last = $null
+    $stillSince = [DateTime]::UtcNow
+    do {
+        $now = $element.Current.BoundingRectangle.ToString()
+        if ($now -ne $last) { $last = $now; $stillSince = [DateTime]::UtcNow }
+        elseif (([DateTime]::UtcNow - $stillSince).TotalMilliseconds -ge $stillMilliseconds) { return }
+        Start-Sleep -Milliseconds 40
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "$id did not stop moving within $seconds seconds (last position: $last)"
+}
 # Layout rules a person notices at a glance. Each one failed in a shipped preview, so each is now a gate.
 function Test-SameSize([string]$what, $first, $second, [double]$tolerance = 2) {
     if ([Math]::Abs($first.Width - $second.Width) -gt $tolerance -or [Math]::Abs($first.Height - $second.Height) -gt $tolerance) {
@@ -495,6 +511,7 @@ function Send-CtrlM {
 }
 foreach ($panel in $panels) {
     Open-Panel $panel.open $panel.field
+    Wait-Settled $panel.field
     $element = Find-Control $panel.field
     if ($element.Current.IsOffscreen) { throw "Opened settings control is not visible: $($panel.field)" }
     if ($panel.open[0] -eq 'TempoEdit' -and (Find-Control 'Tempo').Current.IsOffscreen) {
