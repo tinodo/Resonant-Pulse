@@ -51,10 +51,12 @@ public sealed class LocalWorkspace
 
     public async Task SavePreferencesAsync(Preferences preferences)
     {
-        var json = JsonSerializer.SerializeToUtf8Bytes(preferences);
         await _writes.WaitAsync();
         try
         {
+            // The values are read once the write lock is held, not when the save was asked for: the file then ends with the
+            // latest value of every setting, whatever order several saves were started in and however long one of them took.
+            var json = JsonSerializer.SerializeToUtf8Bytes(preferences);
             Directory.CreateDirectory(_root);
             var path = Path.Combine(_root, "preferences.json");
             await AtomicFile.WriteAsync(path,

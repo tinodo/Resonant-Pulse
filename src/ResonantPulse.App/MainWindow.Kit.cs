@@ -408,36 +408,38 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Applies the commit contract to a number box. A NumberBox raises ValueChanged only when the user commits (Enter, focus
-    /// leaving, a stepper), so an empty or invalid draft never reaches the project: it reverts to the last committed value.
-    /// If the commit itself fails, the box returns to the committed value too, and the error is shown.
-    /// Commits run one at a time, in the order they were made: a slow save never lets a later edit overtake it, and a revert
-    /// always shows the value of the latest commit that actually succeeded. When a newer edit is already waiting, an older
-    /// failure leaves the box alone, because the newer edit decides what it shows.
-    /// <paramref name="commits"/> belongs to the setting and outlives the page: a rebuilt page attaches its new box to it, so a
-    /// save that was pending when the page was rebuilt can neither overwrite a newer edit nor leave the new box out of date.
+    /// leaving, a stepper), so an empty or invalid draft never reaches the setting: the box goes back to the value the setting
+    /// has now, which <paramref name="current"/> reads. A refused value (<paramref name="commit"/> throws before it applies
+    /// anything) goes back the same way, and the reason is shown.
+    /// <paramref name="commit"/> applies the value to the setting before its first await, so edits are applied in the order
+    /// they were made and the setting always holds what the box shows. Whatever follows the first await (remembering the
+    /// value for the next session) cannot make the box and the setting disagree: if it fails, the error is shown and the
+    /// box keeps the value the setting now has.
     /// </summary>
-    private void CommitNumber(NumberBox box, OrderedCommits commits, Func<double, Task> commit)
+    private void CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
     {
         var reverting = false;
-        commits.Attach(value =>
+        void Revert()
         {
             reverting = true;
-            box.Value = value;
+            box.Value = current();
             reverting = false;
-        });
-        box.ValueChanged += (sender, args) =>
+        }
+        box.ValueChanged += async (sender, args) =>
         {
             if (reverting) return;
-            _ = commits.Propose(args.NewValue, async value =>
+            if (!double.IsFinite(args.NewValue))
             {
-                var applied = false;
-                await GuardAsync(async () =>
-                {
-                    await commit(value);
-                    applied = true;
-                });
-                return applied;
+                Revert();
+                return;
+            }
+            var applied = false;
+            await GuardAsync(async () =>
+            {
+                await commit(args.NewValue);
+                applied = true;
             });
+            if (!applied) Revert();
         };
     }
 

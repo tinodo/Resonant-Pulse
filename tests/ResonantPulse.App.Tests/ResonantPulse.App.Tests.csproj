@@ -16,8 +16,6 @@
     <Compile Include="../../src/ResonantPulse.App/MeterPresets.cs" Link="App/MeterPresets.cs" />
     <Compile Include="../../src/ResonantPulse.App/PlayLayout.cs" Link="App/PlayLayout.cs" />
     <Compile Include="../../src/ResonantPulse.App/FormMetrics.cs" Link="App/FormMetrics.cs" />
-    <Compile Include="../../src/ResonantPulse.App/OrderedWork.cs" Link="App/OrderedWork.cs" />
-    <Compile Include="../../src/ResonantPulse.App/OrderedCommits.cs" Link="App/OrderedCommits.cs" />
     <Compile Include="../../src/ResonantPulse.App/WholeNumbers.cs" Link="App/WholeNumbers.cs" />
     <Compile Include="../../src/ResonantPulse.App/PracticeFormat.cs" Link="App/PracticeFormat.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoFormat.cs" Link="App/TempoFormat.cs" />

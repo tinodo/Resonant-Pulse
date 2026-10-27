@@ -9,8 +9,6 @@ namespace ResonantPulse.App;
 
 public sealed partial class MainWindow
 {
-    private OrderedCommits? _exportBarsCommits;
-
     private UIElement BuildLibrary()
     {
         _search = Input("Search", "LibrarySearch", "");
@@ -22,21 +20,13 @@ public sealed partial class MainWindow
         };
         Identify(_libraryList, "LibraryProjects", Text.Get("Library"));
         var exportBars = NumberInput("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
-        // The state belongs to the setting, not to this box: leaving the page and coming back while a save is pending must not
-        // start a second, unordered queue.
-        _exportBarsCommits ??= new OrderedCommits(_preferences.ExportBars);
-        CommitNumber(exportBars, _exportBarsCommits, async value =>
+        // The length applies at once, like every setting: the box shows it and the next export uses it. Remembering it for the
+        // next session is best effort; if that fails the error is shown and the value stays, so the box is never put back to a
+        // length the next export would not use.
+        CommitNumber(exportBars, () => _preferences.ExportBars, async value =>
         {
-            // Commits run one at a time, so the value to roll back to is always the last one that was saved.
-            var bars = Integer(value);
-            var previous = _preferences.ExportBars;
-            _preferences.ExportBars = bars;
-            try { await _workspace.SavePreferencesAsync(_preferences); }
-            catch
-            {
-                _preferences.ExportBars = previous;
-                throw;
-            }
+            _preferences.ExportBars = Integer(value);
+            await _workspace.SavePreferencesAsync(_preferences);
         });
         var exportLength = new StackPanel { Spacing = 4, Children = { Field(exportBars, "UnitBars"), Note("ExportBarsHelp") } };
         var panel = Column(Heading(Text.Get("Library")), _search, _libraryList,
@@ -191,9 +181,11 @@ public sealed partial class MainWindow
     private async Task ExportAsync(bool midi)
     {
         var snapshot = LocalWorkspace.Clone(_document);
+        // One length for the preflight and the export: it is the length the box shows, applied the moment it was committed.
+        var bars = _preferences.ExportBars;
         if (midi)
         {
-            var report = await Task.Run(() => MidiExporter.Preflight(snapshot, _preferences.ExportBars));
+            var report = await Task.Run(() => MidiExporter.Preflight(snapshot, bars));
             if (!report.CanExport)
                 throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", report.Errors));
             if (!await ConfirmAsync(Text.Format("MidiPreflight", report.PulsesPerQuarter, report.MaximumTimingErrorSeconds * 1000)))
@@ -203,7 +195,6 @@ public sealed partial class MainWindow
         if (path is null) return;
         try
         {
-            var bars = _preferences.ExportBars;
             if (midi)
                 await Task.Run(() => MidiExporter.ExportAsync(path, snapshot, bars));
             else
