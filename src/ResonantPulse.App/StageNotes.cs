@@ -105,6 +105,9 @@ internal sealed class StageNotesDraft
     {
         var request = new NotesRequest(Project, Song, text, ++_lastId);
         _pending = request;
+        // A newer request for the same song supersedes a draft that failed before it: asking for that draft again later would
+        // put the older words on top of these.
+        if (_failed is { } failed && failed.Project == request.Project && failed.Song == request.Song) _failed = null;
         return request;
     }
 

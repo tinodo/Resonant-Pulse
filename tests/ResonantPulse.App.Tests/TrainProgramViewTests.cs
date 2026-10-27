@@ -94,4 +94,37 @@ public sealed class TrainProgramViewTests
         Assert.AreEqual(TrainProgramView.Of([], null, runCompleted: false), TrainProgramView.Of([], Warmup, runCompleted: true),
             "and a completed run looks like a stopped one");
     }
+
+    [TestMethod]
+    public void AFinishedRunOfAProgramThatStudioChangedHasNothingToSayAboutTheStepsListedBesideIt()
+    {
+        var changed = new[] { Step("Warm up"), Step("Build", 120) };
+        Assert.IsTrue(TrainProgramView.FinishedRunIsStale(changed, Warmup, runCompleted: true),
+            "the card goes back to the project's own program, idle");
+        Assert.IsTrue(TrainProgramView.FinishedRunIsStale([], Warmup, runCompleted: true));
+        Assert.IsTrue(TrainProgramView.FinishedRunIsStale(Warmup, [], runCompleted: true), "a program added while an open-ended run played");
+        Assert.AreEqual(new TrainProgramView(true, ProgramNote.None), TrainProgramView.Of(changed, Warmup, runCompleted: true),
+            "and the note is gone: nothing plays any more");
+    }
+
+    [TestMethod]
+    public void AFinishedRunOfTheProgramThatIsStillInTheProjectKeepsItsReadouts()
+    {
+        Assert.IsFalse(TrainProgramView.FinishedRunIsStale(Warmup, Warmup.ToList(), runCompleted: true));
+    }
+
+    [TestMethod]
+    public void WhileARunPlaysTheNoteExplainsInsteadOfTheReadoutsBeingSwitched()
+    {
+        var changed = new[] { Step("Warm up"), Step("Build", 120) };
+        Assert.IsFalse(TrainProgramView.FinishedRunIsStale(changed, Warmup, runCompleted: false));
+        Assert.AreEqual(ProgramNote.Changed, TrainProgramView.Of(changed, Warmup, runCompleted: false).Note);
+    }
+
+    [TestMethod]
+    public void NothingRetainedMeansNothingIsStale()
+    {
+        Assert.IsFalse(TrainProgramView.FinishedRunIsStale(Warmup, null, runCompleted: true));
+        Assert.IsFalse(TrainProgramView.FinishedRunIsStale([], null, runCompleted: false));
+    }
 }

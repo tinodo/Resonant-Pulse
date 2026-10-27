@@ -39,4 +39,13 @@ internal readonly record struct TrainProgramView(bool Readouts, ProgramNote Note
     /// <param name="runCompleted">The transport's run has completed.</param>
     public static TrainProgramView Of(IReadOnlyList<ProgramStep> edited, IReadOnlyList<ProgramStep>? retained, bool runCompleted) =>
         Of(edited, runCompleted ? null : retained);
+
+    /// <summary>
+    /// A completed run keeps its plan until Stop. When the program it played is not the one in the project (Studio changed it
+    /// meanwhile), that plan says nothing about the steps listed beside it, so the card's status, progress and chart go back to
+    /// the project's own program, idle, as after Stop. A finished run of the program that is still in the project keeps its
+    /// readouts: its final position and progress are true.
+    /// </summary>
+    public static bool FinishedRunIsStale(IReadOnlyList<ProgramStep> edited, IReadOnlyList<ProgramStep>? retained, bool runCompleted) =>
+        runCompleted && retained is not null && !retained.SequenceEqual(edited);
 }

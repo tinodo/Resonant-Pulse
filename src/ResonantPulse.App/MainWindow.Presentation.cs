@@ -44,6 +44,15 @@ public sealed partial class MainWindow
             Groups = meterBeats == settings.BeatsPerBar && meterDenominator == settings.BeatDenominator ? settings.Groups : []
         };
         var phase = position is null ? 0 : (position.BeatIndex + position.BeatPhase) / meterBeats;
+        // The program card describes the program listed beside it. A finished run of a program that Studio has since changed does
+        // not, so after it the card shows the project's own program, idle, as after Stop.
+        var cardIdle = TrainProgramView.FinishedRunIsStale(_document.Program, snapshot.Revision?.Document.Program,
+            snapshot.State == TransportState.Completed);
+        var cardPlan = cardIdle ? null : plan;
+        var cardFrame = cardIdle ? 0 : frame;
+        PlaybackPosition? cardPosition = cardIdle ? null : position;
+        var cardSection = cardIdle ? null : section;
+        var cardBlind = !cardIdle && blind;
         // The readout shows what the player asked for while nothing plays a program; otherwise the audible tempo, so a
         // running program (or a running open-ended revision) is not misreported after a Studio edit changes the document.
         var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoRequested,
@@ -73,7 +82,7 @@ public sealed partial class MainWindow
         if (_tempoCurve is { } curve)
         {
             EnsureTempoPreview();
-            var presentation = _tempoCurveState.Select(_documentRevision, plan, frame, blind);
+            var presentation = _tempoCurveState.Select(_documentRevision, cardPlan, cardFrame, cardBlind);
             curve.Present(presentation.Plan, presentation.Frame, presentation.IsBlind);
         }
         var elapsed = plan is null ? TimeSpan.Zero : TimeSpan.FromSeconds((double)snapshot.ProcessedFrame / plan.SampleRate);
@@ -142,20 +151,20 @@ public sealed partial class MainWindow
         }
         if (_programStatus is not null)
         {
-            _programStatus.Text = blind ? Text.Get("Silent") : position is null ? Text.Get("ProgramIdle") :
-                $"{(position.IsCountIn ? Text.Get("CountInActive") : position.SectionName)} · {tempo.ToString("0.0", Text.Culture)} BPM · {meterBeats}/{meterDenominator}\n" +
-                Text.Format("Progress", TimeSpan.FromSeconds((double)frame / plan!.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture),
-                    TimeSpan.FromSeconds((double)plan.TotalFrames / plan.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture));
-            if (!blind && section is not null && plan is not null)
+            _programStatus.Text = cardBlind ? Text.Get("Silent") : cardPosition is null ? Text.Get("ProgramIdle") :
+                $"{(cardPosition.IsCountIn ? Text.Get("CountInActive") : cardPosition.SectionName)} · {tempo.ToString("0.0", Text.Culture)} BPM · {meterBeats}/{meterDenominator}\n" +
+                Text.Format("Progress", TimeSpan.FromSeconds((double)cardFrame / cardPlan!.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture),
+                    TimeSpan.FromSeconds((double)cardPlan.TotalFrames / cardPlan.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture));
+            if (!cardBlind && cardSection is not null && cardPlan is not null)
             {
-                var next = plan.SectionBoundaries.FirstOrDefault(boundary => boundary.StartFrame >= section.EndFrame);
+                var next = cardPlan.SectionBoundaries.FirstOrDefault(boundary => boundary.StartFrame >= cardSection.EndFrame);
                 if (next is not null) _programStatus.Text += "\n" + Text.Format("NextSection", next.Name);
             }
         }
         if (_progress is not null)
         {
-            _progress.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
-            _progress.Value = plan is null ? 0 : Math.Clamp((double)frame / plan.TotalFrames, 0, 1);
+            _progress.Visibility = cardBlind ? Visibility.Collapsed : Visibility.Visible;
+            _progress.Value = cardPlan is null ? 0 : Math.Clamp((double)cardFrame / cardPlan.TotalFrames, 0, 1);
         }
         if (_isTimingArmed && System.Diagnostics.Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalMinutes >= 10)
             FinishTiming();

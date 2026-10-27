@@ -372,6 +372,51 @@ public sealed class StageNotesTests
     }
 
     [TestMethod]
+    public void ANewerRequestSupersedesADraftThatFailedBeforeIt()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved", project: 3);
+        draft.Failed(draft.Request("A"));
+        Assert.IsTrue(draft.HasFailed(3));
+        var newer = draft.Request("B");
+        Assert.IsFalse(draft.HasFailed(3), "B stands for the newest words; the draft that failed is out of date");
+
+        // Leaving Stage and closing or saving asks for a retry while B is still on its way: there is nothing to retry, so the
+        // older A can never be queued behind B and land on top of it.
+        draft.Reset();
+        Assert.IsNull(draft.RetryFailed(3));
+        Assert.AreEqual("B", draft.Show(0, "saved", project: 3), "a page built now shows B, which is on its way");
+        draft.Completed(newer);
+        Assert.AreEqual("B", draft.Saved);
+        Assert.IsNull(draft.RetryFailed(3));
+    }
+
+    [TestMethod]
+    public void ARequestForAnotherSongLeavesAFailedDraftAlone()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved", project: 3);
+        draft.Failed(draft.Request("A"));
+        draft.Reset();
+        draft.Show(1, "other", project: 3);
+        draft.Request("typed for the second song");
+        Assert.IsTrue(draft.HasFailed(3), "the first song's draft is still unsaved");
+    }
+
+    [TestMethod]
+    public void WhenTheNewerRequestFailsToo()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved", project: 3);
+        draft.Failed(draft.Request("A"));
+        var newer = draft.Request("B");
+        draft.Failed(newer);
+        Assert.IsTrue(draft.HasFailed(3));
+        draft.Reset();
+        Assert.AreEqual("B", draft.Show(0, "saved", project: 3), "it is B that is remembered, not A");
+    }
+
+    [TestMethod]
     public void NothingIsAskedForWithoutASong()
     {
         var draft = new StageNotesDraft();
