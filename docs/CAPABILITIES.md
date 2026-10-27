@@ -253,9 +253,10 @@ its beat numbers for the scroll bar, which used to be drawn over them. Protected
 main `ea488bf`: main build 40469135784 and CodeQL 40469135742 passed; release
 40469536270 passed fresh hosted tests (234 Core passes of 238 cases, four platform
 skips, and 318 App passes), Windows x64/ARM64 builds and x64 native/package checks,
-including the first-use verifier's new gates (every quick-pick meter, 12/8
-included, fits its strip without a scroll bar or cue; a scrolling strip leaves
-room under its numbers). Hosted audio, live-edit and counted-stop scenarios
+including the first-use verifier's new gates (the four meters it steps through,
+6/8, 3/4, 12/8 and 4/4, fit their strip without a scroll bar or cue, 12/8 being
+the widest of the twelve quick picks, and a 64-beat strip leaves room under its
+numbers). Hosted audio, live-edit and counted-stop scenarios
 explicitly reported `not-run-no-output`. The actual public x64 ZIP checksum and
 embedded source/version/run were checked; the ARM64 checksum file matched the
 GitHub digest of the ARM64 ZIP, which was not downloaded and re-hashed. Local
@@ -265,7 +266,8 @@ the title) in English, Dutch, German, French, Spanish and the light theme, wrapp
 to two rows (97 DIP) at 460 DIP wide, and the 12/8 strip with all twelve beats and
 no bar at 1040x780 and 800x600; the scroll bar forced into its expanded form sat
 under the beat numbers without touching them. The first-use verifier fails on the
-preview.8 build at the 12/8 gate and passes on the new build, silent audio
+preview.8 build at the 12/8 gate (the run stops there, so the scroll-bar-room gate
+was not exercised against it) and passes on the new build, silent audio
 scenarios included. The shipped x64 binary then ran the exact verifier's audio
 scenarios once more on the Windows default output at an inaudible master gain
 (0.0001, isolated data folder, private desktop): playback advanced, live sound,
