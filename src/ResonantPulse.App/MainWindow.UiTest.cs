@@ -83,7 +83,7 @@ public sealed partial class MainWindow
     {
         if (FindById(Root, "PlaySettingsStrip") is not StackPanel strip) return;
         foreach (var button in strip.Children.OfType<Button>())
-            if (button.Content is StackPanel { Children: [_, TextBlock label] })
+            if (button.Content is Grid { Children: [_, TextBlock label] })
                 label.FontSize *= factor;
     }
 

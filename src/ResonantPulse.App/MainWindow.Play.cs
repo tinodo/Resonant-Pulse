@@ -94,7 +94,7 @@ public sealed partial class MainWindow
         {
             var button = new Button { Flyout = panel.Flyout, Style = ResonantStyle("ToolButtonStyle") };
             LabelButton(button, key, glyph);
-            if (button.Content is StackPanel { Children: [_, TextBlock label] }) railLabels.Add(label);
+            if (button.Content is Grid { Children: [_, TextBlock label] }) railLabels.Add(label);
             Identify(button, id, Text.Get(key));
             // The tooltip carries the full name, which matters most when only the icon is shown.
             ToolTipService.SetToolTip(button, Text.Get(hintKey));

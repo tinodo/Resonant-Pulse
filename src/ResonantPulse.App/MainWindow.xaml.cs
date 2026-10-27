@@ -460,19 +460,22 @@ public sealed partial class MainWindow : Window
 
     private static void LabelButton(Button button, string key, string? glyph = null)
     {
-        UIElement content = new TextBlock
+        FrameworkElement content = new TextBlock
         {
             Text = Text.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         if (glyph is not null)
         {
-            var row = new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 8,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
-            };
-            row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
+            // The label has a star column of its own, so in a button narrower than icon + label (a narrow window, a large text
+            // size) it wraps inside the button instead of being clipped. At its natural width nothing changes.
+            // The gap between icon and label belongs to the label (a margin), so a label that is hidden leaves no gap.
+            var row = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16, VerticalAlignment = VerticalAlignment.Center });
+            content.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(content, 1);
             row.Children.Add(content);
             content = row;
         }
