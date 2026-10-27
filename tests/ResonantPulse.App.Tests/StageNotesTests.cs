@@ -128,4 +128,68 @@ public sealed class StageNotesTests
         Assert.AreEqual("b", draft.Saved);
         Assert.IsFalse(draft.NeedsSave("b"));
     }
+
+    [TestMethod]
+    public void ADraftTheProjectRefusedSurvivesTheBoxBeingRebuiltAndCanBeSavedAgain()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved");
+        var song = draft.Request("far too long");
+        draft.Failed(song, "far too long");
+        draft.Reset();
+        Assert.AreEqual("far too long", draft.Show(0, "saved"), "the page shows what was typed, not what the project holds");
+        Assert.IsTrue(draft.NeedsSave("far too long"), "so it is still unsaved and will be asked for again");
+        Assert.AreEqual("saved", draft.Saved);
+    }
+
+    [TestMethod]
+    public void EscDropsARefusedDraftForGood()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved");
+        var song = draft.Request("refused");
+        draft.Failed(song, "refused");
+        Assert.AreEqual("saved", draft.Restore());
+        draft.Reset();
+        Assert.AreEqual("saved", draft.Show(0, "saved"));
+    }
+
+    [TestMethod]
+    public void ASuccessfulSaveForTheSongMakesAnEarlierRefusedDraftOutOfDate()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved");
+        var song = draft.Request("refused");
+        draft.Failed(song, "refused");
+        draft.Request("shorter");
+        draft.Completed(song, "shorter");
+        draft.Reset();
+        Assert.AreEqual("shorter", draft.Show(0, "shorter"));
+    }
+
+    [TestMethod]
+    public void AFailureOfASaveThatANewerOneHasReplacedIsNotRemembered()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "saved");
+        var song = draft.Request("first");
+        draft.Request("second");
+        draft.Failed(song, "first");
+        Assert.AreEqual("second", draft.Restore(), "the second is still on its way");
+        draft.Completed(song, "second");
+        draft.Reset();
+        Assert.AreEqual("second", draft.Show(0, "second"));
+    }
+
+    [TestMethod]
+    public void ARefusedDraftBelongsToItsSongOnly()
+    {
+        var draft = new StageNotesDraft();
+        draft.Show(0, "a");
+        var song = draft.Request("refused");
+        draft.Failed(song, "refused");
+        draft.Reset();
+        Assert.AreEqual("b", draft.Show(1, "b"));
+        Assert.IsFalse(draft.NeedsSave("b"));
+    }
 }

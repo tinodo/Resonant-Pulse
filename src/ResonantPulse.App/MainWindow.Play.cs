@@ -389,6 +389,9 @@ public sealed partial class MainWindow
 
     private bool _tempoPumpRunning;
 
+    /// <summary>Completes when the tempo being submitted has been committed (closing waits for it).</summary>
+    private Task _tempoPump = Task.CompletedTask;
+
     /// <summary>
     /// Shows the requested tempo immediately and commits it. While a commit is running, further requests only
     /// update the wanted value; the running pump then commits the newest one directly. Holding a stepper or tapping
@@ -396,7 +399,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void RequestTempo(double bpm)
     {
-        if (_document.Program.Count > 0) return;
+        if (_document.Program.Count > 0 || _closeFlushing) return;
         var requested = Math.Clamp(Math.Round(bpm, 1), 1, 1000);
         if (!TempoEdits.IsChange(_tempoRequested ?? _document.Settings.Tempo, requested)) return;
         _tempoRequested = requested;
@@ -404,7 +407,7 @@ public sealed partial class MainWindow
         RefreshSnapshot();
         if (_tempoPumpRunning) return;
         _tempoPumpRunning = true;
-        _ = GuardAsync(async () =>
+        _tempoPump = GuardAsync(async () =>
         {
             try
             {

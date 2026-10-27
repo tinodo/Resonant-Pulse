@@ -59,6 +59,33 @@ public sealed class LocalWorkspaceTests
     }
 
     [TestMethod]
+    public async Task ThePreferencesFileIsBehindOnlyBetweenAFailedWriteAndTheNextSuccessfulOne()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        var workspace = new LocalWorkspace(root);
+        var path = Path.Combine(root, "preferences.json");
+        try
+        {
+            Assert.IsFalse(workspace.PreferencesBehind, "nothing was asked for");
+            await workspace.SavePreferencesAsync(new Preferences { Language = "nl" });
+            Assert.IsFalse(workspace.PreferencesBehind);
+
+            File.Delete(path);
+            Directory.CreateDirectory(path);
+            try { await workspace.SavePreferencesAsync(new Preferences { Language = "de" }); }
+            catch (ArgumentException) { /* the write is meant to fail */ }
+            Assert.IsTrue(workspace.PreferencesBehind, "the write failed, so the file is behind the settings");
+            Assert.AreEqual(0, Directory.GetFiles(root, "*.tmp").Length);
+
+            Directory.Delete(path);
+            await workspace.SavePreferencesAsync(new Preferences { Language = "de" });
+            Assert.IsFalse(workspace.PreferencesBehind, "a successful write catches the file up");
+            Assert.AreEqual("de", (await workspace.LoadPreferencesAsync()).Language);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public async Task MixedValidAndCorruptLibraryRetainsGoodProjectsAndReportsExactFailedPaths()
     {
         var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));

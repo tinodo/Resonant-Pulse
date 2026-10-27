@@ -39,6 +39,8 @@ public sealed partial class MainWindow : Window
     private bool _isOutputMissing;
     private int _transportIntent;
     private int _documentRevision;
+    /// <summary>Counts the times the whole project was replaced (opened, new, a ready-made rhythm, the next song).</summary>
+    private int _projectGeneration;
     private int _editorContentRevision;
     private int _armedSong = -1;
     private PulseInstrument? _instrument;
@@ -327,7 +329,7 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
-        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document)
+        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, Action? onPublished = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
@@ -360,6 +362,7 @@ public sealed partial class MainWindow : Window
             }
             _redo.Clear();
             _document = revised;
+            _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
             if (LiveEditPolicy.LeavesPendingEdit(editorChange, affectsPlayback,
@@ -369,7 +372,9 @@ public sealed partial class MainWindow : Window
             // Edits that cannot follow live are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.
             published();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            // From here the project holds the edit, whatever happens to the recovery file next.
+            onPublished?.Invoke();
+            await SaveRecoveryAsync();
         }, succeeded =>
         {
             if (_isClosed) return;
@@ -379,6 +384,21 @@ public sealed partial class MainWindow : Window
             if (EditorRevisionPolicy.ShouldRebuild(succeeded, editorChange)) BuildPage();
             else RefreshSnapshot();
         });
+    }
+
+    /// <summary>True from the moment the project changes until the recovery file has been written with that change.</summary>
+    private bool _recoveryUnsaved;
+
+    /// <summary>
+    /// Writes the project to the recovery file. Until a write has succeeded the file is behind the project; closing the window
+    /// checks that, writes again, and stays open if that fails too. A write of an older snapshot that finishes after a newer
+    /// change leaves the file marked behind.
+    /// </summary>
+    private async Task SaveRecoveryAsync()
+    {
+        var revision = _documentRevision;
+        await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+        if (revision == _documentRevision) _recoveryUnsaved = false;
     }
 
     private static Task ValidateAsync(PulseDocument document) =>
@@ -397,12 +417,13 @@ public sealed partial class MainWindow : Window
             if (source.Count == 0) return;
             target.Push(_document);
             _document = source.Pop();
+            _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
             _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted;
             published();
             SynchronizeGain();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            await SaveRecoveryAsync();
         }, _ => { if (!_isClosed) BuildPage(); });
     }
 

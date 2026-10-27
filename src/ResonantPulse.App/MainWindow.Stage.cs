@@ -24,6 +24,9 @@ public sealed partial class MainWindow
     private readonly StageNotesDraft _stageNotesDraft = new();
     private readonly SaveQueue _stageNotesSaves = new();
 
+    /// <summary>The most characters the project accepts in a song's notes; the box stops typing there.</summary>
+    private const int StageNotesLimit = 32768;
+
     private bool HasArmedSong => _armedSong >= 0 && _armedSong < _document.Setlist.Count;
 
     /// <summary>
@@ -190,7 +193,7 @@ public sealed partial class MainWindow
             _stageNotes = StageControl(new TextBox
             {
                 AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 110, MaxHeight = 220,
-                HorizontalAlignment = HorizontalAlignment.Stretch
+                MaxLength = StageNotesLimit, HorizontalAlignment = HorizontalAlignment.Stretch
             }, () => HasArmedSong);
             Identify(_stageNotes, "SongNotes", Text.Get("Notes"));
             AutomationProperties.SetLabeledBy(_stageNotes, _stageNotesCaption);
@@ -310,21 +313,21 @@ public sealed partial class MainWindow
         var text = _stageNotes.Text;
         if (!_stageNotesDraft.NeedsSave(text)) return;
         var song = _stageNotesDraft.Request(text);
+        var generation = _projectGeneration;
         _ = _stageNotesSaves.Enqueue(async () =>
         {
-            var applied = false;
-            await GuardAsync(async () =>
+            // The project holds the notes once the revised project is published, even if writing the recovery file fails
+            // afterwards (that is reported, and written again when the window closes). A save that was refused (too long, a
+            // locked project, a project that was replaced) never gets there, and its draft stays unsaved.
+            var published = false;
+            await GuardAsync(() => CommitAsync(doc =>
             {
-                await CommitAsync(doc =>
-                {
-                    if (song >= doc.Setlist.Count) throw new InvalidOperationException(Text.Get("ChooseSong"));
-                    doc.Setlist[song].Notes = text;
-                    applied = true;
-                }, false);
-                // A locked project reports that itself and keeps the draft.
-                if (!applied) throw new OperationCanceledException();
-            });
-            if (applied) _stageNotesDraft.Completed(song, text);
+                // Queued notes belong to the project they were typed in.
+                if (generation != _projectGeneration) throw new InvalidOperationException(Text.Get("NotesProjectChanged"));
+                if (song >= doc.Setlist.Count) throw new InvalidOperationException(Text.Get("ChooseSong"));
+                doc.Setlist[song].Notes = text;
+            }, false, onPublished: () => published = true));
+            if (published) _stageNotesDraft.Completed(song, text);
             else _stageNotesDraft.Failed(song, text);
         });
     }
@@ -451,13 +454,15 @@ public sealed partial class MainWindow
                 _undo.Push(_document);
                 _redo.Clear();
                 _document = next;
+                _recoveryUnsaved = true;
+                _projectGeneration++;
                 _documentRevision++;
                 _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
                 _hasPendingEdits = false;
                 _armedSong = selectedIndex + 1 < next.Setlist.Count ? selectedIndex + 1 : -1;
                 published();
                 SynchronizeGain();
-                await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+                await SaveRecoveryAsync();
             }, _ => { if (!_isClosed) BuildPage(); });
         }
         finally { _isBusy = false; RefreshSnapshot(); }

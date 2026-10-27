@@ -180,6 +180,8 @@ public sealed partial class MainWindow
 
     private async Task SaveProjectAsync()
     {
+        // The notes being typed belong to the project, so they are in the file.
+        if (!await FlushStageNotesAsync()) return;
         var path = await PickSavePathAsync(".pulse", Text.Get("Save"));
         if (path is null) return;
         await DocumentStore.SaveAsync(path, LocalWorkspace.Clone(_document));
@@ -214,6 +216,9 @@ public sealed partial class MainWindow
     private async Task ReplaceDocumentAsync(PulseDocument document)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
+        // Notes typed or on their way belong to the project that is about to go. They are saved into it first, in order, so a
+        // queued save can never reach the replacement; if one cannot be saved the replacement does not happen.
+        if (!await FlushStageNotesAsync()) return;
         await DocumentPublication.RunAsync(_edits, async published =>
         {
             // All callers enter without _edits held. Keep validation, backup,
@@ -229,13 +234,15 @@ public sealed partial class MainWindow
             _undo.Push(_document);
             _redo.Clear();
             _document = replacement;
+            _recoveryUnsaved = true;
+            _projectGeneration++;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
             _hasPendingEdits = false;
             _armedSong = -1;
             published();
             SynchronizeGain();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            await SaveRecoveryAsync();
         }, _ => { if (!_isClosed) BuildPage(); });
     }
 

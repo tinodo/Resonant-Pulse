@@ -39,6 +39,8 @@ internal sealed class StageNotesDraft
 {
     private int _pendingSong = -1;
     private string? _pending;
+    private int _failedSong = -1;
+    private string? _failed;
 
     /// <summary>The song the box shows, or -1 for none.</summary>
     public int Song { get; private set; } = -1;
@@ -50,6 +52,15 @@ internal sealed class StageNotesDraft
     private string Expected => _pendingSong == Song && _pending is not null ? _pending : Saved;
 
     /// <summary>
+    /// What a page that has just been built shows for the song: a save still on its way, else a draft that could not be saved
+    /// (it survives the page being rebuilt, and is saved again when asked for), else what the project holds.
+    /// </summary>
+    private string Shown =>
+        _pendingSong == Song && _pending is not null ? _pending
+        : _failedSong == Song && _failed is not null ? _failed
+        : Saved;
+
+    /// <summary>
     /// The page shows <paramref name="song"/> (whose saved notes are <paramref name="saved"/>). Returns the text to put in the box,
     /// or null when the box already shows this song: its draft is kept, for instance when a selection that was refused is
     /// put back.
@@ -59,7 +70,7 @@ internal sealed class StageNotesDraft
         if (song == Song) return null;
         Song = song;
         Saved = song >= 0 ? saved : "";
-        return song >= 0 ? Expected : "";
+        return song >= 0 ? Shown : "";
     }
 
     /// <summary>The page is gone; the next <see cref="Show"/> loads from the project again.</summary>
@@ -81,13 +92,36 @@ internal sealed class StageNotesDraft
     {
         if (Song == song) Saved = text;
         Release(song, text);
+        // A save for the song worked, so a draft that failed before it is out of date.
+        if (_failedSong == song) ClearFailed();
     }
 
-    /// <summary>The save did not happen. The draft stays in the box, and is saved again when it is next asked for.</summary>
-    public void Failed(int song, string text) => Release(song, text);
+    /// <summary>
+    /// The project did not take <paramref name="text"/>. The draft stays in the box, is kept across a rebuild of the page, and is
+    /// saved again when it is next asked for. A failure of a save that a newer one has replaced is not remembered.
+    /// </summary>
+    public void Failed(int song, string text)
+    {
+        if (_pendingSong == song && _pending == text)
+        {
+            _failedSong = song;
+            _failed = text;
+        }
+        Release(song, text);
+    }
 
-    /// <summary>What Esc puts back: the notes as the project holds them, or as they are about to be.</summary>
-    public string Restore() => Expected;
+    /// <summary>What Esc puts back: the notes as the project holds them, or as they are about to be. It also drops a failed draft.</summary>
+    public string Restore()
+    {
+        if (_failedSong == Song) ClearFailed();
+        return Expected;
+    }
+
+    private void ClearFailed()
+    {
+        _failedSong = -1;
+        _failed = null;
+    }
 
     // A newer request for the song stays on its way when an older one finishes.
     private void Release(int song, string text)

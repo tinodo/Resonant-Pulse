@@ -23,7 +23,7 @@ public sealed class PageTextTests
         "AudioNote", "UnitSeconds", "UnitBeats", "UnitBars", "HelpBasics", "HelpWhilePlaying", "HelpShortcuts",
         "ShortcutStart", "ShortcutMute", "ShortcutHit", "KeySpace", "KeyCtrl", "ExportBars", "ExportBarsHelp",
         "PracticeStopAfter", "PracticeTimerHint", "PracticeLimitsSaved",
-        "LibraryPurpose", "LibraryProjects", "LibraryLoading", "LibraryUnreadable", "CloseUnsaved", "LibraryNoMatch", "LibraryEmptyTitle", "ExportTitle", "PresetsHelp",
+        "LibraryPurpose", "LibraryProjects", "LibraryLoading", "LibraryUnreadable", "CloseUnsaved", "NotesProjectChanged", "LibraryNoMatch", "LibraryEmptyTitle", "ExportTitle", "PresetsHelp",
         "Presets", "Load", "Search", "SaveLibrary", "EmptyLibrary", "ExportNotice", "Replace", "MidiPreflight",
         "PresetDesc_open", "PresetDesc_compound-6-8", "PresetDesc_additive-7-8", "PresetDesc_swing", "PresetDesc_polyrhythm-3-4",
         "PresetDesc_polymeter-3-4", "PresetDesc_euclidean-5-8", "PresetDesc_paradiddle", "PresetDesc_warmup-ladder",

@@ -49,18 +49,31 @@ public sealed class LocalWorkspace
             ?? throw new InvalidDataException("Empty preference document.");
     }
 
+    private int _preferencesAsked;
+    private int _preferencesWritten;
+
+    /// <summary>
+    /// True when saving the preferences was asked for and no write has succeeded since, so the file is behind the settings.
+    /// A write covers every save asked for before it started (it reads the values once it holds the write lock), so a later
+    /// failure cannot hide behind an earlier success, nor an earlier slow write clear a later failure.
+    /// </summary>
+    public bool PreferencesBehind => Volatile.Read(ref _preferencesAsked) != Volatile.Read(ref _preferencesWritten);
+
     public async Task SavePreferencesAsync(Preferences preferences)
     {
+        Interlocked.Increment(ref _preferencesAsked);
         await _writes.WaitAsync();
         try
         {
             // The values are read once the write lock is held, not when the save was asked for: the file then ends with the
             // latest value of every setting, whatever order several saves were started in and however long one of them took.
+            var covered = Volatile.Read(ref _preferencesAsked);
             var json = JsonSerializer.SerializeToUtf8Bytes(preferences);
             Directory.CreateDirectory(_root);
             var path = Path.Combine(_root, "preferences.json");
             await AtomicFile.WriteAsync(path,
                 (stream, token) => stream.WriteAsync(json, token).AsTask(), CancellationToken.None);
+            Volatile.Write(ref _preferencesWritten, covered);
         }
         finally { _writes.Release(); }
     }
