@@ -14,7 +14,7 @@ public sealed class Preferences
     public int ExportBars { get; set; } = 16;
 }
 
-public sealed record LibraryItem(string Path, string Name);
+public sealed record LibraryItem(string Path, string Name, DateTime? Modified = null);
 public sealed record LibraryReadFailure(string Path, Exception Error);
 public sealed record LibraryReadResult(IReadOnlyList<LibraryItem> Items, IReadOnlyList<LibraryReadFailure> Failures,
     bool HasMore);
@@ -114,7 +114,7 @@ public sealed class LocalWorkspace
             try
             {
                 var document = await DocumentStore.LoadAsync(path);
-                result.Add(new(path, document.Name));
+                result.Add(new(path, document.Name, File.GetLastWriteTime(path)));
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
                 or InvalidDataException or JsonException or ArgumentException)

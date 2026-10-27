@@ -19,7 +19,10 @@ public sealed partial class MainWindow
     private bool _includeSilentTargets = true;
     private ComboBox? _timingTarget;
     private NumberBox? _timingToleranceInput;
-    private CheckBox? _timingSilentTargets;
+    private ToggleSwitch? _timingSilentTargets;
+    private Button? _timingBegin;
+    private Button? _timingHit;
+    private Button? _timingFinish;
     private readonly List<double> _observed = [];
     private string _lastTimingReport = "";
     private readonly TempoCurveState _tempoCurveState = new();
@@ -27,62 +30,90 @@ public sealed partial class MainWindow
     private UIElement BuildTrain()
     {
         // Without a cap the dial's viewbox scales to the full page width inside the scrolling page and fills several screens.
-        _instrument = new PulseInstrument { MaxHeight = 360, HorizontalAlignment = HorizontalAlignment.Center };
+        _instrument = new PulseInstrument { MaxHeight = 320, HorizontalAlignment = HorizontalAlignment.Center };
         _position = Body("");
-        _programStatus = Body("");
-        _tempoCurve = new TempoCurve();
-        _progress = new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 };
-        Identify(_progress, "ProgramProgress", Text.Get("Program"));
-        var panel = Column(Heading(Text.Get("Train")), _programStatus, _progress,
-            Copy("TempoChartAxis"), _tempoCurve, _instrument, _position, Copy("PresentationLimits"), Copy("ProgramEmpty"));
-        foreach (var step in _document.Program)
-            panel.Children.Add(Body($"{step.Name} · {step.StartTempo.ToString("0.0", Text.Culture)} → {step.EndTempo.ToString("0.0", Text.Culture)} · {step.Bars} × {step.Repeats} {Text.Get("Bars")} · {step.BeatsPerBar}/{step.BeatDenominator} · {Text.Get(step.Ramp)}"));
-        panel.Children.Add(ActionButton("Program", "EditProgram", () => SelectView("Studio")));
-        panel.Children.Add(Heading(Text.Get("TimingLab")));
-        panel.Children.Add(Copy("TimingLimits"));
-        panel.Children.Add(Copy("TimingBudget"));
+        _position.HorizontalAlignment = HorizontalAlignment.Center;
+        _position.TextAlignment = TextAlignment.Center;
+        var hasProgram = _document.Program.Count > 0;
+        // The chart, progress bar and step status only mean something when there is a program to follow.
+        _tempoCurve = hasProgram ? new TempoCurve() : null;
+        _progress = hasProgram ? new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 } : null;
+        _programStatus = hasProgram ? Body("") : null;
+        if (_progress is not null) Identify(_progress, "ProgramProgress", Text.Get("Program"));
+
+        UIElement programBody;
+        if (!hasProgram)
+        {
+            programBody = EmptyState("\uEC4A", "ProgramEmptyTitle", "ProgramEmpty",
+                ActionButton("BuildProgram", "EditProgram", () => SelectView("Studio"), "\uE9E9", ButtonKind.Primary),
+                ActionButton("Presets", "OpenPresets", () => SelectView("Library"), "\uE8F1"));
+        }
+        else
+        {
+            var steps = SettingRows(_document.Program.Select(ProgramStepRow).ToArray());
+            programBody = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    _programStatus!, _progress!, Note("TempoChartAxis"), _tempoCurve!, steps,
+                    CommandRow(ActionButton("EditInStudio", "EditProgram", () => SelectView("Studio"), "\uE70F"))
+                }
+            };
+        }
+        var program = Card("TrainProgramTitle", programBody, "TrainProgramHelp", id: "ProgramCard");
+        var live = Card("NowPlaying", new StackPanel { Spacing = 8, Children = { _instrument, _position } }, id: "LiveCard");
+
         var targets = new List<Choice> { new("-1", Text.Get("MainTarget")) };
         var targetDocument = _isTimingArmed && _timingRevision is not null ? _timingRevision.Document : _document;
         if (!_isTimingArmed && !TimingRunRules.IsValidTarget(_timingLane, targetDocument.Lanes.Count))
             _timingLane = -1;
         for (var index = 0; index < targetDocument.Lanes.Count; index++)
             targets.Add(new(index.ToString(System.Globalization.CultureInfo.InvariantCulture), targetDocument.Lanes[index].Name));
-        var target = SelectChoices("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
-        var tolerance = NumberInt("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
-        var includeSilent = Check("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
+        var target = Dropdown("Target", "TimingTarget", _timingLane.ToString(System.Globalization.CultureInfo.InvariantCulture), targets);
+        var tolerance = NumberInput("Tolerance", "TimingTolerance", _timingTolerance * 1000, 10, 500, 5);
+        var includeSilent = Toggle("IncludeSilentTargets", "TimingSilentTargets", _includeSilentTargets);
         _timingTarget = target;
         _timingToleranceInput = tolerance;
         _timingSilentTargets = includeSilent;
+        _timingBegin = ActionButton("BeginTiming", "BeginKeyboardTiming", () =>
+        {
+            var snapshot = _transport.Snapshot();
+            if (snapshot.State != TransportState.Playing || snapshot.Revision is null)
+                throw new InvalidOperationException(Text.Get("TimingRequiresPlayback"));
+            var selectedLane = int.Parse(Selected(target), System.Globalization.CultureInfo.InvariantCulture);
+            if (!TimingRunRules.CanArm(_hasPendingEdits, selectedLane, snapshot.Revision.Document.Lanes.Count))
+                throw new InvalidOperationException(Text.Get(_hasPendingEdits ? "TimingPendingEdits" : "TimingTargetChanged"));
+            _timingLane = selectedLane;
+            _timingTolerance = Value(tolerance) / 1000;
+            _includeSilentTargets = includeSilent.IsOn;
+            _timingRevision = snapshot.Revision;
+            _timingStartFrame = snapshot.ProcessedFrame;
+            _timingStartTimestamp = Stopwatch.GetTimestamp();
+            _observed.Clear();
+            _lastTimingReport = "";
+            SetTimingArmed(true);
+            BuildPage();
+            ShowNotice("TimingArmed");
+        }, "\uE768", ButtonKind.Primary);
+        _timingHit = ActionButton("Hit", "KeyboardAttack", RecordAttack, "\uE815");
+        _timingFinish = ActionButton("FinishTiming", "FinishKeyboardTiming", FinishTiming, "\uE73E");
         RefreshTimingControlState();
-        panel.Children.Add(Flow(target, tolerance));
-        panel.Children.Add(includeSilent);
-        panel.Children.Add(CommandFlow(
-            ActionButton("BeginTiming", "BeginKeyboardTiming", () =>
-            {
-                var snapshot = _transport.Snapshot();
-                if (snapshot.State != TransportState.Playing || snapshot.Revision is null)
-                    throw new InvalidOperationException(Text.Get("TimingRequiresPlayback"));
-                var selectedLane = int.Parse(Selected(target), System.Globalization.CultureInfo.InvariantCulture);
-                if (!TimingRunRules.CanArm(_hasPendingEdits, selectedLane, snapshot.Revision.Document.Lanes.Count))
-                    throw new InvalidOperationException(Text.Get(_hasPendingEdits ? "TimingPendingEdits" : "TimingTargetChanged"));
-                _timingLane = selectedLane;
-                _timingTolerance = Value(tolerance) / 1000;
-                _includeSilentTargets = includeSilent.IsChecked == true;
-                _timingRevision = snapshot.Revision;
-                _timingStartFrame = snapshot.ProcessedFrame;
-                _timingStartTimestamp = Stopwatch.GetTimestamp();
-                _observed.Clear();
-                _lastTimingReport = "";
-                SetTimingArmed(true);
-                BuildPage();
-                ShowNotice("TimingArmed");
-            }),
-            ActionButton("Hit", "KeyboardAttack", RecordAttack),
-            ActionButton("FinishTiming", "FinishKeyboardTiming", FinishTiming)));
         _timingStatus = Body(_isTimingArmed ? Text.Get("TimingArmed") : _lastTimingReport);
-        panel.Children.Add(_timingStatus);
-        panel.Children.Add(Copy("IntegrationGates"));
-        return Scroll(panel);
+        var timing = Card("TimingLab", new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                Note("TimingLimits"),
+                FieldRow(Field(target), Field(tolerance, "UnitMs")),
+                SettingRow("IncludeSilentTargets", "IncludeSilentHelp", includeSilent),
+                CommandRow(_timingBegin, _timingHit, _timingFinish),
+                _timingStatus,
+                Note("TimingBudget")
+            }
+        }, id: "TimingCard");
+        return PageScaffold("Train", "TrainPurpose", null, TwoPane(program, live, 380), timing);
     }
 
     private void EnsureTempoPreview()
@@ -196,5 +227,28 @@ public sealed partial class MainWindow
         if (_timingTarget is not null) _timingTarget.IsEnabled = isEnabled;
         if (_timingToleranceInput is not null) _timingToleranceInput.IsEnabled = isEnabled;
         if (_timingSilentTargets is not null) _timingSilentTargets.IsEnabled = isEnabled;
+        // A check starts, takes presses, then finishes: only the command that makes sense now is available.
+        if (_timingBegin is not null) _timingBegin.IsEnabled = !_isTimingArmed;
+        if (_timingHit is not null) _timingHit.IsEnabled = _isTimingArmed;
+        if (_timingFinish is not null) _timingFinish.IsEnabled = _isTimingArmed;
+    }
+
+    /// <summary>A program step: its name, then tempo, length, meter and how the tempo changes, in one short line.</summary>
+    private static UIElement ProgramStepRow(ProgramStep step)
+    {
+        string Tempo(double value) => TempoFormat.Format(value, Text.Culture);
+        var tempo = step.StartTempo == step.EndTempo ? $"{Tempo(step.StartTempo)} BPM" : $"{Tempo(step.StartTempo)} → {Tempo(step.EndTempo)} BPM";
+        var length = $"{step.Bars} {Text.Get("Bars").ToLower(Text.Culture)}" + (step.Repeats > 1 ? $" × {step.Repeats}" : "");
+        var detail = $"{tempo} · {length} · {step.BeatsPerBar}/{step.BeatDenominator}" +
+            (step.Ramp == "Constant" ? "" : $" · {Text.Get(step.Ramp)}");
+        return new StackPanel
+        {
+            Spacing = 2,
+            Children =
+            {
+                new TextBlock { Text = step.Name, Style = ResonantStyle("BodyStyle"), FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
+                new TextBlock { Text = detail, Style = ResonantStyle("NoteStyle") }
+            }
+        };
     }
 }

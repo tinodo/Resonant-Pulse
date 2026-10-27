@@ -81,16 +81,57 @@ public sealed partial class MainWindow
         };
     }
 
+    /// <summary>
+    /// A title block with actions at its right. When both do not fit on one line the actions move under the title, so
+    /// neither is squeezed or clipped in a narrow window.
+    /// </summary>
     private static UIElement HeaderRow(UIElement left, UIElement? right)
     {
         if (right is not FrameworkElement actions) return left;
-        var row = new Grid { ColumnSpacing = 16 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var row = new Grid { ColumnSpacing = 16, RowSpacing = 8 };
         row.Children.Add(left);
-        actions.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(actions, 1);
         row.Children.Add(actions);
+        actions.VerticalAlignment = VerticalAlignment.Top;
+        bool? sideBySide = null;
+        var natural = 0d;
+        void Arrange()
+        {
+            var side = row.ActualWidth <= 0 || natural <= row.ActualWidth;
+            if (sideBySide == side) return;
+            sideBySide = side;
+            row.ColumnDefinitions.Clear();
+            row.RowDefinitions.Clear();
+            if (side)
+            {
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetRow((FrameworkElement)left, 0);
+                Grid.SetColumn((FrameworkElement)left, 0);
+                Grid.SetRow(actions, 0);
+                Grid.SetColumn(actions, 1);
+                actions.HorizontalAlignment = HorizontalAlignment.Right;
+                return;
+            }
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow((FrameworkElement)left, 0);
+            Grid.SetColumn((FrameworkElement)left, 0);
+            Grid.SetRow(actions, 1);
+            Grid.SetColumn(actions, 0);
+            actions.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+        row.Loaded += (_, _) =>
+        {
+            var unbounded = new Size(double.PositiveInfinity, double.PositiveInfinity);
+            left.Measure(unbounded);
+            actions.Measure(unbounded);
+            natural = left.DesiredSize.Width + row.ColumnSpacing + actions.DesiredSize.Width;
+            sideBySide = null;
+            Arrange();
+        };
+        row.SizeChanged += (_, _) => Arrange();
+        Arrange();
         return row;
     }
 
@@ -419,6 +460,45 @@ public sealed partial class MainWindow
 
     /// <summary>A short explanation under a field or card title.</summary>
     private static TextBlock Note(string key) => new() { Text = Text.Get(key), Style = ResonantStyle("NoteStyle") };
+
+    /// <summary>A square icon-only command with a tooltip and a screen-reader name, for plain commands such as up and down.</summary>
+    private Button IconButton(string glyph, string nameKey, string id, Func<Task> action)
+    {
+        var button = new Button { Content = new FontIcon { Glyph = glyph, FontSize = 16 }, MinWidth = 44, Padding = new Thickness(0) };
+        Identify(button, id, Text.Get(nameKey));
+        ToolTipService.SetToolTip(button, Text.Get(nameKey));
+        button.Click += async (_, _) => await GuardAsync(action);
+        return button;
+    }
+
+    /// <summary>A switch with its caption at the left, linked to it for screen readers.</summary>
+    private static StackPanel LabeledSwitch(string captionKey, ToggleSwitch toggle)
+    {
+        var label = new TextBlock
+        {
+            Text = Text.Get(captionKey), Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center
+        };
+        AutomationProperties.SetLabeledBy(toggle, label);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, HorizontalAlignment = HorizontalAlignment.Right };
+        row.Children.Add(label);
+        row.Children.Add(toggle);
+        return row;
+    }
+
+    /// <summary>Rebuilds the page and puts the scroll position back, so a structural change does not throw the reader to the top.</summary>
+    private void RebuildPreservingScroll()
+    {
+        var offset = (PageHost.Content as ScrollViewer)?.VerticalOffset ?? 0;
+        BuildPage();
+        if (offset <= 0 || PageHost.Content is not ScrollViewer scroll) return;
+        EventHandler<object>? restore = null;
+        restore = (_, _) =>
+        {
+            scroll.LayoutUpdated -= restore;
+            scroll.ChangeView(null, offset, null, true);
+        };
+        scroll.LayoutUpdated += restore;
+    }
 
     /// <summary>
     /// Applies the commit contract to a number box. A NumberBox raises ValueChanged only when the user commits (Enter, focus

@@ -9,16 +9,43 @@ namespace ResonantPulse.App;
 
 public sealed partial class MainWindow
 {
+    private TextBlock? _libraryStatus;
+    private TextBlock? _libraryNoMatch;
+    private UIElement? _libraryEmpty;
     private UIElement BuildLibrary()
     {
-        _search = Input("Search", "LibrarySearch", "");
+        _search = TextInput("Search", "LibrarySearch", "", 280);
         _search.TextChanged += (_, _) => FilterLibrary();
-        _libraryList = new ListView
+        _libraryList = new ListView { MaxHeight = 320, SelectionMode = ListViewSelectionMode.Single };
+        Identify(_libraryList, "LibraryProjects", Text.Get("LibraryProjects"));
+        _libraryStatus = Note("LibraryLoading");
+        _libraryNoMatch = Note("LibraryNoMatch");
+        _libraryNoMatch.Visibility = Visibility.Collapsed;
+        _libraryEmpty = EmptyState("\uE8F1", "LibraryEmptyTitle", "EmptyLibrary");
+        _libraryEmpty.Visibility = Visibility.Collapsed;
+
+        var open = ActionButton("Load", "LoadLibraryProject", OpenSelectedLibraryProjectAsync, "\uE8E5", ButtonKind.Primary);
+        open.IsEnabled = false;
+        _libraryList.SelectionChanged += (_, _) => open.IsEnabled = _libraryList?.SelectedItem is ListViewItem { Tag: LibraryItem };
+        _libraryList.DoubleTapped += async (_, _) => await GuardAsync(OpenSelectedLibraryProjectAsync);
+        _libraryList.KeyDown += async (_, args) =>
         {
-            MinHeight = 140, Height = 300,
-            SelectionMode = ListViewSelectionMode.Single
+            if (args.Key != Windows.System.VirtualKey.Enter) return;
+            args.Handled = true;
+            await GuardAsync(OpenSelectedLibraryProjectAsync);
         };
-        Identify(_libraryList, "LibraryProjects", Text.Get("Library"));
+        var save = ActionButton("SaveLibrary", "SaveToLibrary", async () =>
+        {
+            await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
+            ShowNotice("Saved");
+            await RefreshLibraryAsync();
+        }, "\uE74E");
+        var projects = Card("LibraryProjects", new StackPanel
+        {
+            Spacing = 12,
+            Children = { Field(_search), _libraryStatus, _libraryEmpty, _libraryNoMatch, _libraryList, CommandRow(open, save) }
+        }, id: "LibraryProjectsCard");
+
         var exportBars = NumberInput("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
         // The length applies at once, like every setting: the box shows it and the next export uses it. Remembering it for the
         // next session is best effort; if that fails the error is shown and the value stays, so the box is never put back to a
@@ -28,38 +55,40 @@ public sealed partial class MainWindow
             _preferences.ExportBars = Integer(value);
             await _workspace.SavePreferencesAsync(_preferences);
         });
-        var exportLength = new StackPanel { Spacing = 4, Children = { Field(exportBars, "UnitBars"), Note("ExportBarsHelp") } };
-        var panel = Column(Heading(Text.Get("Library")), _search, _libraryList,
-            CommandFlow(
-                ActionButton("Load", "LoadLibraryProject", async () =>
-                {
-                    if (_libraryList?.SelectedItem is not ListViewItem { Tag: LibraryItem item }) return;
-                    await LoadProjectAsync(item.Path);
-                }),
-                ActionButton("SaveLibrary", "SaveToLibrary", async () =>
-                {
-                    await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
-                    ShowNotice("Saved");
-                    await RefreshLibraryAsync();
-                }),
-                ActionButton("Open", "LibraryImport", OpenProjectAsync),
-                ActionButton("Save", "LibraryExportProject", SaveProjectAsync),
-                ActionButton("New", "NewProject", async () =>
-                {
-                    if (!await ConfirmAsync(Text.Get("Replace"))) return;
-                    await ReplaceDocumentAsync(new PulseDocument { Name = Text.Get("OpenPractice") });
-                })),
-            Copy("ExportNotice"), exportLength,
-            CommandFlow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false)),
-                ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true))), BuildPresets());
+        var export = Card("ExportTitle", new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                Note("ExportNotice"), Field(exportBars, "UnitBars"), Note("ExportBarsHelp"),
+                CommandRow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false), "\uE896"),
+                    ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true), "\uE8D6"))
+            }
+        }, id: "ExportCard");
+
+        var fresh = ActionButton("New", "NewProject", async () =>
+        {
+            if (!await ConfirmAsync(Text.Get("Replace"))) return;
+            await ReplaceDocumentAsync(new PulseDocument { Name = Text.Get("OpenPractice") });
+        }, "\uE710", ButtonKind.Tertiary);
+        var openFile = ActionButton("Open", "LibraryImport", OpenProjectAsync, "\uE8E5", ButtonKind.Tertiary);
+        var saveFile = ActionButton("Save", "LibraryExportProject", SaveProjectAsync, "\uE74E", ButtonKind.Tertiary);
         _ = GuardAsync(RefreshLibraryAsync);
-        return Scroll(panel);
+        return PageScaffold("Library", "LibraryPurpose", CommandRow(fresh, openFile, saveFile),
+            TwoPane(projects, export, 360), BuildPresets());
+    }
+
+    private async Task OpenSelectedLibraryProjectAsync()
+    {
+        if (_libraryList?.SelectedItem is not ListViewItem { Tag: LibraryItem item }) return;
+        await LoadProjectAsync(item.Path);
     }
 
     private async Task RefreshLibraryAsync()
     {
         var result = await _workspace.ListAsync();
         _library = result.Items;
+        if (_libraryStatus is not null) _libraryStatus.Visibility = Visibility.Collapsed;
         FilterLibrary();
         if (result.Failures.Count > 0 || result.HasMore)
         {
@@ -84,15 +113,32 @@ public sealed partial class MainWindow
         _libraryList.Items.Clear();
         foreach (var item in _library.Where(item => item.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
         {
-            var row = new ListViewItem { Content = item.Name, Tag = item, MinHeight = 44 };
-            Identify(row, $"LibraryProject{_libraryList.Items.Count}", item.Name);
-            _libraryList.Items.Add(row);
+            var name = new TextBlock
+            {
+                Text = item.Name, Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            var saved = new TextBlock
+            {
+                Text = item.Modified is { } modified ? modified.ToString("d", Text.Culture) : "",
+                Style = ResonantStyle("NoteStyle"), VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(saved, 1);
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(name);
+            row.Children.Add(saved);
+            var entry = new ListViewItem { Content = row, Tag = item, MinHeight = 44, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+            Identify(entry, $"LibraryProject{_libraryList.Items.Count}", item.Name);
+            _libraryList.Items.Add(entry);
         }
-        // With nothing saved the list shrinks to its hint instead of leaving a blank block above the buttons.
-        var empty = _libraryList.Items.Count == 0;
-        _libraryList.MinHeight = empty ? 0 : 140;
-        _libraryList.Height = empty ? double.NaN : 300;
-        _libraryList.Footer = _library.Count == 0 ? Copy("EmptyLibrary") : null;
+        // Nothing saved: the page says what the library is for. Saved but nothing matches: say so, instead of a blank list.
+        var empty = _library.Count == 0;
+        _libraryList.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        if (_libraryEmpty is not null) _libraryEmpty.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (_libraryNoMatch is not null)
+            _libraryNoMatch.Visibility = !empty && _libraryList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task<string?> PickSavePathAsync(string extension, string description)

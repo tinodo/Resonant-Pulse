@@ -266,15 +266,26 @@ public sealed partial class MainWindow : Window
         _position = null;
         _stageTempo = null;
         _stageMeter = null;
+        _stageList = null;
+        _stageCue = null;
+        _stageNotes = null;
+        _stageLockNote = null;
+        _stageNotesCaption = null;
         _programStatus = null;
         _progress = null;
         _timingStatus = null;
         _timingTarget = null;
         _timingToleranceInput = null;
         _timingSilentTargets = null;
+        _timingBegin = null;
+        _timingHit = null;
+        _timingFinish = null;
         _tempoCurve = null;
         _libraryList = null;
         _search = null;
+        _libraryStatus = null;
+        _libraryNoMatch = null;
+        _libraryEmpty = null;
         PageHost.Content = _view switch
         {
             "Studio" => BuildStudio(),

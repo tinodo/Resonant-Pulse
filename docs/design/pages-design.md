@@ -82,14 +82,16 @@ is specified in `metronome-design.md` and is not changed here.
   history.
 
 ### Stage
-- **Now playing** and **Up next** are separate, always labelled in words. Selecting a row only inspects it (its notes
-  show); *Make next* queues it; *Next + count-in* starts the queued song. *Lock editing* blocks edits to the setlist and
-  notes, never playback.
-- Left: song title, tempo (large), meter, position, the dial, *Next + count-in* (primary).
-- Right: the setlist (Now playing and Up next marked with text and icon), *Add current project*, up, down, remove; notes
-  for the selected song (saved when focus leaves). *Lock editing* and *Always on top* are switches in the page header.
-- Below 900 DIP the setlist moves under the display, but a compact *Up next* selector with *Next + count-in* stays
-  above the fold.
+- **Now playing** is the loaded project; **Up next** is the song selected in the setlist, said in words ("Up next: …") and
+  marked in the list. There is no separate inspect or queue step: selecting a row makes it next (its notes show) and never
+  interrupts playback; *Next + count-in* starts it. *Lock editing* blocks edits to the setlist and notes, never playback.
+- Left: project name, the tempo large (shown once: the dial's own numeral is hidden on this page), meter, position, the dial,
+  *Next + count-in* (primary).
+- Right: the setlist (the next song marked with text), *Add current project*, up, down, remove; notes for the selected
+  song (saved when focus leaves, Esc puts back what was saved). *Lock editing* and *Always on top* are switches on one line
+  in the page header; what the lock does is its tooltip, and the sentence is shown in the setlist card only while the lock is
+  on, where it explains why the setlist commands are greyed out.
+- Below 900 DIP the setlist moves under the display.
 
 ### Train
 - **Program:** current step, progress, the planned tempo as a compact chart, the steps as a table, *Edit in Studio*.

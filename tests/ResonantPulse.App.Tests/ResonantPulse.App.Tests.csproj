@@ -18,6 +18,7 @@
     <Compile Include="../../src/ResonantPulse.App/FormMetrics.cs" Link="App/FormMetrics.cs" />
     <Compile Include="../../src/ResonantPulse.App/WholeNumbers.cs" Link="App/WholeNumbers.cs" />
     <Compile Include="../../src/ResonantPulse.App/PracticeFormat.cs" Link="App/PracticeFormat.cs" />
+    <Compile Include="../../src/ResonantPulse.App/PresetSummary.cs" Link="App/PresetSummary.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoFormat.cs" Link="App/TempoFormat.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoReadout.cs" Link="App/TempoReadout.cs" />
     <Compile Include="../../src/ResonantPulse.App/LiveSoundEdits.cs" Link="App/LiveSoundEdits.cs" />

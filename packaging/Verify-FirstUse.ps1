@@ -701,8 +701,52 @@ $motion.Toggle()
 Wait-ToggleState $motion $motionBefore 'Reduce motion did not return to its previous state.'
 Select-Destination 'DestinationLibrary'
 Wait-Settled 'ExportBars'
-Test-FieldWidths 'Library' @{ ExportBars = 200 }
+Test-FieldWidths 'Library' @{ ExportBars = 200; LibrarySearch = 290 }
 Test-NoApplyButtons 'Library'
+# Two-pane pages put their cards side by side when the window is wide, and stack them when it is not.
+$wideWindow = (Get-CurrentWindow).Current.BoundingRectangle.Width / $scale -ge 1000
+function Test-SideBySide([string]$where, [string]$firstId, [string]$secondId) {
+    if (-not $wideWindow) { return }
+    $first = (Find-Control $firstId).Current.BoundingRectangle
+    $second = (Find-Control $secondId).Current.BoundingRectangle
+    if ($second.Left -lt $first.Right - 2 * $scale) { throw "${where}: $firstId and $secondId are not side by side on a wide window ($first and $second)." }
+}
+Test-SideBySide 'Library' 'LibraryProjectsCard' 'ExportCard'
+# Nothing is chosen yet, so there is nothing to open. A saved revision appears in the list (the page rebuild that follows once
+# crashed the app with a layout cycle when the list had entries), and choosing it makes it openable.
+if ((Find-Control 'LoadLibraryProject').Current.IsEnabled) { throw 'Library: Open is enabled before a project is chosen.' }
+Invoke-Control 'SaveToLibrary'
+Wait-Condition { $null -ne (Find-Optional 'LibraryProject0') } 'Library: the saved project never appeared in the list.'
+(Find-Control 'LibraryProject0').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+Wait-Condition { (Find-Control 'LoadLibraryProject').Current.IsEnabled } 'Library: choosing a project did not enable Open.'
+# Stage: the now-playing card and the setlist side by side; Lock editing switches setlist editing off and on at once, and an
+# added song appears in the setlist.
+Select-Destination 'DestinationStage'
+Wait-Settled 'StageLock'
+Test-NoApplyButtons 'Stage'
+Test-SideBySide 'Stage' 'NowPlayingCard' 'SetlistCard'
+if (-not (Find-Control 'AddCurrentSong').Current.IsEnabled) { throw 'Stage: adding a song is disabled while editing is not locked.' }
+$stageLock = (Find-Control 'StageLock').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+$stageLock.Toggle()
+Wait-ToggleState $stageLock ([Windows.Automation.ToggleState]::On) 'Stage: Lock editing did not switch on.'
+Wait-Condition { -not (Find-Control 'AddCurrentSong').Current.IsEnabled } 'Stage: locking did not disable adding a song.'
+$stageLock.Toggle()
+Wait-ToggleState $stageLock ([Windows.Automation.ToggleState]::Off) 'Stage: Lock editing did not switch off.'
+Wait-Condition { (Find-Control 'AddCurrentSong').Current.IsEnabled } 'Stage: unlocking did not enable adding a song again.'
+Invoke-Control 'AddCurrentSong'
+Wait-Condition { $null -ne (Find-Optional 'StageSong0') } 'Stage: the added song never appeared in the setlist.'
+# Train: content-sized fields; with no program the page says how to get one; a timing check offers only the command that makes
+# sense now (nothing to press or finish until one is running).
+Select-Destination 'DestinationTrain'
+Wait-Settled 'TimingTolerance'
+Test-FieldWidths 'Train' @{ TimingTolerance = 200; TimingTarget = 330 }
+Test-NoApplyButtons 'Train'
+Test-SideBySide 'Train' 'ProgramCard' 'LiveCard'
+$null = Find-Control 'EditProgram'
+if (-not (Find-Control 'BeginKeyboardTiming').Current.IsEnabled) { throw 'Train: the timing check cannot be started.' }
+foreach ($id in 'KeyboardAttack', 'FinishKeyboardTiming') {
+    if ((Find-Control $id).Current.IsEnabled) { throw "Train: $id is enabled while no timing check is running." }
+}
 Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
 Invoke-Control 'AudioOptions'
@@ -877,6 +921,22 @@ foreach ($panel in $panels) {
     Test-NewButtonsOnScreen "Dutch panel $($panel.open[-1])" $before
     Invoke-Control $panel.close
     Wait-Absent $panel.field
+}
+# The same for the commands each page shows on its first screen (the rest is reached by scrolling).
+function Test-OnScreen([string]$where, [string]$id) {
+    $element = Find-Control $id
+    if ($element.Current.IsOffscreen -or $element.Current.BoundingRectangle.IsEmpty) {
+        throw "${where}: '$id' ('$($element.Current.Name)') is not on screen."
+    }
+}
+foreach ($page in @(
+    @{destination='DestinationLibrary'; settle='ExportBars'
+      ids=@('NewProject', 'LibraryImport', 'LibraryExportProject', 'LoadLibraryProject', 'SaveToLibrary', 'ExportWav', 'ExportMidi')},
+    @{destination='DestinationStage'; settle='StageLock'; ids=@('StageLock', 'AlwaysOnTop', 'AddCurrentSong')},
+    @{destination='DestinationTrain'; settle='TimingTolerance'; ids=@('EditProgram')})) {
+    Select-Destination $page.destination
+    Wait-Settled $page.settle
+    foreach ($id in $page.ids) { Test-OnScreen "Dutch page $($page.destination)" $id }
 }
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'

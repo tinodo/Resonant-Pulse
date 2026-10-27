@@ -97,7 +97,8 @@ public sealed partial class MainWindow
         if (_position is not null) _position.Text = detail;
         if (_stageTempo is not null)
         {
-            _stageTempo.FontSize = Math.Clamp(Root.ActualWidth / 8, 32, 96);
+            // Follows the height as well as the width: in a short window a 96 pt number would push the up-next button out of sight.
+            _stageTempo.FontSize = Math.Clamp(Math.Min(Root.ActualWidth / 8, Root.ActualHeight / 9), 32, 96);
             _stageTempo.Text = blind ? Text.Get("Silent") : PulseInstrument.FormatTempo(tempo);
             if (_stageMeter is not null)
                 _stageMeter.Text = blind ? "" : $"BPM · {PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}";
@@ -130,7 +131,7 @@ public sealed partial class MainWindow
         }
         if (_programStatus is not null)
         {
-            _programStatus.Text = blind ? Text.Get("Silent") : position is null ? Text.Get("ProgramEmpty") :
+            _programStatus.Text = blind ? Text.Get("Silent") : position is null ? Text.Get("ProgramIdle") :
                 $"{(position.IsCountIn ? Text.Get("CountInActive") : position.SectionName)} · {tempo.ToString("0.0", Text.Culture)} BPM · {meterBeats}/{meterDenominator}\n" +
                 Text.Format("Progress", TimeSpan.FromSeconds((double)frame / plan!.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture),
                     TimeSpan.FromSeconds((double)plan.TotalFrames / plan.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture));
