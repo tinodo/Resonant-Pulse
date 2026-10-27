@@ -370,8 +370,10 @@ public sealed partial class MainWindow
         double GroupWidth(double scale) => rules.Max(rule => rule(scale));
         var width = GroupWidth(TextScale);
         var units = rows.Select(row => Text.Get(row.UnitKey)).ToArray();
-        // Equal unit widths make every row wrap at the same width, and line the units up in a column when they fit.
+        // Equal unit widths make every row wrap at the same width, and line the units up in a column when they fit. The common
+        // width is measured again when the Windows text size changes, with the boxes, so the rows keep wrapping together.
         var unitWidth = Math.Ceiling(WidestText(units));
+        var labels = new List<TextBlock>();
         var stack = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Left };
         for (var index = 0; index < rows.Length; index++)
         {
@@ -384,9 +386,21 @@ public sealed partial class MainWindow
                 Text = units[index], Style = ResonantStyle("BodyStyle"), FontSize = 14, MinWidth = unitWidth,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            labels.Add(label);
             // A unit that wraps sits 2 DIP under its box; the 14 DIP between rows keeps it with the box it belongs to.
             stack.Children.Add(Wrapped(8, 2, [Bounded(box), label]));
         }
+        void FollowUnits()
+        {
+            var wanted = Math.Ceiling(WidestText(units));
+            foreach (var label in labels) label.MinWidth = wanted;
+        }
+        stack.Loaded += (_, _) =>
+        {
+            TextScaleChanged += FollowUnits;
+            FollowUnits();
+        };
+        stack.Unloaded += (_, _) => TextScaleChanged -= FollowUnits;
         return stack;
     }
 
