@@ -517,12 +517,58 @@ foreach ($size in @(@(400, 720), @(320, 900))) {
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 500
 # Every panel: opens with its fields visible, and an emergency mute (Ctrl+M) works while it owns the keyboard.
+# A field is as wide as what it holds (docs/design/pages-design.md): the box for "100" or "1000" must never stretch to the
+# window. Limits are DIPs at 100 % text size and grow with the Windows text-size setting, so a larger text size is never
+# mistaken for a stretched field.
+$textScale = 1.0
+try {
+    $configured = (Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Accessibility' -ErrorAction Stop).TextScaleFactor
+    if ($configured) { $textScale = [Math]::Max(1.0, $configured / 100.0) }
+} catch { }
+function Test-FieldWidths([string]$where, [hashtable]$limits) {
+    foreach ($id in $limits.Keys) {
+        $width = (Find-Control $id).Current.BoundingRectangle.Width / $scale
+        $limit = $limits[$id] * $textScale
+        if ($width -gt $limit) {
+            throw "${where}: $id is $([Math]::Round($width)) DIP wide, but a field is as wide as its contents (at most $([Math]::Round($limit)) DIP)."
+        }
+    }
+}
+# No page or panel carries an Apply button: a change takes effect as it is made. (Play panels keep Cancel and Done.)
+function Test-NoApplyButtons([string]$where) {
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+    foreach ($button in (Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition)) {
+        $id = $button.Current.AutomationId
+        if ($id -match 'Apply' -or $button.Current.Name -match '^Apply') {
+            throw "${where}: an Apply button is present: '$id' '$($button.Current.Name)'"
+        }
+    }
+}
+function Wait-ToggleState($pattern, $state, [string]$failure) {
+    $limit = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        if ($pattern.Current.ToggleState -eq $state) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw $failure
+}
+function Select-Destination([string]$id) {
+    $item = Find-Control $id
+    $pattern = $null
+    if ($item.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select() }
+    else { $item.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke() }
+}
 $panels = @(
     @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
-    @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'},
-    @{open=@('TempoEdit');                  field='TempoUnit';         close='TempoOptionsCancel'; focus='TempoOptionsCancel'},
-    @{open=@('PracticeTimer');              field='PracticeSeconds';   close='PracticeTimerOptionsCancel'; focus='PracticeTimerOptionsCancel'},
-    @{open=@('ProjectOptions');             field='DocumentName';      close='ProjectOptionsPanelCancel'; focus='ProjectOptionsPanelCancel'},
+    @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
+      limits=@{MeterBeats=200; MeterDenominator=330; MeterGroups=300; Subdivision=200; Swing=200; CountInBars=200; AudibleBars=200; SilentBars=200}},
+    @{open=@('TempoEdit');                  field='TempoUnit';         close='TempoOptionsCancel'; focus='TempoOptionsCancel'
+      limits=@{Tempo=260; TempoUnit=330}},
+    @{open=@('PracticeTimer');              field='PracticeSeconds';   close='PracticeTimerOptionsCancel'; focus='PracticeTimerOptionsCancel'
+      limits=@{PracticeSeconds=200; PracticeBeats=200; PracticeBars=200}},
+    @{open=@('ProjectOptions');             field='DocumentName';      close='ProjectOptionsPanelCancel'; focus='ProjectOptionsPanelCancel'
+      limits=@{DocumentName=390}},
     @{open=@('PlayHelp');                   field='PlayHelpPanelDone'; close='PlayHelpPanelDone'; focus='PlayHelpPanelDone'},
     @{open=@('AudioOptions');               field='AudioOutputPicker'; close='AudioOptionsClose'; focus='AudioOptionsClose'}
 )
@@ -552,6 +598,7 @@ foreach ($panel in $panels) {
         # Cancel and Done are one pair: the same size, on one line.
         Test-Pair $panel.close ($panel.close -replace 'Cancel$', 'Done')
     }
+    if ($panel.limits) { Test-FieldWidths "Panel $($panel.open[-1])" $panel.limits }
     if ($panel.open[0] -eq 'AudioOptions') {
         # The device list and its refresh button share one height and one centre line.
         Test-Pair 'AudioOutputPicker' 'RefreshAudioOutputs' -HeightOnly
@@ -581,6 +628,25 @@ foreach ($panel in $panels) {
     Invoke-Control $panel.close
     Wait-Absent $panel.field
 }
+# Settings and Library: content-sized fields, a switch that takes effect as it is toggled, and no Apply button.
+Select-Destination 'DestinationSettings'
+Wait-Settled 'Language'
+Test-FieldWidths 'Settings' @{ Language = 330; Theme = 330 }
+Test-NoApplyButtons 'Settings'
+Wait-Absent 'SaveExportBars'
+$motion = (Find-Control 'ReducedMotion').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+$motionBefore = $motion.Current.ToggleState
+$motionAfter = if ($motionBefore -eq [Windows.Automation.ToggleState]::On) { [Windows.Automation.ToggleState]::Off } else { [Windows.Automation.ToggleState]::On }
+$motion.Toggle()
+Wait-ToggleState $motion $motionAfter 'Reduce motion did not change when it was switched.'
+$motion.Toggle()
+Wait-ToggleState $motion $motionBefore 'Reduce motion did not return to its previous state.'
+Select-Destination 'DestinationLibrary'
+Wait-Settled 'ExportBars'
+Test-FieldWidths 'Library' @{ ExportBars = 200 }
+Test-NoApplyButtons 'Library'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
 Invoke-Control 'AudioOptions'
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()

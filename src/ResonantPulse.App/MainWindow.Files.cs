@@ -19,6 +19,13 @@ public sealed partial class MainWindow
             SelectionMode = ListViewSelectionMode.Single
         };
         Identify(_libraryList, "LibraryProjects", Text.Get("Library"));
+        var exportBars = NumberInput("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
+        CommitNumber(exportBars, async value =>
+        {
+            _preferences.ExportBars = (int)value;
+            await _workspace.SavePreferencesAsync(_preferences);
+        });
+        var exportLength = new StackPanel { Spacing = 4, Children = { Field(exportBars, "UnitBars"), Note("ExportBarsHelp") } };
         var panel = Column(Heading(Text.Get("Library")), _search, _libraryList,
             CommandFlow(
                 ActionButton("Load", "LoadLibraryProject", async () =>
@@ -39,7 +46,7 @@ public sealed partial class MainWindow
                     if (!await ConfirmAsync(Text.Get("Replace"))) return;
                     await ReplaceDocumentAsync(new PulseDocument { Name = Text.Get("OpenPractice") });
                 })),
-            Copy("ExportNotice"),
+            Copy("ExportNotice"), exportLength,
             CommandFlow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false)),
                 ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true))), BuildPresets());
         _ = GuardAsync(RefreshLibraryAsync);

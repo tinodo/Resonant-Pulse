@@ -165,12 +165,15 @@ public sealed partial class MainWindow
     private OptionPanel BuildTempoPanel()
     {
         var settings = _document.Settings;
-        var tempo = Number("Tempo", "Tempo", settings.Tempo, 1, 1000, 1, 0);
+        var tempo = NumberInput("Tempo", "Tempo", settings.Tempo, 1, 1000, 1, 0, whole: false);
         tempo.FontSize = 24;
-        var unit = SelectChoices("Unit", "TempoUnit", Invariant(settings.BeatUnitQuarters), TempoUnitChoices(settings));
+        // The digits are drawn at 24 pt, so this box is wider than the 14 pt rule gives.
+        tempo.Width = Math.Max(tempo.Width, 200 * Math.Max(1, TextSettings.TextScaleFactor));
+        var unit = Dropdown("Unit", "TempoUnit", Invariant(settings.BeatUnitQuarters), TempoUnitChoices(settings));
         var half = ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, Math.Round(tempo.Value / 2, 1)); });
         var twice = ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, Math.Round(tempo.Value * 2, 1)); });
-        return CreateOptionPanel("TempoTab", "TempoOptions", Column(tempo, unit, CommandFlow(half, twice)), "TempoEditorHelp",
+        var tempoContent = new StackPanel { Spacing = 12, Children = { FieldRow(Field(tempo), Field(unit)), CommandRow(half, twice) } };
+        return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
                 tempo.Value = _tempoRequested ?? _document.Settings.Tempo;
@@ -196,20 +199,27 @@ public sealed partial class MainWindow
     private OptionPanel BuildRhythmPanel()
     {
         var settings = _document.Settings;
-        var beats = NumberInt("BeatsTop", "MeterBeats", settings.BeatsPerBar, 1, 64);
-        var denominator = SelectChoices("BeatNote", "MeterDenominator", settings.BeatDenominator.ToString(CultureInfo.InvariantCulture), NoteChoices());
-        var groups = Input("GroupingLabel", "MeterGroups", MeterPresets.GroupsText(settings.Groups));
-        var division = NumberInt("SubdivisionLabel", "Subdivision", settings.Subdivision, 1, 64);
-        var swing = Number("Swing", "Swing", settings.Swing, 0.5, 0.9, 0.01, 2);
-        var countIn = NumberInt("CountIn", "CountInBars", settings.CountInBars, 0, 32);
-        var audible = NumberInt("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
-        var silent = NumberInt("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
-        var blind = Check("Blind", "BlindGaps", settings.BlindGaps);
-        var content = Column(
-            SectionHeading("TimeSignature"), Flow(beats, denominator), groups,
-            SectionHeading("SectionFeel"), Flow(division, swing),
-            SectionHeading("SectionTraining"), Flow(countIn, audible, silent), blind,
-            Hint("GroupAccentRule"));
+        var beats = NumberInput("BeatsTop", "MeterBeats", settings.BeatsPerBar, 1, 64);
+        var denominator = Dropdown("BeatNote", "MeterDenominator", settings.BeatDenominator.ToString(CultureInfo.InvariantCulture), NoteChoices());
+        var groups = TextInput("GroupingLabel", "MeterGroups", MeterPresets.GroupsText(settings.Groups), 260);
+        var division = NumberInput("SubdivisionLabel", "Subdivision", settings.Subdivision, 1, 64);
+        var swing = NumberInput("Swing", "Swing", settings.Swing, 0.5, 0.9, 0.01, 2, whole: false);
+        var countIn = NumberInput("CountIn", "CountInBars", settings.CountInBars, 0, 32);
+        var audible = NumberInput("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
+        var silent = NumberInput("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
+        var blind = Toggle("Blind", "BlindGaps", settings.BlindGaps);
+        var content = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                SectionHeading("TimeSignature"), FieldRow(Field(beats), Field(denominator)), Field(groups),
+                SectionHeading("SectionFeel"), FieldRow(Field(division), Field(swing)),
+                SectionHeading("SectionTraining"), FieldRow(Field(countIn), Field(audible), Field(silent)),
+                SettingRow("Blind", null, blind, sideBySideFrom: 280),
+                Hint("GroupAccentRule")
+            }
+        };
         return CreateOptionPanel("RhythmEditorTitle", "RhythmOptions", content, "RhythmEditorHelp",
             () =>
             {
@@ -222,7 +232,7 @@ public sealed partial class MainWindow
                 countIn.Value = current.CountInBars;
                 audible.Value = current.AudibleBars;
                 silent.Value = current.SilentBars;
-                blind.IsChecked = current.BlindGaps;
+                blind.IsOn = current.BlindGaps;
             },
             async () =>
             {
@@ -235,7 +245,7 @@ public sealed partial class MainWindow
                 var newCountIn = Integer(countIn);
                 var newAudible = Integer(audible);
                 var newSilent = Integer(silent);
-                var newBlind = blind.IsChecked == true;
+                var newBlind = blind.IsOn;
                 var applied = false;
                 await CommitAsync(doc =>
                 {
@@ -259,16 +269,28 @@ public sealed partial class MainWindow
     private OptionPanel BuildPracticePanel()
     {
         var settings = _document.Settings;
-        var seconds = NumberInt("PracticeSeconds", "PracticeSeconds", settings.PracticeSeconds, 0, 86400);
-        var beats = NumberInt("PracticeBeats", "PracticeBeats", settings.PracticeBeats, 0, 6_400_000);
-        var bars = NumberInt("PracticeBars", "PracticeBars", settings.PracticeBars, 0, 100_000);
-        var feedback = Body(Text.Format("PracticeLimitsSaved", settings.PracticeSeconds, settings.PracticeBeats, settings.PracticeBars));
-        feedback.FontSize = 12;
+        var seconds = NumberInput("PracticeStopAfter", "PracticeSeconds", settings.PracticeSeconds, 0, 86400);
+        var beats = NumberInput("PracticeStopAfter", "PracticeBeats", settings.PracticeBeats, 0, 6_400_000);
+        var bars = NumberInput("PracticeStopAfter", "PracticeBars", settings.PracticeBars, 0, 100_000);
+        var feedback = new TextBlock
+        {
+            Text = SavedLimits(settings.PracticeSeconds, settings.PracticeBeats, settings.PracticeBars),
+            Style = ResonantStyle("NoteStyle")
+        };
         Identify(feedback, "PracticeLimitsStatus", feedback.Text);
         AutomationProperties.SetItemStatus(feedback, "0");
         long commitVersion = 0;
-        return CreateOptionPanel("PracticeTimer", "PracticeTimerOptions",
-            Column(seconds, beats, bars, Hint("PracticeTimerHint"), Hint("CountedStopHint"), feedback), null,
+        var fields = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                SectionHeading("PracticeStopAfter"),
+                UnitRows("PracticeStopAfter", (seconds, "UnitSeconds"), (beats, "UnitBeats"), (bars, "UnitBars")),
+                feedback
+            }
+        };
+        return CreateOptionPanel("PracticeTimer", "PracticeTimerOptions", fields, "PracticeTimerHint",
             () =>
             {
                 var current = _document.Settings;
@@ -290,7 +312,7 @@ public sealed partial class MainWindow
                     applied = true;
                 }, editorChange: EditorChangeKind.PracticeTimerOnly);
                 if (!applied) return false; // A locked document reports its notice without publishing.
-                feedback.Text = Text.Format("PracticeLimitsSaved", newSeconds, newBeats, newBars);
+                feedback.Text = SavedLimits(newSeconds, newBeats, newBars);
                 AutomationProperties.SetName(feedback, feedback.Text);
                 AutomationProperties.SetItemStatus(feedback,
                     FormattableString.Invariant($"{++commitVersion}:{newSeconds}:{newBeats}:{newBars}"));
@@ -298,9 +320,16 @@ public sealed partial class MainWindow
             });
     }
 
+    private static string SavedLimits(int seconds, int beats, int bars)
+    {
+        var off = Text.Get("Off").ToLower(Text.Culture);
+        return Text.Format("PracticeLimitsSaved", PracticeFormat.Time(seconds, off, Text.Culture),
+            PracticeFormat.Count(beats, off, Text.Culture), PracticeFormat.Count(bars, off, Text.Culture));
+    }
+
     private OptionPanel BuildProjectPanel()
     {
-        var name = Input("Name", "DocumentName", _document.Name);
+        var name = TextInput("Name", "DocumentName", _document.Name, 360);
         OptionPanel? project = null;
         // The name is a draft until Done; saving the project must save what the field shows, not the old name.
         async Task CommitNameAsync()
@@ -313,9 +342,10 @@ public sealed partial class MainWindow
             await CommitNameAsync();
             project!.Flyout.Hide();
             await SaveProjectAsync();
-        });
-        var open = ActionButton("Open", "PlayOpen", async () => { project!.Flyout.Hide(); await OpenProjectAsync(); });
-        project = CreateOptionPanel("ProjectOptions", "ProjectOptionsPanel", Column(name, CommandFlow(save, open)), null,
+        }, "\uE74E");
+        var open = ActionButton("Open", "PlayOpen", async () => { project!.Flyout.Hide(); await OpenProjectAsync(); }, "\uE8E5");
+        project = CreateOptionPanel("ProjectOptions", "ProjectOptionsPanel",
+            new StackPanel { Spacing = 12, Children = { Field(name), CommandRow(save, open) } }, null,
             () => name.Text = _document.Name,
             async () =>
             {
@@ -327,7 +357,35 @@ public sealed partial class MainWindow
         return project;
     }
 
-    private OptionPanel BuildHelpPanel() => CreateOptionPanel("Help", "PlayHelpPanel",
-        Column(Copy("FirstUseHint"), Copy("LiveSoundHint"), Copy("PlayEditBoundary"), Copy("PresentationLimits"),
-            Copy("KeyboardHelp"), Copy("Horizon")), null, null, null);
+    private OptionPanel BuildHelpPanel()
+    {
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(SectionHeading("HelpBasics"));
+        content.Children.Add(Copy("FirstUseHint"));
+        content.Children.Add(SectionHeading("HelpWhilePlaying"));
+        content.Children.Add(Copy("LiveSoundHint"));
+        content.Children.Add(SectionHeading("HelpShortcuts"));
+        var ctrl = Text.Get("KeyCtrl");
+        content.Children.Add(Shortcut(Text.Get("KeySpace"), Text.Get("ShortcutStart")));
+        content.Children.Add(Shortcut($"{ctrl} + M", Text.Get("ShortcutMute")));
+        content.Children.Add(Shortcut($"{ctrl} + S", Text.Get("Save")));
+        content.Children.Add(Shortcut($"{ctrl} + O", Text.Get("Open")));
+        content.Children.Add(Shortcut("F", Text.Format("ShortcutHit", Text.Get("Train"))));
+        return CreateOptionPanel("HelpTab", "PlayHelpPanel", content, null, null, null);
+    }
+
+    /// <summary>A keyboard shortcut: the key drawn as a keycap, then what it does.</summary>
+    private static Grid Shortcut(string keys, string description)
+    {
+        var row = new Grid { ColumnSpacing = 12 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96 * Math.Max(1, TextSettings.TextScaleFactor)) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var chip = KeyChip(keys);
+        chip.HorizontalAlignment = HorizontalAlignment.Left;
+        row.Children.Add(chip);
+        var text = new TextBlock { Text = description, Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(text, 1);
+        row.Children.Add(text);
+        return row;
+    }
 }

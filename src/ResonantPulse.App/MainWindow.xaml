@@ -62,7 +62,7 @@
                               HorizontalScrollBarVisibility="Disabled" HorizontalScrollMode="Disabled">
                   <Grid x:Name="OutputRow" ColumnSpacing="12" RowSpacing="8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <!-- The caption sits outside the ComboBox: a header inside it makes the box 32 DIP, shorter than the
                          44 DIP refresh button beside it. Both have a 44 DIP minimum (so they can grow with Windows text
                          size) and stretch to the one row height, so they always match and share a centre line. -->
@@ -80,6 +80,8 @@
                     </StackPanel>
                     <Slider x:Name="MasterGain" Grid.Column="1" Minimum="0" Maximum="1" StepFrequency="0.01" Value="0.5"
                             VerticalAlignment="Top" AutomationProperties.AutomationId="MasterGain" />
+                    <TextBlock x:Name="OutputNote" Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource NoteStyle}"
+                               AutomationProperties.AutomationId="OutputNote" />
                   </Grid>
                 </ScrollViewer>
                 <Button x:Name="AudioOptionsClose" Grid.Row="2" HorizontalAlignment="Right" Width="120"

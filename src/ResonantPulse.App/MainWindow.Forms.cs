@@ -116,17 +116,21 @@ public sealed partial class MainWindow
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto
     };
 
-    private Button ActionButton(string key, string id, Func<Task> action)
+    private Button ActionButton(string key, string id, Func<Task> action, string? glyph = null,
+        ButtonKind kind = ButtonKind.Secondary)
     {
         var button = new Button { HorizontalContentAlignment = HorizontalAlignment.Center };
-        LabelButton(button, key);
+        if (kind == ButtonKind.Primary) button.Style = ResonantStyle("PrimaryButtonStyle");
+        else if (kind == ButtonKind.Tertiary) button.Style = ResonantStyle("ToolButtonStyle");
+        LabelButton(button, key, glyph);
         Identify(button, id, Text.Get(key));
         button.Click += async (_, _) => await GuardAsync(action);
         return button;
     }
 
-    private Button ActionButton(string key, string id, Action action) =>
-        ActionButton(key, id, () => { action(); return Task.CompletedTask; });
+    private Button ActionButton(string key, string id, Action action, string? glyph = null,
+        ButtonKind kind = ButtonKind.Secondary) =>
+        ActionButton(key, id, () => { action(); return Task.CompletedTask; }, glyph, kind);
 
     private static NumberBox Number(string key, string id, double value, double minimum, double maximum, double increment = 1,
         int fractionDigits = 1)

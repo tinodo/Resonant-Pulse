@@ -441,6 +441,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
         OutputPicker.Header = null;
         OutputCaption.Text = Text.Get("Output");
+        OutputNote.Text = Text.Get("AudioNote");
         OutputPicker.PlaceholderText = Text.Get("ChooseOutput");
         Identify(OutputPicker, "AudioOutputPicker", Text.Get("Output"));
         AutomationProperties.SetName(OutputButton, Text.Get("RefreshDevices"));
