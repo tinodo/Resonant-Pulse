@@ -35,6 +35,10 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
   older do): it would open the owner's real projects and settings and could play
   them audibly. `Verify-Local.ps1` refuses such a build by looking for that
   setting's name inside `ResonantPulse.dll`; any other launcher must do the same.
+- A flyout slides into place for about 400 ms and its controls report a new
+  position every frame, so two reads a frame apart can differ by the distance
+  travelled (a Cancel/Done pair once looked 12 px apart). Measure a panel only
+  after `Wait-Settled` in `Verify-FirstUse.ps1`; never right after it appears.
 - GitHub Actions remains the authoritative gate (hosted build, native, package,
   CodeQL, review). Local runs give fast feedback only; never treat an
   unexecuted test or an uploaded artifact as a pass.
