@@ -22,11 +22,21 @@ internal sealed class SaveQueue
         return _tail = RunAfterAsync();
     }
 
-    /// <summary>Completes when every save asked for so far has finished. Never throws: failures are the saves' own.</summary>
+    /// <summary>
+    /// Completes when every save asked for so far has finished, including one asked for while waiting: a save asked for behind
+    /// the one being waited for is waited for too, so a caller that goes on once the queue is idle (a project being saved to
+    /// a file, a project being replaced) never goes on before a draft that was already on its way. Never throws: failures are
+    /// the saves' own.
+    /// </summary>
     public async Task WhenIdleAsync()
     {
-        try { await _tail; }
-        catch (Exception) { /* reported by the save that failed */ }
+        Task waited;
+        do
+        {
+            waited = Volatile.Read(ref _tail);
+            try { await waited; }
+            catch (Exception) { /* reported by the save that failed */ }
+        } while (!ReferenceEquals(waited, Volatile.Read(ref _tail)));
     }
 }
 

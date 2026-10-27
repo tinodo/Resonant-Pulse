@@ -42,6 +42,38 @@ public sealed class StageNotesTests
     }
 
     [TestMethod]
+    public async Task WaitingForAnIdleQueueAlsoWaitsForASaveAskedForWhileWaiting()
+    {
+        var queue = new SaveQueue();
+        var finished = new List<string>();
+        var releaseFirst = new TaskCompletionSource();
+        var releaseSecond = new TaskCompletionSource();
+        _ = queue.Enqueue(async () => { await releaseFirst.Task; finished.Add("first"); });
+        var waiting = queue.WhenIdleAsync();
+        // Asked for while the first is still running and someone is already waiting for the queue to go quiet.
+        _ = queue.Enqueue(async () => { await releaseSecond.Task; finished.Add("second"); });
+        releaseFirst.SetResult();
+        var winner = await Task.WhenAny(waiting, Task.Delay(300));
+        Assert.AreNotSame(waiting, winner, "the wait ended while the second save was still pending");
+        CollectionAssert.AreEqual(new[] { "first" }, finished);
+        releaseSecond.SetResult();
+        await waiting.WaitAsync(TimeSpan.FromSeconds(10));
+        CollectionAssert.AreEqual(new[] { "first", "second" }, finished);
+    }
+
+    [TestMethod]
+    public async Task AFailureWhileWaitingForASaveAskedForLaterIsStillTheSavesOwn()
+    {
+        var queue = new SaveQueue();
+        var releaseFirst = new TaskCompletionSource();
+        _ = queue.Enqueue(async () => { await releaseFirst.Task; throw new InvalidOperationException("first failed"); });
+        var waiting = queue.WhenIdleAsync();
+        _ = queue.Enqueue(() => throw new InvalidOperationException("second failed"));
+        releaseFirst.SetResult();
+        await waiting.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [TestMethod]
     public void ADraftIsSavedOnceNoMatterHowOftenTheBoxLosesFocus()
     {
         var draft = new StageNotesDraft();
