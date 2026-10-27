@@ -225,18 +225,31 @@ public sealed partial class MainWindow
         await ReplaceDocumentAsync(document);
     }
 
-    private async Task ReplaceDocumentAsync(PulseDocument document)
+    /// <summary>
+    /// Replaces the project. It runs as a Stage operation: from before the notes are saved until the page has been built again
+    /// the notes box and the setlist are switched off, so nothing can be typed that no save would reach (the old project's
+    /// backup, or the new project). Notes typed or on their way belong to the project that is about to go; they are saved into
+    /// it first, in order, so a queued save can never reach the replacement, and if one cannot be saved the replacement does not
+    /// happen. A replacement that fails leaves the page as it was, working again.
+    /// </summary>
+    private Task ReplaceDocumentAsync(PulseDocument document) =>
+        RunStageOperationAsync(() => ReplaceProjectAsync(document), restructures: true);
+
+    // Lets the local verification build hold a replacement open, so a driver can look at the page meanwhile (MainWindow.UiTest.cs);
+    // shipped builds have no body.
+    partial void HoldReplacementForUiTest(ref Task? hold);
+
+    private async Task ReplaceProjectAsync(PulseDocument document)
     {
-        if (_isLocked) { ShowNotice("Locked"); return; }
-        // Notes typed or on their way belong to the project that is about to go. They are saved into it first, in order, so a
-        // queued save can never reach the replacement; if one cannot be saved the replacement does not happen.
-        if (!await FlushStageNotesAsync()) return;
         await DocumentPublication.RunAsync(_edits, async published =>
         {
             // All callers enter without _edits held. Keep validation, backup,
             // replacement and recovery in the same transaction as normal edits
             // and undo, so an older edit cannot publish after this replacement.
             if (_isLocked) { ShowNotice("Locked"); return; }
+            Task? hold = null;
+            HoldReplacementForUiTest(ref hold);
+            if (hold is not null) await hold;
             var replacement = LocalWorkspace.Clone(document);
             await ValidateAsync(replacement);
             await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));

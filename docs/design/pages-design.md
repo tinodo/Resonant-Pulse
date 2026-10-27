@@ -99,7 +99,9 @@ is specified in `metronome-design.md` and is not changed here.
   draft in the box and the song selected, and says why; the page is not rebuilt meanwhile, so what is typed next stays. A
   draft that failed and whose page is gone is asked for again when the window closes or the project is replaced. The setlist
   itself is switched off while songs are being added, moved or removed (and only then: switching it off for every operation
-  would take the keyboard focus away from it). *Lock editing* and *Always on top* are
+  would take the keyboard focus away from it). Replacing the project (Ctrl+O, New, a ready-made rhythm) is a Stage operation
+  too: from before the notes are saved until the new project is shown the notes box and the setlist are switched off, so
+  nothing typed can fall between the last save and the replacement, and they work again if the replacement fails. *Lock editing* and *Always on top* are
   switches on one line in the page header, each caption wrapping inside the room it is given; what the lock does is its
   tooltip, and the sentence is shown in the setlist card only while the lock is on, where it explains why the setlist
   commands are greyed out.
