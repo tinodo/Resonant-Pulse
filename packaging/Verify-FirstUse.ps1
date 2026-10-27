@@ -255,6 +255,25 @@ function Test-PlayTools {
     }
     return @{ labelled = $labelled; buttonHeight = $rects[0].Height }
 }
+# Every beat of a quick-pick meter is fully inside the beat strip's own viewport, so the strip needs no scroll bar (a bar is
+# drawn over the beat numbers) and shows no "more beats" cue. 12/8, with its three group gaps, is the widest quick pick;
+# sizing the cells without the gaps once made it overflow by about 20 DIP, so its last beat was cut off and a scroll bar
+# appeared for beats that all fit. A cut-off cell is reported with a clipped (narrower) rectangle.
+function Test-StripFits([int]$beats) {
+    # The cells are sized after the page's first layout pass, so give a freshly rebuilt strip a moment to settle.
+    $limit = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $strip = (Find-Control 'PulseAccentStrip').Current.BoundingRectangle
+        $firstCell = (Find-Control 'MainAccent0').Current.BoundingRectangle
+        $lastCell = (Find-Control "MainAccent$($beats - 1)").Current.BoundingRectangle
+        $cue = Find-Optional 'PlayScrollHint'
+        $fits = $lastCell.Right -le $strip.Right + 1 -and $lastCell.Width -ge $firstCell.Width - 3 * $scale
+        $cueShown = $null -ne $cue -and -not $cue.Current.IsOffscreen
+        if ($fits -and -not $cueShown) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "All $beats beats of a quick-pick meter must fit the beat strip without a scroll bar or a 'more beats' cue: first beat $firstCell, last beat $lastCell, strip $strip, cue shown: $cueShown"
+}
 function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     $limit = [DateTime]::UtcNow.AddSeconds(65)
     do {
@@ -426,6 +445,7 @@ foreach ($case in @(@('6_8', '6/8', 6), @('3_4', '3/4', 3), @('12_8', '12/8', 12
     $last = $case[2] - 1
     $null = Find-Control "MainAccent$last"
     Wait-Absent "MainAccent$($case[2])"
+    Test-StripFits $case[2]
     $dialText = Get-Dial
     if ($case[1] -in @('6/8', '12/8')) {
         Wait-Until { (Get-Dial) -like '*BPM*Eighth*' } "A /8 meter must count eighth notes: $dialText"
@@ -459,6 +479,12 @@ $manyPulseInstrument = $null
 $hierarchy = Test-InstrumentHierarchy
 $manyPulseInstrument = $hierarchy
 if ((Find-Control 'PlayScrollHint').Current.IsOffscreen) { throw 'Long beat strip has no visible overflow cue.' }
+# A strip that scrolls keeps room under its beat numbers for the scroll bar, which is drawn over the bottom of the strip.
+$scrollingStrip = (Find-Control 'PulseAccentStrip').Current.BoundingRectangle
+$firstBeat = (Find-Control 'MainAccent0').Current.BoundingRectangle
+if ($scrollingStrip.Bottom - $firstBeat.Bottom -lt 12 * $scale) {
+    throw "A scrolling beat strip leaves no room under its beat numbers for the scroll bar: first beat $firstBeat, strip $scrollingStrip"
+}
 (Find-Control 'PulseAccentStrip').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).SetScrollPercent(100, -1)
 Start-Sleep -Milliseconds 300
 $lastPulse = Find-Control 'MainAccent63'

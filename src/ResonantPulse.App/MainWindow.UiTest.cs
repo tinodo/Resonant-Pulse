@@ -24,16 +24,22 @@ public sealed partial class MainWindow
         var name = Tiny(new TextBox());
         var capture = Tiny(new Button());
         var grow = Tiny(new Button());
+        var expand = Tiny(new Button());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
         Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
+        Identify(expand, "UiTestExpandScrollBars", "ui test expand scroll bars");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
         // Stands in for a Windows text-size change: the page-tools labels get bigger while the page keeps its size.
         grow.Click += (_, _) => GrowToolLabels(1.6);
+        // Stands in for the pointer being over a scroll bar (or Windows set to always show scroll bars), which a private
+        // desktop cannot do: the beat strip's bar takes its full, expanded form.
+        expand.Click += (_, _) => ExpandScrollBars();
         var host = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
         host.Children.Add(name);
         host.Children.Add(capture);
         host.Children.Add(grow);
+        host.Children.Add(expand);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");
@@ -66,6 +72,27 @@ public sealed partial class MainWindow
             if (FindById(child, id) is { } found) return found;
         }
         return null;
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) yield return match;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
+    }
+
+    private void ExpandScrollBars()
+    {
+        if (FindById(Root, "PulseAccentStrip") is not { } strip) return;
+        foreach (var bar in Descendants<ScrollBar>(strip))
+        {
+            // Two state groups: how big the bar is, and whether it is shown at all (it is hidden until something scrolls).
+            VisualStateManager.GoToState(bar, "ExpandedWithoutAnimation", false);
+            VisualStateManager.GoToState(bar, "MouseIndicator", false);
+        }
     }
 
     private async Task CaptureAsync(string folder, string requested)
