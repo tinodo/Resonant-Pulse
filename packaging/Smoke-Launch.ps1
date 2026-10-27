@@ -6,6 +6,12 @@ param(
     [string]$PackageFamilyName
 )
 $ErrorActionPreference = 'Stop'
+# This script starts the payload against the machine's real data folder, copies the screen and force-stops the process,
+# so it is restricted to disposable GitHub-hosted runners (as Smoke-Package.ps1 is). On a developer machine use
+# Verify-Local.ps1: isolated data, a private desktop and a refusal of builds that ignore RESONANT_PULSE_HOME.
+if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+    throw 'Smoke-Launch.ps1 is restricted to disposable GitHub-hosted runners; use packaging\Verify-Local.ps1 on a developer machine.'
+}
 $artifactDirectory = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Screenshot))
 $executable = Join-Path ([IO.Path]::GetFullPath($Payload)) 'ResonantPulse.exe'
 if ($ExistingProcessId) {
