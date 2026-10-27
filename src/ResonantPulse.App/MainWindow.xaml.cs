@@ -307,7 +307,8 @@ public sealed partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
-        if (_isBusy || !_isReady) return;
+        // While the window closes nothing new may start or resume (Stop and Mute stay available), whichever button or key asked.
+        if (_isBusy || !_isReady || _closeFlushing) return;
         InvalidateTiming();
         if (_transport.State == TransportState.Playing)
         {

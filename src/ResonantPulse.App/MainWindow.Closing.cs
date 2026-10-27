@@ -21,6 +21,10 @@ public sealed partial class MainWindow
     /// <summary>True while the window is being closed: nothing new starts producing edits.</summary>
     private bool _closeFlushing;
 
+    // Lets the local verification build make the last save slow, so a driver can look at the window meanwhile
+    // (MainWindow.UiTest.cs); shipped builds have no body.
+    partial void HoldCloseForUiTest(ref Task? hold);
+
     private void InstallCloseFlush()
     {
         AppWindow.Closing += (sender, args) =>
@@ -50,6 +54,9 @@ public sealed partial class MainWindow
             // switched off: what was being typed is in the queues the flush waits for, and nothing new can be typed after it.
             CommitFocusedField();
             BlockEditing(true);
+            Task? hold = null;
+            HoldCloseForUiTest(ref hold);
+            if (hold is not null) await hold;
             var flush = FlushPendingEditsAsync();
             var finished = await Task.WhenAny(flush, Task.Delay(CloseSaveLimit));
             timedOut = finished != flush;
@@ -85,6 +92,8 @@ public sealed partial class MainWindow
     {
         Navigation.IsEnabled = !blocked;
         AudioOptionsButton.IsEnabled = !blocked;
+        // Start follows closing too (it is outside the page area): it is off while the last save is under way.
+        RefreshSnapshot();
         if (!blocked)
         {
             foreach (var panel in _blockedPanels) panel.IsEnabled = true;

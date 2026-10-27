@@ -133,7 +133,7 @@ public sealed partial class MainWindow
             var duration = TimeSpan.FromSeconds(Math.Ceiling((double)remaining / timed.Initial.SampleRate));
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }
-        StartButton.IsEnabled = !_isBusy && (snapshot.State == TransportState.Playing || HasSelectedOutput);
+        StartButton.IsEnabled = !_isBusy && !_closeFlushing && (snapshot.State == TransportState.Playing || HasSelectedOutput);
         StopButton.IsEnabled = snapshot.State != TransportState.Stopped;
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
