@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.7 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.8 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -200,3 +200,41 @@ advanced normally in preview.5, 6 and 7, and the check now waits for the text to
 change. The instance installed for the owner played no audio, so this does not
 establish acoustic accuracy, live-splice latency, Contrast-theme appearance,
 full-product acceptance or Store publication.
+
+[Preview 0.1.0-preview.8](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.8)
+polishes the Play page and the controls it shares with the other pages after an
+owner review of preview.7. The time-signature digits are centred in their chip,
+the mute button reads "Mute"/"Unmute", the audio picker and its refresh button
+share one height, Cancel and Done are one size in every panel, and the Timer,
+Project and Help buttons (Practice is now called Timer) form one labelled strip
+under Settings in full-contrast text. A saved project whose tempo unit disagrees
+with its written meter (for example eight beats counted in dotted halves, where
+clicks fall every three quarter notes while the dial goes round once per four)
+now shows a closable one-click notice that rewrites the unit and keeps the BPM
+number, so the click rate does not change. Close requests are logged with their
+source and the time since the last keyboard or mouse input. Protected main
+`acfa43a`: main build 40422313141 and CodeQL 40422313125 passed; release
+40422834681 passed fresh hosted tests (234 Core passes of 238 cases, four
+platform skips, and 303 App passes), Windows x64/ARM64 builds and x64
+native/package checks. The hosted first-use report recorded the digits centred
+(0 px offset) and the page tools labelled and 44 DIP high at 800x600 and
+1000x720. Hosted audio, live-edit and counted-stop scenarios explicitly reported
+`not-run-no-output`. The actual public x64 ZIP checksum and embedded
+source/version/run were checked; the ARM64 checksum file matched the GitHub
+digest of the ARM64 ZIP, which was not downloaded and re-hashed.
+The build was installed on the development PC after a dry run on copies of its
+saved state: it started responsive and stopped, the saved preferences and
+recovery draft were byte-identical after startup, and the per-user Start menu
+shortcut now targets preview.8. Scratch instances of the shipped x64 binary
+then ran the exact verifier's audio scenarios four times on the Windows default
+output at an inaudible master gain (0.0001, isolated data folder, private
+desktop). The first run failed before reaching them, at a Cancel/Done pair read
+taken while a panel was still sliding in; that is a race in the verifier, not in
+the product, and is fixed by waiting until the panel is still (PR #20). The other
+three runs, one of them with the fixed verifier, passed: playback advanced, live
+sound, tempo and meter edits were published without stopping, and the counted
+stops passed. The instance installed for the owner played no audio, so this does
+not establish acoustic accuracy, live-splice latency, Windows text-size or
+Contrast-theme appearance, full-product acceptance or Store publication. At a
+window width of about 320 DIP the page content still overflows the window, as in
+preview.7; whether to impose a minimum window size is an open product decision.
