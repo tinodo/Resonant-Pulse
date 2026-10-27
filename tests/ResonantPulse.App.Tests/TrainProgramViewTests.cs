@@ -68,4 +68,30 @@ public sealed class TrainProgramViewTests
         Assert.AreNotEqual(whilePlaying, afterStop, "the page is rebuilt when the view changes");
         Assert.AreEqual(new TrainProgramView(false, ProgramNote.None), afterStop);
     }
+
+    [TestMethod]
+    public void ARunThatHasCompletedIsNotPlayingEvenThoughTheTransportStillHoldsItsRevision()
+    {
+        // Studio removed the program while it played; the run then finished by itself (or reached a practice limit). The
+        // transport keeps the revision until Stop, but nothing plays any more.
+        var completed = TrainProgramView.Of([], Warmup, runCompleted: true);
+        Assert.AreEqual(new TrainProgramView(false, ProgramNote.None), completed);
+        Assert.AreEqual(ProgramNote.Removed, TrainProgramView.Of([], Warmup, runCompleted: false).Note,
+            "while it still plays the note stands");
+    }
+
+    [TestMethod]
+    public void ACompletedRunLeavesNoNoteAboutAChangedProgram()
+    {
+        var changed = new[] { Step("Warm up"), Step("Build", 120) };
+        Assert.AreEqual(new TrainProgramView(true, ProgramNote.None), TrainProgramView.Of(changed, Warmup, runCompleted: true));
+    }
+
+    [TestMethod]
+    public void WhenTheRunCompletesTheViewChangesSoThePageIsBuiltAgain()
+    {
+        Assert.AreNotEqual(TrainProgramView.Of([], Warmup, runCompleted: false), TrainProgramView.Of([], Warmup, runCompleted: true));
+        Assert.AreEqual(TrainProgramView.Of([], null, runCompleted: false), TrainProgramView.Of([], Warmup, runCompleted: true),
+            "and a completed run looks like a stopped one");
+    }
 }

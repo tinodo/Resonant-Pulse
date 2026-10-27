@@ -39,7 +39,8 @@ public sealed partial class MainWindow
         _position.TextAlignment = TextAlignment.Center;
         // What plays can be a program the project no longer holds (a Studio edit is heard from the next Start), so the readouts
         // follow the revision that plays as well as the project.
-        var view = TrainProgramView.Of(_document.Program, _transport.Snapshot().Revision?.Document.Program);
+        var current = _transport.Snapshot();
+        var view = TrainProgramView.Of(_document.Program, current.Revision?.Document.Program, current.State == TransportState.Completed);
         _trainProgramView = view;
         var hasProgram = view.Readouts;
         // The chart, progress bar and step status only mean something when there is a program to follow.

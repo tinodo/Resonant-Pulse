@@ -143,10 +143,14 @@ public sealed partial class MainWindow
                 Identify(item, $"StageSong{index}", songs[index].Name);
                 _stageList.Items.Add(item);
             }
-            _stageList.SelectionChanged += async (_, _) =>
+            _stageList.SelectionChanged += async (sender, _) =>
             {
-                if (_stageSyncing || _stageList is null || _stageList.SelectedIndex < 0) return;
+                // Only the list this page shows speaks for the selection; one that has been replaced no longer does.
+                if (_stageSyncing || _stageList is null || !ReferenceEquals(sender, _stageList)) return;
+                // Clearing the selection (Ctrl+click, an assistive technology) means no song is up next. It goes through the
+                // same guarded path as choosing a song, so the list, the badge, the notes and Next always agree.
                 var requested = _stageList.SelectedIndex;
+                if (requested == (HasArmedSong ? _armedSong : -1)) return;
                 await GuardAsync(async () =>
                 {
                     var accepted = await RunStageOperationAsync(() =>

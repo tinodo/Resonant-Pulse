@@ -19,7 +19,8 @@ public sealed partial class MainWindow
         // The program card of the Train page follows what plays as well as the project. When that changes (a run ends, so a
         // program that was removed in Studio is no longer playing) the page is built again.
         if (_view == "Train" && !_trainRebuilding &&
-            _trainProgramView != TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program))
+            _trainProgramView != TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program,
+                snapshot.State == TransportState.Completed))
         {
             _trainRebuilding = true;
             try { BuildPage(); }

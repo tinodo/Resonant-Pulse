@@ -29,4 +29,14 @@ internal readonly record struct TrainProgramView(bool Readouts, ProgramNote Note
             : edited.Count == 0 ? ProgramNote.Removed : ProgramNote.Changed;
         return new(readouts, note);
     }
+
+    /// <summary>
+    /// A run that has completed (it reached its end or a practice limit) keeps its revision until Stop, but nothing plays any
+    /// more: it counts as no program playing, so a program removed in Studio does not keep claiming to play.
+    /// </summary>
+    /// <param name="edited">The program of the project as it is now.</param>
+    /// <param name="retained">The program of the revision the transport holds, or null when it holds none.</param>
+    /// <param name="runCompleted">The transport's run has completed.</param>
+    public static TrainProgramView Of(IReadOnlyList<ProgramStep> edited, IReadOnlyList<ProgramStep>? retained, bool runCompleted) =>
+        Of(edited, runCompleted ? null : retained);
 }
