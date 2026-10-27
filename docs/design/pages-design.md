@@ -106,7 +106,8 @@ is specified in `metronome-design.md` and is not changed here.
   tooltip, and the sentence is shown in the setlist card only while the lock is on, where it explains why the setlist
   commands are greyed out.
 - Closing the window commits the field being typed in, then switches every control that edits the project or the settings
-  off (the page area, the audio options and any open panel; a question that is open is answered No), switches Start off too
+  off (the page area, the audio options and any open panel; a question that is open is answered No, and one that a request
+  still loading would ask now is not asked at all), switches Start off too
   (Stop and Mute stay available, so nothing new starts to play while the last save is made), waits for the saves,
   and switches them on again if closing is refused, so nothing typed or confirmed during the last save can be missed by
   it. Undo and Redo in Studio wait for the notes saves first, so they act on the latest completed edit; when the song that

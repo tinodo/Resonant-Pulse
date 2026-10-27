@@ -652,8 +652,8 @@ public sealed partial class MainWindow
             openCustomWhenClosed = false;
             DispatcherQueue.TryEnqueue(() =>
             {
-                // The page may have been rebuilt (or the window closed) since the picker closed.
-                if (!_isClosed && chip.XamlRoot is not null) rhythm.Flyout.ShowAt(chip);
+                // The page may have been rebuilt (or the window closed, or be closing) since the picker closed.
+                if (!_isClosed && !_closeFlushing && chip.XamlRoot is not null) rhythm.Flyout.ShowAt(chip);
             });
         };
         custom.HorizontalAlignment = HorizontalAlignment.Stretch;

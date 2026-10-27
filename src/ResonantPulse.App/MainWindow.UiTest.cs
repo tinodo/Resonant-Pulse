@@ -29,6 +29,7 @@ public sealed partial class MainWindow
         var textScale = Tiny(new Button());
         var replace = Tiny(new Button());
         var holdClose = Tiny(new Button());
+        var ask = Tiny(new Button());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
         Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
@@ -36,9 +37,13 @@ public sealed partial class MainWindow
         Identify(textScale, "UiTestTextScale", "ui test text scale");
         Identify(replace, "UiTestReplaceProject", "ui test replace project");
         Identify(holdClose, "UiTestHoldClose", "ui test hold close");
+        Identify(ask, "UiTestAskQuestion", "ui test ask question");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
+        // Stands in for a request that was still loading when the window began to close (an Open validating its file) and now
+        // asks whether to replace the project.
+        ask.Click += async (_, _) => await GuardAsync(async () => { _ = await ConfirmAsync("Replace the project? (ui test)"); });
         // Makes the last save of the next close take twelve seconds longer, so the window can be looked at while it closes.
-        holdClose.Click += (_, _) => _uiTestCloseHold = TimeSpan.FromSeconds(12);
+        holdClose.Click += (_, _) => _uiTestCloseHold = TimeSpan.FromSeconds(25);
         // Stands in for Ctrl+O on the Stage page (a keystroke a private desktop cannot send): the project is replaced by an empty
         // one, and the replacement is held open for three seconds so the page can be looked at while it runs.
         replace.Click += async (_, _) =>
@@ -65,6 +70,7 @@ public sealed partial class MainWindow
         host.Children.Add(textScale);
         host.Children.Add(replace);
         host.Children.Add(holdClose);
+        host.Children.Add(ask);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");
