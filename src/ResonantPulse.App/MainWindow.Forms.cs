@@ -244,6 +244,9 @@ public sealed partial class MainWindow
         return whole;
     }
 
+    /// <summary>The question being asked, if any. Closing the window dismisses it (as Cancel): nothing is confirmed while it saves.</summary>
+    private ContentDialog? _confirmation;
+
     private async Task<bool> ConfirmAsync(string message, string primary = "Continue")
     {
         if (_isDialogOpen) return false;
@@ -273,8 +276,13 @@ public sealed partial class MainWindow
                 args.Handled = true;
             };
             dialog.KeyboardAccelerators.Add(mute);
+            _confirmation = dialog;
             return await dialog.ShowAsync() == ContentDialogResult.Primary;
         }
-        finally { _isDialogOpen = false; }
+        finally
+        {
+            _confirmation = null;
+            _isDialogOpen = false;
+        }
     }
 }

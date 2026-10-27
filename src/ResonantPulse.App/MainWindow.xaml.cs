@@ -410,6 +410,9 @@ public sealed partial class MainWindow : Window
     private async Task UndoAsync(bool redo, int? expectedRevision = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
+        // Notes typed or on their way belong to the project as it is now. They are saved first, in order, so the undo acts on the
+        // latest completed edit and no save that was queued behind it can land on top of its result (and clear what Redo holds).
+        if (!await FlushStageNotesAsync()) return;
         await DocumentPublication.RunAsync(_edits, async published =>
         {
             if (_isLocked) { ShowNotice("Locked"); return; }
@@ -420,6 +423,8 @@ public sealed partial class MainWindow : Window
             if (source.Count == 0) return;
             target.Push(_document);
             _document = source.Pop();
+            // The setlist may be shorter now; the song that was up next may not exist any more.
+            if (_armedSong >= _document.Setlist.Count) _armedSong = -1;
             _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);

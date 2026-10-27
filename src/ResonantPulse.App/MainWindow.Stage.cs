@@ -161,7 +161,7 @@ public sealed partial class MainWindow
             };
 
             var up = StageControl(IconButton("\uE74A", "MoveUp", "SongMoveUp", () => RunStageOperationAsync(() => MoveSongAsync(-1), restructures: true)),
-                () => !_isLocked && _armedSong > 0);
+                () => !_isLocked && HasArmedSong && _armedSong > 0);
             var down = StageControl(IconButton("\uE74B", "MoveDown", "SongMoveDown", () => RunStageOperationAsync(() => MoveSongAsync(1), restructures: true)),
                 () => !_isLocked && HasArmedSong && _armedSong < _document.Setlist.Count - 1);
             var remove = StageControl(ActionButton("Remove", "RemoveSong", () => RunStageOperationAsync(async () =>

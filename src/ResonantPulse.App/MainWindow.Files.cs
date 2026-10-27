@@ -12,8 +12,13 @@ public sealed partial class MainWindow
     private TextBlock? _libraryStatus;
     private TextBlock? _libraryNoMatch;
     private UIElement? _libraryEmpty;
+
+    /// <summary>True once the library has been read successfully. Until then (looking, or unable to) it is not "empty".</summary>
+    private bool _libraryScanned;
+
     private UIElement BuildLibrary()
     {
+        _libraryScanned = false;
         _search = TextInput("Search", "LibrarySearch", "", 280);
         _search.TextChanged += (_, _) => FilterLibrary();
         _libraryList = new ListView { MaxHeight = 320, SelectionMode = ListViewSelectionMode.Single };
@@ -36,6 +41,8 @@ public sealed partial class MainWindow
         };
         var save = ActionButton("SaveLibrary", "SaveToLibrary", async () =>
         {
+            // Notes typed or on their way belong to the project, so they are in the saved copy.
+            if (!await FlushStageNotesAsync()) return;
             await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
             ShowNotice("Saved");
             await RefreshLibraryAsync();
@@ -90,7 +97,9 @@ public sealed partial class MainWindow
         try { result = await _workspace.ListAsync(); }
         catch
         {
-            // Nothing is being looked for any more. The page says it could not look, and the caller reports the reason.
+            // Nothing is being looked for any more. The page says it could not look, and the caller reports the reason. A
+            // library that could not be read is not an empty one: no empty or no-match message, whatever is typed in Search.
+            _libraryScanned = false;
             _library = [];
             if (_libraryStatus is not null)
             {
@@ -103,6 +112,7 @@ public sealed partial class MainWindow
             throw;
         }
         _library = result.Items;
+        _libraryScanned = true;
         if (_libraryStatus is not null) _libraryStatus.Visibility = Visibility.Collapsed;
         FilterLibrary();
         if (result.Failures.Count > 0 || result.HasMore)
@@ -148,12 +158,14 @@ public sealed partial class MainWindow
             Identify(entry, $"LibraryProject{_libraryList.Items.Count}", item.Name);
             _libraryList.Items.Add(entry);
         }
-        // Nothing saved: the page says what the library is for. Saved but nothing matches: say so, instead of a blank list.
+        // Nothing saved: the page says what the library is for. Saved but nothing matches: say so, instead of a blank list. Both
+        // are said only about a library that has been read: while it is being looked at, or when it could not be read, the
+        // status line is all the page says, however Search is edited.
         var empty = _library.Count == 0;
         _libraryList.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
-        if (_libraryEmpty is not null) _libraryEmpty.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (_libraryEmpty is not null) _libraryEmpty.Visibility = _libraryScanned && empty ? Visibility.Visible : Visibility.Collapsed;
         if (_libraryNoMatch is not null)
-            _libraryNoMatch.Visibility = !empty && _libraryList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            _libraryNoMatch.Visibility = _libraryScanned && !empty && _libraryList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task<string?> PickSavePathAsync(string extension, string description)

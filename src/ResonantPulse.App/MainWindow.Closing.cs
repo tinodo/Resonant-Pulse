@@ -91,6 +91,8 @@ public sealed partial class MainWindow
             _blockedPanels.Clear();
             return;
         }
+        // A question that is open (remove this song?) is answered No: nothing can be confirmed while the project is saved.
+        _confirmation?.Hide();
         if (Root.XamlRoot is not { } xamlRoot) return;
         foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot))
         {

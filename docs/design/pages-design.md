@@ -75,6 +75,8 @@ is specified in `metronome-design.md` and is not changed here.
 - **My projects:** search (up to 280), the list with name, *Open* (primary) and *Save current to library*; *New*,
   *Open file*, *Save as file* in the card header. States: loading ("Looking for projects..."), empty (what the library
   is and how to fill it), partial ("Showing the first 1000 projects"), read failures (named, with the rest still usable).
+  Empty and "no project matches" are said only about a library that was read successfully: while it is being looked at, or
+  when it could not be read, the status line is all the page says, whatever is typed in Search.
 - **Export:** one sentence per format; *Length when the project has no program: [16] bars* ("this many bars are
   rendered"); *Export WAV*, *Export MIDI*; a failure names the file and the reason.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,
@@ -100,8 +102,10 @@ is specified in `metronome-design.md` and is not changed here.
   tooltip, and the sentence is shown in the setlist card only while the lock is on, where it explains why the setlist
   commands are greyed out.
 - Closing the window commits the field being typed in, then switches every control that edits the project or the settings
-  off (the page area, the audio options and any open panel), waits for the saves, and switches them on again if closing is
-  refused, so nothing typed during the last save can be missed by it.
+  off (the page area, the audio options and any open panel; a question that is open is answered No), waits for the saves,
+  and switches them on again if closing is refused, so nothing typed or confirmed during the last save can be missed by
+  it. Undo and Redo in Studio wait for the notes saves first, so they act on the latest completed edit; when the song that
+  was up next is gone after an undo, nothing is up next and the commands that need a song are off.
 - Below 900 DIP the setlist moves under the display.
 
 ### Train

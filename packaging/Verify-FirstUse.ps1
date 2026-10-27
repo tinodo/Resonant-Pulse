@@ -290,12 +290,15 @@ function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
 }
 function Get-SettledStatus([string]$text) {
     $stillSince = [DateTime]::UtcNow
-    $limit = [DateTime]::UtcNow.AddSeconds(3)
+    $limit = [DateTime]::UtcNow.AddSeconds(6)
     while ([DateTime]::UtcNow -lt $limit) {
         Start-Sleep -Milliseconds 60
         $now = (Find-Control 'TransportStatus').Current.Name
         if ($now -ne $text) { $text = $now; $stillSince = [DateTime]::UtcNow }
-        elseif (([DateTime]::UtcNow - $stillSince).TotalMilliseconds -ge 300) { break }
+        # A finished run has no time left to play, so a readout that still shows some is not final, however long it has stood
+        # still: a busy machine can hold the display back for a moment (seen once, as 00:35 with a second left). It is read
+        # again until the limit; a readout that never reaches zero still fails the check that called this.
+        elseif (([DateTime]::UtcNow - $stillSince).TotalMilliseconds -ge 300 -and $text -notmatch 'Time remaining: (?!0:00:00)') { break }
     }
     return $text
 }
@@ -752,12 +755,19 @@ Wait-Condition { (Get-SongNotes) -eq $songNotes } 'Stage: the notes typed for th
 # The setlist is switched off while songs are being added, moved or removed, so a song cannot be chosen from rows that are about
 # to be replaced: Remove asks for confirmation inside the operation, so while the question is open the list is off, and after
 # Cancel it is on again with every song still in it. (It is not switched off for other operations: that would take the keyboard
-# focus away from it each time a song is chosen.)
+# focus away from it each time a song is chosen.) The dialog's buttons are found inside the dialog: the notice bar above the
+# transport has a close button with the same id.
+function Find-DialogButton([string]$id) {
+    $dialog = Find-Optional 'ConfirmationDialog'
+    if ($null -eq $dialog) { return $null }
+    $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants,
+        [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id))
+}
 Invoke-Control 'RemoveSong'
-Wait-Condition { $null -ne (Find-Optional 'CloseButton') } 'Stage: Remove did not ask for confirmation.'
+Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Stage: Remove did not ask for confirmation.'
 Wait-Condition { -not (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist can still be used while a song is being removed.'
-Invoke-Control 'CloseButton'
-Wait-Absent 'CloseButton'
+(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Stage: Cancel did not close the confirmation.'
 Wait-Condition { (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist stayed switched off after the removal was cancelled.'
 Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: cancelling the removal removed a song.'
 # Train: content-sized fields; with no program the page says how to get one; a timing check offers only the command that makes
