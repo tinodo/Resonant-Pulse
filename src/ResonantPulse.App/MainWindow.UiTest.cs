@@ -45,6 +45,17 @@ public sealed partial class MainWindow
         Diagnostics.Write("UI test capture hook installed (local verification build)");
     }
 
+    // Stands in for a larger Windows text size: with RESONANT_PULSE_UITEST_TEXTSCALE set (for example 2), every width that
+    // follows the text size is worked out as if the text were that big. That is what decides whether a field fits its room or
+    // gives way, which a private desktop cannot show by changing the real system setting (and must not).
+    static partial void AdjustTextScale(ref double scale)
+    {
+        if (double.TryParse(Environment.GetEnvironmentVariable("RESONANT_PULSE_UITEST_TEXTSCALE"),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var forced)
+            && forced > scale)
+            scale = forced;
+    }
+
     private static T Tiny<T>(T control) where T : Control
     {
         control.Width = control.Height = 2;

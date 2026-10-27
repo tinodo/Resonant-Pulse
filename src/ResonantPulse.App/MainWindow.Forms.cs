@@ -231,12 +231,17 @@ public sealed partial class MainWindow
         return number.Value;
     }
 
-    private static int Integer(NumberBox number)
+    private static int Integer(NumberBox number) => Integer(number.Value);
+
+    /// <summary>
+    /// A NumberBox shows a whole number rounded, but reports the fraction typed ("1.9" shows as 2 and is 1.9), so a count must be
+    /// checked rather than cast: the project should hold what the field shows or refuse it with a message.
+    /// </summary>
+    private static int Integer(double value)
     {
-        var value = Value(number);
-        if (value != Math.Truncate(value) || value is < int.MinValue or > int.MaxValue)
-            throw new ArgumentException(Text.Get("WholeNumber"));
-        return (int)value;
+        if (!double.IsFinite(value)) throw new ArgumentException(Text.Get("Error"));
+        if (!WholeNumbers.TryGet(value, out var whole)) throw new ArgumentException(Text.Get("WholeNumber"));
+        return whole;
     }
 
     private async Task<bool> ConfirmAsync(string message, string primary = "Continue")

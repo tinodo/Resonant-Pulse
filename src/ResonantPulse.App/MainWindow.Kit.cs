@@ -18,6 +18,20 @@ public sealed partial class MainWindow
 
     private static readonly Windows.UI.ViewManagement.UISettings TextSettings = new();
 
+    /// <summary>The Windows text size as a factor (1 is 100%), never below 1.</summary>
+    private static double TextScale
+    {
+        get
+        {
+            var scale = Math.Max(1, TextSettings.TextScaleFactor);
+            AdjustTextScale(ref scale);
+            return scale;
+        }
+    }
+
+    // Lets the local verification build stand in for a larger text size (MainWindow.UiTest.cs); shipped builds have no body.
+    static partial void AdjustTextScale(ref double scale);
+
     // ---- page structure ----------------------------------------------------------------------------------------------
 
     /// <summary>A scrolling page: title (and an optional line of purpose and page-level actions), then cards.</summary>
@@ -29,7 +43,10 @@ public sealed partial class MainWindow
         heading.Children.Add(title);
         if (purposeKey is not null)
             heading.Children.Add(new TextBlock { Text = Text.Get(purposeKey), Style = ResonantStyle("NoteStyle") });
-        var stack = new StackPanel { Spacing = 16, MaxWidth = FormMetrics.PageMaxWidth, HorizontalAlignment = HorizontalAlignment.Center };
+        // Stretch with a maximum, not Center: a centred stack is as wide as its content, so a two-pane page that changes its
+        // content when its width crosses the breakpoint would change its own width and never settle (a layout cycle). A
+        // stretched element with a maximum is centred in a wider slot anyway.
+        var stack = new StackPanel { Spacing = 16, MaxWidth = FormMetrics.PageMaxWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
         stack.Children.Add(HeaderRow(heading, actions));
         foreach (var item in content) stack.Children.Add(item);
         return new ScrollViewer
@@ -128,13 +145,14 @@ public sealed partial class MainWindow
         text.Children.Add(title);
         if (descriptionKey is not null)
             text.Children.Add(new TextBlock { Text = Text.Get(descriptionKey), Style = ResonantStyle("NoteStyle") });
-        control.VerticalAlignment = VerticalAlignment.Center;
+        var host = Bounded(control);
+        host.VerticalAlignment = VerticalAlignment.Center;
         AutomationProperties.SetLabeledBy(control, title);
         if (string.IsNullOrEmpty(AutomationProperties.GetName(control))) AutomationProperties.SetName(control, title.Text);
 
         var row = new Grid { ColumnSpacing = 24, RowSpacing = 8, MinHeight = 44 };
         row.Children.Add(text);
-        row.Children.Add(control);
+        row.Children.Add(host);
         bool? sideBySide = null;
         void Arrange(double width)
         {
@@ -147,17 +165,17 @@ public sealed partial class MainWindow
             {
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                Grid.SetRow(control, 0);
-                Grid.SetColumn(control, 1);
-                control.HorizontalAlignment = HorizontalAlignment.Right;
+                Grid.SetRow(host, 0);
+                Grid.SetColumn(host, 1);
+                host.HorizontalAlignment = HorizontalAlignment.Right;
                 return;
             }
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(control, 1);
-            Grid.SetColumn(control, 0);
-            control.HorizontalAlignment = HorizontalAlignment.Left;
+            Grid.SetRow(host, 1);
+            Grid.SetColumn(host, 0);
+            host.HorizontalAlignment = HorizontalAlignment.Left;
         }
         Arrange(0);
         row.SizeChanged += (_, args) => Arrange(args.NewSize.Width);
@@ -199,7 +217,7 @@ public sealed partial class MainWindow
             : Number(captionKey, id, value, minimum, maximum, step, fractionDigits);
         box.Header = null;
         box.HorizontalAlignment = HorizontalAlignment.Left;
-        box.Width = FormMetrics.NumberWidth(minimum, maximum, fractionDigits, TextSettings.TextScaleFactor);
+        box.Width = FormMetrics.NumberWidth(minimum, maximum, fractionDigits, TextScale);
         return box;
     }
 
@@ -232,21 +250,23 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// A caption above a field, with an optional unit after it ("seconds"). The caption is the control's own name, and the
-    /// control is linked to it, so a screen reader never meets an unnamed edit box.
+    /// Hosts a field at the width it was sized for but never wider than the room it is offered, so it cannot be clipped by a
+    /// narrow window or a large text size. A number box whose steppers no longer fit switches to compact ones.
     /// </summary>
-    private static StackPanel Field(FrameworkElement control, string? unitKey = null)
+    private static FrameworkElement Bounded(FrameworkElement control)
     {
-        var caption = AutomationProperties.GetName(control);
-        var label = new TextBlock { Text = caption, Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
-        AutomationProperties.SetLabeledBy(control, label);
-        var field = new StackPanel
+        if ((control is NumberBox || control is ComboBox) && double.IsFinite(control.Width))
         {
-            HorizontalAlignment = control.HorizontalAlignment == HorizontalAlignment.Stretch
-                ? HorizontalAlignment.Stretch : HorizontalAlignment.Left
-        };
-        field.Children.Add(label);
-        UIElement body = control;
+            var preferred = control.Width;
+            control.Width = double.NaN;
+            control.HorizontalAlignment = HorizontalAlignment.Stretch;
+            var host = new FitWidth { PreferredWidth = preferred, HorizontalAlignment = HorizontalAlignment.Left };
+            host.Children.Add(control);
+            if (control is NumberBox box)
+                host.SizeChanged += (_, args) => box.SpinButtonPlacementMode = FormMetrics.SteppersInline(args.NewSize.Width, preferred)
+                    ? NumberBoxSpinButtonPlacementMode.Inline : NumberBoxSpinButtonPlacementMode.Compact;
+            return host;
+        }
         if (control.HorizontalAlignment == HorizontalAlignment.Stretch && double.IsFinite(control.MaxWidth))
         {
             // A stretched control with a MaxWidth would be centred in a wider slot. A star column with the same maximum keeps
@@ -255,8 +275,28 @@ public sealed partial class MainWindow
             host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = control.MaxWidth });
             control.MaxWidth = double.PositiveInfinity;
             host.Children.Add(control);
-            body = host;
+            return host;
         }
+        return control;
+    }
+
+    /// <summary>
+    /// A caption above a field, with an optional unit after it ("seconds"); the unit moves under the field when the row is
+    /// too narrow for both. The caption is the control's own name, and the control is linked to it, so a screen reader never
+    /// meets an unnamed edit box.
+    /// </summary>
+    private static StackPanel Field(FrameworkElement control, string? unitKey = null)
+    {
+        var caption = AutomationProperties.GetName(control);
+        var label = new TextBlock { Text = caption, Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetLabeledBy(control, label);
+        var body = Bounded(control);
+        var field = new StackPanel
+        {
+            HorizontalAlignment = body.HorizontalAlignment == HorizontalAlignment.Stretch
+                ? HorizontalAlignment.Stretch : HorizontalAlignment.Left
+        };
+        field.Children.Add(label);
         if (unitKey is null)
         {
             field.Children.Add(body);
@@ -264,38 +304,35 @@ public sealed partial class MainWindow
         }
         var unit = new TextBlock { Text = Text.Get(unitKey), Style = ResonantStyle("NoteStyle"), VerticalAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(control, $"{caption} ({unit.Text})");
-        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        line.Children.Add(body);
-        line.Children.Add(unit);
-        field.Children.Add(line);
+        field.Children.Add(Wrapped(8, 4, [body, unit]));
         return field;
     }
 
-    /// <summary>Number boxes of one width in a column, each followed by its unit: "[ 300 ] seconds". The unit is the label.</summary>
-    private static Grid UnitRows(string captionKey, params (NumberBox Box, string UnitKey)[] rows)
+    /// <summary>
+    /// Number boxes of one width in a column, each followed by its unit: "[ 300 ] seconds". The unit is the label. A box
+    /// never gets wider than the room it is offered, and every unit moves under its box together when a row is too narrow.
+    /// </summary>
+    private static StackPanel UnitRows(string captionKey, params (NumberBox Box, string UnitKey)[] rows)
     {
-        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8, HorizontalAlignment = HorizontalAlignment.Left };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var width = rows.Max(row => row.Box.Width);
+        var units = rows.Select(row => Text.Get(row.UnitKey)).ToArray();
+        // Equal unit widths make every row wrap at the same width, and line the units up in a column when they fit.
+        var unitWidth = Math.Ceiling(WidestText(units));
+        var stack = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Left };
         for (var index = 0; index < rows.Length; index++)
         {
-            var (box, unitKey) = rows[index];
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var unit = Text.Get(unitKey);
+            var box = rows[index].Box;
             box.Width = width;
-            AutomationProperties.SetName(box, $"{Text.Get(captionKey)}: {unit}");
-            Grid.SetRow(box, index);
-            grid.Children.Add(box);
+            AutomationProperties.SetName(box, $"{Text.Get(captionKey)}: {units[index]}");
             var label = new TextBlock
             {
-                Text = unit, Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center
+                Text = units[index], Style = ResonantStyle("BodyStyle"), FontSize = 14, MinWidth = unitWidth,
+                VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetRow(label, index);
-            Grid.SetColumn(label, 1);
-            grid.Children.Add(label);
+            // A unit that wraps sits 2 DIP under its box; the 14 DIP between rows keeps it with the box it belongs to.
+            stack.Children.Add(Wrapped(8, 2, [Bounded(box), label]));
         }
-        return grid;
+        return stack;
     }
 
     private static double WidestText(IEnumerable<string> texts)
@@ -318,33 +355,33 @@ public sealed partial class MainWindow
     /// Applies the commit contract to a number box. A NumberBox raises ValueChanged only when the user commits (Enter, focus
     /// leaving, a stepper), so an empty or invalid draft never reaches the project: it reverts to the last committed value.
     /// If the commit itself fails, the box returns to the committed value too, and the error is shown.
+    /// Commits run one at a time, in the order they were made: a slow save never lets a later edit overtake it, and a revert
+    /// always shows the value of the latest commit that actually succeeded. When a newer edit is already waiting, an older
+    /// failure leaves the box alone, because the newer edit decides what it shows.
     /// </summary>
     private void CommitNumber(NumberBox box, Func<double, Task> commit)
     {
-        var committed = box.Value;
+        var commits = new OrderedCommits(box.Value);
         var reverting = false;
         void Revert()
         {
             reverting = true;
-            box.Value = committed;
+            box.Value = commits.Committed;
             reverting = false;
         }
-        box.ValueChanged += async (_, args) =>
+        box.ValueChanged += (sender, args) =>
         {
             if (reverting) return;
-            if (!double.IsFinite(args.NewValue))
+            _ = commits.Propose(args.NewValue, async value =>
             {
-                Revert();
-                return;
-            }
-            var applied = false;
-            await GuardAsync(async () =>
-            {
-                await commit(args.NewValue);
-                applied = true;
-            });
-            if (applied) committed = args.NewValue;
-            else Revert();
+                var applied = false;
+                await GuardAsync(async () =>
+                {
+                    await commit(value);
+                    applied = true;
+                });
+                return applied;
+            }, Revert);
         };
     }
 

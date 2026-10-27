@@ -22,8 +22,16 @@ public sealed partial class MainWindow
         var exportBars = NumberInput("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
         CommitNumber(exportBars, async value =>
         {
-            _preferences.ExportBars = (int)value;
-            await _workspace.SavePreferencesAsync(_preferences);
+            // Commits run one at a time, so the value to roll back to is always the last one that was saved.
+            var bars = Integer(value);
+            var previous = _preferences.ExportBars;
+            _preferences.ExportBars = bars;
+            try { await _workspace.SavePreferencesAsync(_preferences); }
+            catch
+            {
+                _preferences.ExportBars = previous;
+                throw;
+            }
         });
         var exportLength = new StackPanel { Spacing = 4, Children = { Field(exportBars, "UnitBars"), Note("ExportBarsHelp") } };
         var panel = Column(Heading(Text.Get("Library")), _search, _libraryList,

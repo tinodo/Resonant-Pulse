@@ -69,6 +69,42 @@ public sealed class FormMetricsTests
     }
 
     [TestMethod]
+    public void FooterButtonsShareTheirWidthAndShrinkTogetherInANarrowPanel()
+    {
+        // Two 120 DIP buttons and an 8 DIP gap need 248; the smallest panel is 240, which used to clip Cancel.
+        Assert.AreEqual(120, FormMetrics.FooterCell(560, 8, 2, 120));
+        Assert.AreEqual(120, FormMetrics.FooterCell(248, 8, 2, 120));
+        Assert.AreEqual(116, FormMetrics.FooterCell(240, 8, 2, 120));
+        Assert.AreEqual(120, FormMetrics.FooterCell(240, 8, 1, 120));
+        Assert.AreEqual(0, FormMetrics.FooterCell(4, 8, 2, 120));
+        // Whatever the width, the pair together never exceeds the panel.
+        foreach (var width in new[] { 100d, 199, 240, 247, 248, 300 })
+            Assert.IsTrue(2 * FormMetrics.FooterCell(width, 8, 2, 120) + 8 <= Math.Max(width, 8), $"{width}");
+    }
+
+    [TestMethod]
+    public void AFieldNeverGetsMoreRoomThanItWasOffered()
+    {
+        Assert.AreEqual(187, FormMetrics.Fit(187, 400));
+        // The Timer's largest box at 200% text (250 DIP) in a 320 DIP window, where the card leaves 228.
+        Assert.AreEqual(228, FormMetrics.Fit(250, 228));
+        // A measuring pass with no limit gets the field's own width.
+        Assert.AreEqual(187, FormMetrics.Fit(187, double.PositiveInfinity));
+        Assert.AreEqual(0, FormMetrics.Fit(187, -5));
+        Assert.AreEqual(0, FormMetrics.Fit(187, 0));
+    }
+
+    [TestMethod]
+    public void StepperButtonsStayInlineOnlyWhenTheBoxKeepsItsFullWidth()
+    {
+        Assert.IsTrue(FormMetrics.SteppersInline(187, 187));
+        Assert.IsTrue(FormMetrics.SteppersInline(400, 187));
+        Assert.IsFalse(FormMetrics.SteppersInline(228, 250));
+        // Layout rounding must not flip the mode.
+        Assert.IsTrue(FormMetrics.SteppersInline(249.6, 250));
+    }
+
+    [TestMethod]
     public void WrapRowsKeepChildrenOnOneRowWhileTheyFit()
     {
         CollectionAssert.AreEqual(new[] { 0 }, WrapRows.Starts([100, 100, 100], 320, 10).ToArray());

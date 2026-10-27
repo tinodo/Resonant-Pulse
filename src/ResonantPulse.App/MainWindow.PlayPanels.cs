@@ -32,8 +32,9 @@ public sealed partial class MainWindow
         scroll.Padding = new Thickness(0, 0, 12, 0);
         var error = new TextBlock { Style = ResonantStyle("ErrorTextStyle"), Visibility = Visibility.Collapsed };
         Identify(error, id + "Error", Text.Get("Error"));
-        // [Cancel] [Done] are one pair: equal fixed-width cells, and each button stretches to the cell, so they are the
-        // same size however either one's style or label changes.
+        // [Cancel] [Done] are one pair: equal cells, each button stretches to its cell, so they are the same size however
+        // either one's style or label changes. The cell width is set when the panel opens (FitFooter), so a panel narrower
+        // than the pair makes both buttons narrower together instead of clipping one.
         var done = new Button
         {
             Style = ResonantStyle("PrimaryButtonStyle"),
@@ -55,28 +56,28 @@ public sealed partial class MainWindow
         Grid.SetColumn(done, footer.ColumnDefinitions.Count - 1);
         footer.Children.Add(done);
 
+        // Rows exist only for what is shown (Grid.RowSpacing is paid between every pair of rows, even empty ones), and the
+        // scrolling middle takes whatever height is left, so the footer stays on screen (see SizeOptionsFlyout).
         var panel = new Grid { RowSpacing = 12 };
-        for (var row = 0; row < 5; row++) panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        panel.Children.Add(title);
-        if (helpKey is not null)
+        var rows = 0;
+        void Place(FrameworkElement element, GridLength height)
         {
-            var help = new TextBlock { Text = Text.Get(helpKey), Style = ResonantStyle("CaptionStyle") };
-            Grid.SetRow(help, 1);
-            panel.Children.Add(help);
+            panel.RowDefinitions.Add(new RowDefinition { Height = height });
+            Grid.SetRow(element, rows++);
+            panel.Children.Add(element);
         }
-        Grid.SetRow(scroll, 2);
-        panel.Children.Add(scroll);
-        Grid.SetRow(error, 3);
-        panel.Children.Add(error);
-        Grid.SetRow(footer, 4);
-        panel.Children.Add(footer);
+        Place(title, GridLength.Auto);
+        if (helpKey is not null) Place(new TextBlock { Text = Text.Get(helpKey), Style = ResonantStyle("CaptionStyle") }, GridLength.Auto);
+        Place(scroll, new GridLength(1, GridUnitType.Star));
+        // The inline error sits just above the footer; while it is hidden it takes no room.
+        Place(new StackPanel { Spacing = 8, Children = { error, footer } }, GridLength.Auto);
         panel.KeyDown += OnKeyDown;
 
         var flyout = new Flyout { Content = panel };
         var isOpen = false;
         flyout.Opening += (_, _) =>
         {
-            SizeOptionsFlyout(flyout, panel, scroll);
+            SizeOptionsFlyout(flyout, panel, scroll, footer);
             error.Visibility = Visibility.Collapsed;
             populate?.Invoke();
         };
@@ -106,12 +107,23 @@ public sealed partial class MainWindow
         return new OptionPanel(flyout);
     }
 
-    private void SizeOptionsFlyout(Flyout flyout, Grid panel, ScrollViewer scroll)
+    /// <summary>
+    /// Sizes a panel to the window. A code-built panel (it has a footer) lets its scrolling middle take the height left after
+    /// the title, help and footer, and its presenter does not scroll, so Cancel and Done are always on screen wherever Windows
+    /// places the flyout: Auto placement above a button low in a small window leaves a fraction of the window, and a fixed
+    /// height budget would push the footer out of sight. The Audio panel (built in XAML) keeps its fixed budget.
+    /// </summary>
+    private void SizeOptionsFlyout(Flyout flyout, Grid panel, ScrollViewer scroll, Grid? footer = null)
     {
-        scroll.MaxHeight = Math.Max(100, Root.ActualHeight - 220);
+        if (footer is null) scroll.MaxHeight = Math.Max(100, Root.ActualHeight - 220);
         panel.Width = Math.Clamp(Root.ActualWidth - 100, 240, 560);
+        if (footer is not null)
+        {
+            var cell = FormMetrics.FooterCell(panel.Width, footer.ColumnSpacing, footer.ColumnDefinitions.Count, FooterButtonWidth);
+            foreach (var column in footer.ColumnDefinitions) column.Width = new GridLength(cell);
+        }
         panel.RequestedTheme = Root.RequestedTheme;
-        flyout.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
+        var presenter = new Style(typeof(FlyoutPresenter))
         {
             Setters =
             {
@@ -120,6 +132,12 @@ public sealed partial class MainWindow
                 new Setter(Microsoft.UI.Xaml.Controls.Control.PaddingProperty, new Thickness(16))
             }
         };
+        if (footer is not null)
+        {
+            presenter.Setters.Add(new Setter(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled));
+            presenter.Setters.Add(new Setter(ScrollViewer.VerticalScrollModeProperty, ScrollMode.Disabled));
+        }
+        flyout.FlyoutPresenterStyle = presenter;
     }
 
     private static TextBlock SectionHeading(string key) => new()
@@ -168,7 +186,7 @@ public sealed partial class MainWindow
         var tempo = NumberInput("Tempo", "Tempo", settings.Tempo, 1, 1000, 1, 0, whole: false);
         tempo.FontSize = 24;
         // The digits are drawn at 24 pt, so this box is wider than the 14 pt rule gives.
-        tempo.Width = Math.Max(tempo.Width, 200 * Math.Max(1, TextSettings.TextScaleFactor));
+        tempo.Width = Math.Max(tempo.Width, 200 * TextScale);
         var unit = Dropdown("Unit", "TempoUnit", Invariant(settings.BeatUnitQuarters), TempoUnitChoices(settings));
         var half = ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, Math.Round(tempo.Value / 2, 1)); });
         var twice = ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, Math.Round(tempo.Value * 2, 1)); });
@@ -366,26 +384,40 @@ public sealed partial class MainWindow
         content.Children.Add(Copy("LiveSoundHint"));
         content.Children.Add(SectionHeading("HelpShortcuts"));
         var ctrl = Text.Get("KeyCtrl");
-        content.Children.Add(Shortcut(Text.Get("KeySpace"), Text.Get("ShortcutStart")));
-        content.Children.Add(Shortcut($"{ctrl} + M", Text.Get("ShortcutMute")));
-        content.Children.Add(Shortcut($"{ctrl} + S", Text.Get("Save")));
-        content.Children.Add(Shortcut($"{ctrl} + O", Text.Get("Open")));
-        content.Children.Add(Shortcut("F", Text.Format("ShortcutHit", Text.Get("Train"))));
+        content.Children.Add(Shortcuts(
+            (Text.Get("KeySpace"), Text.Get("ShortcutStart")),
+            ($"{ctrl} + M", Text.Get("ShortcutMute")),
+            ($"{ctrl} + S", Text.Get("Save")),
+            ($"{ctrl} + O", Text.Get("Open")),
+            ("F", Text.Format("ShortcutHit", Text.Get("Train")))));
         return CreateOptionPanel("HelpTab", "PlayHelpPanel", content, null, null, null);
     }
 
-    /// <summary>A keyboard shortcut: the key drawn as a keycap, then what it does.</summary>
-    private static Grid Shortcut(string keys, string description)
+    /// <summary>
+    /// Keyboard shortcuts: each key drawn as a keycap, then what it does. One grid, so the keycap column is as wide as the
+    /// widest key at any text size and the descriptions line up; a long description wraps instead of being clipped.
+    /// </summary>
+    private static Grid Shortcuts(params (string Keys, string Description)[] rows)
     {
-        var row = new Grid { ColumnSpacing = 12 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96 * Math.Max(1, TextSettings.TextScaleFactor)) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var chip = KeyChip(keys);
-        chip.HorizontalAlignment = HorizontalAlignment.Left;
-        row.Children.Add(chip);
-        var text = new TextBlock { Text = description, Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(text, 1);
-        row.Children.Add(text);
-        return row;
+        var grid = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var index = 0; index < rows.Length; index++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var chip = KeyChip(rows[index].Keys);
+            chip.HorizontalAlignment = HorizontalAlignment.Left;
+            Grid.SetRow(chip, index);
+            grid.Children.Add(chip);
+            var text = new TextBlock
+            {
+                Text = rows[index].Description, Style = ResonantStyle("BodyStyle"), FontSize = 14,
+                TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetRow(text, index);
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(text);
+        }
+        return grid;
     }
 }

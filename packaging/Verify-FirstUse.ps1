@@ -628,6 +628,41 @@ foreach ($panel in $panels) {
     Invoke-Control $panel.close
     Wait-Absent $panel.field
 }
+# At the smallest windows a panel still fits: its Cancel/Done pair is on screen, and the pair and the fields stay between the
+# panel's own edges. Both failed in a shipped build: a pair wider than a narrow panel poked out and was clipped, and a panel
+# that Windows placed above a button low in a short window was cut off above its footer.
+foreach ($size in @(@(320, 900), @(400, 720))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
+    foreach ($panel in $panels) {
+        if ($panel.close -notlike '*Cancel') { continue }
+        $where = "Panel $($panel.open[-1]) at $($size[0])x$($size[1])"
+        $doneId = $panel.close -replace 'Cancel$', 'Done'
+        Open-Panel $panel.open $panel.field
+        Wait-Settled $panel.field
+        $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+        $edge = (Find-Control $panel.field).Current.BoundingRectangle.Left
+        $cancel = (Find-Control $panel.close).Current.BoundingRectangle
+        $done = (Find-Control $doneId).Current.BoundingRectangle
+        Test-Visible $cancel $windowRect "$where $($panel.close)"
+        Test-Visible $done $windowRect "$where $doneId"
+        $tolerance = 2 * $scale
+        if ($cancel.Left -lt $edge - $tolerance) { throw "${where}: Cancel pokes out of the panel ($($cancel.Left) is left of $edge)." }
+        foreach ($id in $panel.limits.Keys) {
+            $rect = (Find-Control $id).Current.BoundingRectangle
+            # A field scrolled out of view reports no rectangle; its place along the row is checked wherever it has one.
+            if ($rect.IsEmpty) { continue }
+            if ($rect.Left -lt $edge - $tolerance -or $rect.Right -gt $done.Right + $tolerance) {
+                throw "${where}: $id does not fit between the panel's edges ($rect, panel content $edge to $($done.Right))."
+            }
+        }
+        Test-Pair $panel.close $doneId
+        Invoke-Control $panel.close
+        Wait-Absent $panel.field
+    }
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 # Settings and Library: content-sized fields, a switch that takes effect as it is toggled, and no Apply button.
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'

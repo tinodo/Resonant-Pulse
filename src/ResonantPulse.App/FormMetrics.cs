@@ -44,6 +44,26 @@ internal static class FormMetrics
     internal static double SelectWidth(double longestText) =>
         Math.Clamp(Math.Ceiling(longestText + SelectChrome), SelectMinWidth, SelectMaxWidth);
 
+    /// <summary>
+    /// The width a field gets: its own preferred width, but never more than the room it was offered, so a field cannot be
+    /// clipped by a narrow window or a large text size. Unbounded room (a measuring pass) gives the preferred width.
+    /// </summary>
+    internal static double Fit(double preferred, double available) =>
+        double.IsFinite(available) ? Math.Min(preferred, Math.Max(0, available)) : preferred;
+
+    /// <summary>
+    /// True when a number box got the room its inline steppers need. Below that it uses compact steppers, which appear over
+    /// the box only while it has focus, so the digits keep their room.
+    /// </summary>
+    internal static bool SteppersInline(double given, double preferred) => given >= preferred - 0.5;
+
+    /// <summary>
+    /// The width of each of <paramref name="count"/> equal footer buttons: <paramref name="preferred"/> when they fit in
+    /// <paramref name="panelWidth"/>, otherwise as wide as the panel allows, so a narrow panel never clips the pair.
+    /// </summary>
+    internal static double FooterCell(double panelWidth, double spacing, int count, double preferred) =>
+        Math.Min(preferred, Math.Max(0, Math.Floor((panelWidth - spacing * Math.Max(0, count - 1)) / Math.Max(1, count))));
+
     /// <summary>The number of columns a two-pane page uses: one below the breakpoint, two from it.</summary>
     internal static int PageColumns(double width) => width >= TwoColumnBreakpoint ? 2 : 1;
 
