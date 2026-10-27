@@ -16,6 +16,15 @@ public sealed partial class MainWindow
         if (!_isReady || _isClosed) return;
         var snapshot = _transport.Snapshot();
         _transport.FinishCompleted();
+        // The program card of the Train page follows what plays as well as the project. When that changes (a run ends, so a
+        // program that was removed in Studio is no longer playing) the card is built again, in place: the rest of the page,
+        // the timing check with the choices made in it, is left alone.
+        if (_view == "Train" && _programHost is not null)
+        {
+            var view = TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program,
+                snapshot.State == TransportState.Completed);
+            if (view != _trainProgramView) _programHost.Content = BuildProgramBody(view);
+        }
         var active = snapshot.Revision?.Document ?? _document;
         var plan = snapshot.Plan;
         var frame = plan is null ? 0 : Math.Clamp(snapshot.MusicalFrame, 0, plan.TotalFrames - 1);
@@ -33,6 +42,15 @@ public sealed partial class MainWindow
             Groups = meterBeats == settings.BeatsPerBar && meterDenominator == settings.BeatDenominator ? settings.Groups : []
         };
         var phase = position is null ? 0 : (position.BeatIndex + position.BeatPhase) / meterBeats;
+        // The program card describes the program listed beside it. A finished run of a program that Studio has since changed does
+        // not, so after it the card shows the project's own program, idle, as after Stop.
+        var cardIdle = TrainProgramView.FinishedRunIsStale(_document.Program, snapshot.Revision?.Document.Program,
+            snapshot.State == TransportState.Completed);
+        var cardPlan = cardIdle ? null : plan;
+        var cardFrame = cardIdle ? 0 : frame;
+        PlaybackPosition? cardPosition = cardIdle ? null : position;
+        var cardSection = cardIdle ? null : section;
+        var cardBlind = !cardIdle && blind;
         // The readout shows what the player asked for while nothing plays a program; otherwise the audible tempo, so a
         // running program (or a running open-ended revision) is not misreported after a Studio edit changes the document.
         var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoRequested,
@@ -62,7 +80,7 @@ public sealed partial class MainWindow
         if (_tempoCurve is { } curve)
         {
             EnsureTempoPreview();
-            var presentation = _tempoCurveState.Select(_documentRevision, plan, frame, blind);
+            var presentation = _tempoCurveState.Select(_documentRevision, cardPlan, cardFrame, cardBlind);
             curve.Present(presentation.Plan, presentation.Frame, presentation.IsBlind);
         }
         var elapsed = plan is null ? TimeSpan.Zero : TimeSpan.FromSeconds((double)snapshot.ProcessedFrame / plan.SampleRate);
@@ -97,7 +115,8 @@ public sealed partial class MainWindow
         if (_position is not null) _position.Text = detail;
         if (_stageTempo is not null)
         {
-            _stageTempo.FontSize = Math.Clamp(Root.ActualWidth / 8, 32, 96);
+            // Follows the height as well as the width: in a short window a 96 pt number would push the up-next button out of sight.
+            _stageTempo.FontSize = Math.Clamp(Math.Min(Root.ActualWidth / 8, Root.ActualHeight / 9), 32, 96);
             _stageTempo.Text = blind ? Text.Get("Silent") : PulseInstrument.FormatTempo(tempo);
             if (_stageMeter is not null)
                 _stageMeter.Text = blind ? "" : $"BPM · {PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}";
@@ -114,7 +133,7 @@ public sealed partial class MainWindow
             var duration = TimeSpan.FromSeconds(Math.Ceiling((double)remaining / timed.Initial.SampleRate));
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }
-        StartButton.IsEnabled = !_isBusy && (snapshot.State == TransportState.Playing || HasSelectedOutput);
+        StartButton.IsEnabled = !_isBusy && !_closeFlushing && (snapshot.State == TransportState.Playing || HasSelectedOutput);
         StopButton.IsEnabled = snapshot.State != TransportState.Stopped;
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
@@ -130,20 +149,20 @@ public sealed partial class MainWindow
         }
         if (_programStatus is not null)
         {
-            _programStatus.Text = blind ? Text.Get("Silent") : position is null ? Text.Get("ProgramEmpty") :
-                $"{(position.IsCountIn ? Text.Get("CountInActive") : position.SectionName)} · {tempo.ToString("0.0", Text.Culture)} BPM · {meterBeats}/{meterDenominator}\n" +
-                Text.Format("Progress", TimeSpan.FromSeconds((double)frame / plan!.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture),
-                    TimeSpan.FromSeconds((double)plan.TotalFrames / plan.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture));
-            if (!blind && section is not null && plan is not null)
+            _programStatus.Text = cardBlind ? Text.Get("Silent") : cardPosition is null ? Text.Get("ProgramIdle") :
+                $"{(cardPosition.IsCountIn ? Text.Get("CountInActive") : cardPosition.SectionName)} · {tempo.ToString("0.0", Text.Culture)} BPM · {meterBeats}/{meterDenominator}\n" +
+                Text.Format("Progress", TimeSpan.FromSeconds((double)cardFrame / cardPlan!.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture),
+                    TimeSpan.FromSeconds((double)cardPlan.TotalFrames / cardPlan.SampleRate).ToString(@"hh\:mm\:ss", Text.Culture));
+            if (!cardBlind && cardSection is not null && cardPlan is not null)
             {
-                var next = plan.SectionBoundaries.FirstOrDefault(boundary => boundary.StartFrame >= section.EndFrame);
+                var next = cardPlan.SectionBoundaries.FirstOrDefault(boundary => boundary.StartFrame >= cardSection.EndFrame);
                 if (next is not null) _programStatus.Text += "\n" + Text.Format("NextSection", next.Name);
             }
         }
         if (_progress is not null)
         {
-            _progress.Visibility = blind ? Visibility.Collapsed : Visibility.Visible;
-            _progress.Value = plan is null ? 0 : Math.Clamp((double)frame / plan.TotalFrames, 0, 1);
+            _progress.Visibility = cardBlind ? Visibility.Collapsed : Visibility.Visible;
+            _progress.Value = cardPlan is null ? 0 : Math.Clamp((double)cardFrame / cardPlan.TotalFrames, 0, 1);
         }
         if (_isTimingArmed && System.Diagnostics.Stopwatch.GetElapsedTime(_timingStartTimestamp).TotalMinutes >= 10)
             FinishTiming();

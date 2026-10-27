@@ -81,7 +81,7 @@ public sealed partial class MainWindow
                     InvalidateTiming();
                     _transportIntent++;
                     _transport.Stop();
-                    _ = GuardAsync(() => _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document)));
+                    _ = GuardAsync(SaveRecoveryAsync);
                     RefreshSnapshot();
                 }
                 catch (Exception exception) { Diagnostics.Write("Power transition", exception); }

@@ -158,6 +158,7 @@ public sealed class EditorOperationGateTests
     [DataRow((int)EditorChangeKind.GlobalTempoOnly)]
     [DataRow((int)EditorChangeKind.PracticeTimerOnly)]
     [DataRow((int)EditorChangeKind.SoundAndAccentsOnly)]
+    [DataRow((int)EditorChangeKind.InPlaceField)]
     public async Task GlobalScalarPublicationWhileWaitingForEditsKeepsExistingEditorTokenValid(int changeValue)
     {
         var change = (EditorChangeKind)changeValue;

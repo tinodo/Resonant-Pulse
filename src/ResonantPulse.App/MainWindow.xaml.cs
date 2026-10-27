@@ -39,6 +39,8 @@ public sealed partial class MainWindow : Window
     private bool _isOutputMissing;
     private int _transportIntent;
     private int _documentRevision;
+    /// <summary>Counts the times the whole project was replaced (opened, new, a ready-made rhythm, the next song).</summary>
+    private int _projectGeneration;
     private int _editorContentRevision;
     private int _armedSong = -1;
     private PulseInstrument? _instrument;
@@ -188,6 +190,7 @@ public sealed partial class MainWindow : Window
         _refresh.Tick += (_, _) => RefreshSnapshot();
         InstallPowerHook(hwnd);
         InstallUiTestHook();
+        InstallCloseFlush();
         Closed += (_, _) =>
         {
             _isClosed = true;
@@ -260,21 +263,36 @@ public sealed partial class MainWindow : Window
 
     private void BuildPage()
     {
+        // The notes box is about to be replaced. What was typed in it goes with the request that saves it, not with the box, so
+        // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
+        QueueStageNotesSave();
         _instrument = null;
         _beatStrip = null;
         _tempoEdit = null;
         _position = null;
         _stageTempo = null;
         _stageMeter = null;
+        _stageList = null;
+        _stageCue = null;
+        _stageNotes = null;
+        _stageLockNote = null;
+        _stageNotesCaption = null;
         _programStatus = null;
         _progress = null;
+        _programHost = null;
         _timingStatus = null;
         _timingTarget = null;
         _timingToleranceInput = null;
         _timingSilentTargets = null;
+        _timingBegin = null;
+        _timingHit = null;
+        _timingFinish = null;
         _tempoCurve = null;
         _libraryList = null;
         _search = null;
+        _libraryStatus = null;
+        _libraryNoMatch = null;
+        _libraryEmpty = null;
         PageHost.Content = _view switch
         {
             "Studio" => BuildStudio(),
@@ -289,7 +307,8 @@ public sealed partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
-        if (_isBusy || !_isReady) return;
+        // While the window closes nothing new may start or resume (Stop and Mute stay available), whichever button or key asked.
+        if (_isBusy || !_isReady || _closeFlushing) return;
         InvalidateTiming();
         if (_transport.State == TransportState.Playing)
         {
@@ -315,7 +334,7 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
-        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document)
+        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, Action? onPublished = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
@@ -348,6 +367,7 @@ public sealed partial class MainWindow : Window
             }
             _redo.Clear();
             _document = revised;
+            _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
             if (LiveEditPolicy.LeavesPendingEdit(editorChange, affectsPlayback,
@@ -357,7 +377,9 @@ public sealed partial class MainWindow : Window
             // Edits that cannot follow live are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.
             published();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            // From here the project holds the edit, whatever happens to the recovery file next.
+            onPublished?.Invoke();
+            await SaveRecoveryAsync();
         }, succeeded =>
         {
             if (_isClosed) return;
@@ -369,12 +391,30 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    /// <summary>True from the moment the project changes until the recovery file has been written with that change.</summary>
+    private bool _recoveryUnsaved;
+
+    /// <summary>
+    /// Writes the project to the recovery file. Until a write has succeeded the file is behind the project; closing the window
+    /// checks that, writes again, and stays open if that fails too. A write of an older snapshot that finishes after a newer
+    /// change leaves the file marked behind.
+    /// </summary>
+    private async Task SaveRecoveryAsync()
+    {
+        var revision = _documentRevision;
+        await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+        if (revision == _documentRevision) _recoveryUnsaved = false;
+    }
+
     private static Task ValidateAsync(PulseDocument document) =>
         Task.Run(() => { _ = ScheduleCompiler.Compile(document, 48000, 1, false); });
 
     private async Task UndoAsync(bool redo, int? expectedRevision = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
+        // Notes typed or on their way belong to the project as it is now. They are saved first, in order, so the undo acts on the
+        // latest completed edit and no save that was queued behind it can land on top of its result (and clear what Redo holds).
+        if (!await FlushStageNotesAsync()) return;
         await DocumentPublication.RunAsync(_edits, async published =>
         {
             if (_isLocked) { ShowNotice("Locked"); return; }
@@ -385,12 +425,15 @@ public sealed partial class MainWindow : Window
             if (source.Count == 0) return;
             target.Push(_document);
             _document = source.Pop();
+            // The setlist may be shorter now; the song that was up next may not exist any more.
+            if (_armedSong >= _document.Setlist.Count) _armedSong = -1;
+            _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
             _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted;
             published();
             SynchronizeGain();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            await SaveRecoveryAsync();
         }, _ => { if (!_isClosed) BuildPage(); });
     }
 
@@ -537,6 +580,8 @@ public sealed partial class MainWindow : Window
             args.Handled = true;
             return;
         }
+        // While the window is closing nothing new is started: not a save or an open, not playback.
+        if (_closeFlushing) return;
         if (ctrl && args.Key is VirtualKey.S or VirtualKey.O)
         {
             _ = GuardAsync(args.Key == VirtualKey.S ? SaveProjectAsync : OpenProjectAsync);

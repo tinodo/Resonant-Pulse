@@ -75,6 +75,8 @@ is specified in `metronome-design.md` and is not changed here.
 - **My projects:** search (up to 280), the list with name, *Open* (primary) and *Save current to library*; *New*,
   *Open file*, *Save as file* in the card header. States: loading ("Looking for projects..."), empty (what the library
   is and how to fill it), partial ("Showing the first 1000 projects"), read failures (named, with the rest still usable).
+  Empty and "no project matches" are said only about a library that was read successfully: while it is being looked at, or
+  when it could not be read, the status line is all the page says, whatever is typed in Search.
 - **Export:** one sentence per format; *Length when the project has no program: [16] bars* ("this many bars are
   rendered"); *Export WAV*, *Export MIDI*; a failure names the file and the reason.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,
@@ -82,18 +84,44 @@ is specified in `metronome-design.md` and is not changed here.
   history.
 
 ### Stage
-- **Now playing** and **Up next** are separate, always labelled in words. Selecting a row only inspects it (its notes
-  show); *Make next* queues it; *Next + count-in* starts the queued song. *Lock editing* blocks edits to the setlist and
+- **Now playing** is the loaded project; **Up next** is the song selected in the setlist, said in words ("Up next: …") and
+  marked in the list. There is no separate inspect or queue step: selecting a row makes it next (its notes show) and never
+  interrupts playback; *Next + count-in* starts it. Clearing the selection (Ctrl+click, an assistive technology) means no song
+  is up next: the cue says so and the notes, Next, up, down and remove are off. *Lock editing* blocks edits to the setlist and
   notes, never playback.
-- Left: song title, tempo (large), meter, position, the dial, *Next + count-in* (primary).
-- Right: the setlist (Now playing and Up next marked with text and icon), *Add current project*, up, down, remove; notes
-  for the selected song (saved when focus leaves). *Lock editing* and *Always on top* are switches in the page header.
-- Below 900 DIP the setlist moves under the display, but a compact *Up next* selector with *Next + count-in* stays
-  above the fold.
+- Left: project name, the tempo large (shown once: the dial's own numeral is hidden on this page), meter, position, the dial,
+  *Next + count-in* (primary).
+- Right: the setlist (the next song marked with text), *Add current project*, up, down, remove; notes for the selected
+  song (saved when focus leaves, Esc puts back what was saved). Notes are saved in the order they were typed, none is dropped
+  because another save is running, and selecting, moving, removing or starting a song (and closing the window) waits for them.
+  Each request is told apart by its own number (not by its text) and belongs to the project it was typed in, so a later save
+  of the same words never releases an earlier one and a draft never reaches a replaced project. A save that fails keeps the
+  draft in the box and the song selected, and says why; the page is not rebuilt meanwhile, so what is typed next stays. A
+  draft that failed and whose page is gone is asked for again when the window closes or the project is replaced. The setlist
+  itself is switched off while songs are being added, moved or removed (and only then: switching it off for every operation
+  would take the keyboard focus away from it). Replacing the project (Ctrl+O, New, a ready-made rhythm) is a Stage operation
+  too: from before the notes are saved until the new project is shown the notes box and the setlist are switched off, so
+  nothing typed can fall between the last save and the replacement, and they work again if the replacement fails. *Lock editing* and *Always on top* are
+  switches on one line in the page header, each caption wrapping inside the room it is given; what the lock does is its
+  tooltip, and the sentence is shown in the setlist card only while the lock is on, where it explains why the setlist
+  commands are greyed out.
+- Closing the window commits the field being typed in, then switches every control that edits the project or the settings
+  off (the page area, the audio options and any open panel; a question that is open is answered No, and one that a request
+  still loading would ask now is not asked at all), switches Start off too
+  (Stop and Mute stay available, so nothing new starts to play while the last save is made), waits for the saves,
+  and switches them on again if closing is refused, so nothing typed or confirmed during the last save can be missed by
+  it. Undo and Redo in Studio wait for the notes saves first, so they act on the latest completed edit; when the song that
+  was up next is gone after an undo, nothing is up next and the commands that need a song are off.
+- Below 900 DIP the setlist moves under the display.
 
 ### Train
-- **Program:** current step, progress, the planned tempo as a compact chart, the steps as a table, *Edit in Studio*.
-  Without a program: what programs are for, and *Build a program* (Studio) / *Ready-made rhythms* (Library).
+- **Program:** current step, progress (the time played of the whole program), the planned tempo as a compact chart, the steps as a table,
+  *Edit in Studio*. Without a program: what programs are for, and *Build a program* (Studio) / *Ready-made rhythms* (Library).
+  A change made in Studio while the metronome plays is heard from the next Start, so the status, progress and chart follow
+  the program that plays (even one that was removed from the project, until Stop) and a note says that the steps listed are
+  the changed program (or that the program was removed); the card's content is swapped in place when the run ends, by Stop
+  or by itself (a completed run keeps its revision until Stop, but nothing plays any more), so the timing check beside it
+  keeps its controls and the choices made in them.
 - **Live view:** the dial and position.
 - **Timing check** (was "Timing Lab"): states plainly what it does: it compares the moment each key press or Hit
   arrives with the moment each click was scheduled; it does not hear your instrument and does not measure speaker delay.

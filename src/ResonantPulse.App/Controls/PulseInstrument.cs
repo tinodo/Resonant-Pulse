@@ -40,6 +40,16 @@ public sealed class PulseInstrument : Grid
     private readonly UISettings _uiSettings = new();
     internal string AccessibleValue => $"{_tempo.Text} · {_unit.Text}";
 
+    /// <summary>
+    /// False hides the tempo number and unit inside the ring, for a page that shows them larger beside it (the Stage), so the
+    /// same number is never on screen twice. The accessible value still reports them.
+    /// </summary>
+    public bool ShowReadout
+    {
+        get => _tempo.Visibility == Visibility.Visible;
+        set => _tempo.Visibility = _unit.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     protected override AutomationPeer OnCreateAutomationPeer() => new InstrumentPeer(this);
 
     private sealed class InstrumentPeer(PulseInstrument owner) : FrameworkElementAutomationPeer(owner), IValueProvider

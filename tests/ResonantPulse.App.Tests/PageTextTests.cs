@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ResonantPulse.App.Localization;
+using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Tests;
 
@@ -21,7 +22,20 @@ public sealed class PageTextTests
         "On", "Off", "Appearance", "ReducedMotion", "ReducedMotionHelp", "AboutApp", "VersionLine", "TimingHonesty",
         "AudioNote", "UnitSeconds", "UnitBeats", "UnitBars", "HelpBasics", "HelpWhilePlaying", "HelpShortcuts",
         "ShortcutStart", "ShortcutMute", "ShortcutHit", "KeySpace", "KeyCtrl", "ExportBars", "ExportBarsHelp",
-        "PracticeStopAfter", "PracticeTimerHint", "PracticeLimitsSaved"
+        "PracticeStopAfter", "PracticeTimerHint", "PracticeLimitsSaved",
+        "LibraryPurpose", "LibraryProjects", "LibraryLoading", "LibraryUnreadable", "CloseUnsaved", "NotesProjectChanged", "LibraryNoMatch", "LibraryEmptyTitle", "ExportTitle", "PresetsHelp",
+        "Presets", "Load", "Search", "SaveLibrary", "EmptyLibrary", "ExportNotice", "Replace", "MidiPreflight",
+        "PresetDesc_open", "PresetDesc_compound-6-8", "PresetDesc_additive-7-8", "PresetDesc_swing", "PresetDesc_polyrhythm-3-4",
+        "PresetDesc_polymeter-3-4", "PresetDesc_euclidean-5-8", "PresetDesc_paradiddle", "PresetDesc_warmup-ladder",
+        "PresetDesc_internal-time", "PresetDesc_ramp-domains", "PresetDesc_seeded-density",
+        "StagePurpose", "NowPlaying", "UpNextBadge", "NothingUpNext", "SetlistHelp", "SetlistEmptyTitle", "NotesFor", "NotesSaved",
+        "LockHelp", "AddSong", "ArmedSong", "StageTransition", "EmptySetlist", "ChooseSong",
+        "TrainPurpose", "TrainProgramTitle", "TrainProgramHelp", "EditInStudio", "ProgramEmptyTitle", "BuildProgram", "ProgramIdle",
+        "TrainProgramChanged", "TrainProgramRemoved", "Progress",
+        "UnitMs", "IncludeSilentHelp", "TempoChartAxis", "Target", "MainTarget", "IncludeSilentTargets", "Tolerance",
+        "Program", "ProgramEmpty", "BeginTiming", "FinishTiming", "Hit", "TimingBudget", "TimingDriftUnavailable", "TimingNoMatches",
+        "TimingAdditional", "TimingLab", "TimingLimits", "TimingArmed", "TimingReport", "TimingRequiresPlayback", "TimingPendingEdits",
+        "TimingTargetChanged", "TimingInvalidated"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>
@@ -31,7 +45,8 @@ public sealed class PageTextTests
     /// <summary>Wording that legitimately matches English: a number format, a key name, a unit.</summary>
     private static readonly HashSet<string> SameAsEnglishAllowed =
     [
-        "VersionLine/de", "VersionLine/fr", "KeyCtrl/nl", "KeyCtrl/fr", "KeyCtrl/es"
+        "VersionLine/de", "VersionLine/fr", "KeyCtrl/nl", "KeyCtrl/fr", "KeyCtrl/es",
+        "UnitMs/nl", "UnitMs/de", "UnitMs/fr", "UnitMs/es"
     ];
 
     private static IReadOnlyList<int> Placeholders(string text) =>
@@ -118,6 +133,20 @@ public sealed class PageTextTests
             StringAssert.Contains(line, "5:00", language);
             StringAssert.Contains(line, "8", language);
             Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{language}: {line}");
+        }
+    }
+
+    [TestMethod]
+    public void EveryBuiltInRhythmHasADescriptionInEveryLanguage()
+    {
+        foreach (var preset in BuiltInLibrary.Presets().Concat(BuiltInLibrary.PracticePrograms()))
+        foreach (var language in Languages)
+        {
+            var name = Get(language, "Preset_" + preset.Id);
+            var description = Get(language, "PresetDesc_" + preset.Id);
+            Assert.AreNotEqual("Preset_" + preset.Id, name, $"{language}: {preset.Id} has no name");
+            Assert.AreNotEqual("PresetDesc_" + preset.Id, description, $"{language}: {preset.Id} has no description");
+            Assert.IsTrue(description.Length is > 20 and < 200, $"{language}/{preset.Id}: {description.Length} characters");
         }
     }
 

@@ -52,5 +52,7 @@ public sealed class LiveEditPolicyTests
         Assert.IsTrue(LiveEditPolicy.LeavesPendingEdit(EditorChangeKind.PracticeTimerOnly, true, true, LiveEditOutcome.NotPlaying, false));
         Assert.IsFalse(LiveEditPolicy.LeavesPendingEdit(EditorChangeKind.Document, false, true, LiveEditOutcome.NotPlaying, false));
         Assert.IsFalse(LiveEditPolicy.LeavesPendingEdit(EditorChangeKind.MasterGainOnly, false, true, LiveEditOutcome.NotPlaying, false));
+        // A field changed in place that does not concern playback (a song's notes) leaves nothing pending.
+        Assert.IsFalse(LiveEditPolicy.LeavesPendingEdit(EditorChangeKind.InPlaceField, false, true, LiveEditOutcome.NotPlaying, false));
     }
 }
