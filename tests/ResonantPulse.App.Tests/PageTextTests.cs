@@ -31,6 +31,7 @@ public sealed class PageTextTests
         "StagePurpose", "NowPlaying", "UpNextBadge", "NothingUpNext", "SetlistHelp", "SetlistEmptyTitle", "NotesFor", "NotesSaved",
         "LockHelp", "AddSong", "ArmedSong", "StageTransition", "EmptySetlist", "ChooseSong",
         "TrainPurpose", "TrainProgramTitle", "TrainProgramHelp", "EditInStudio", "ProgramEmptyTitle", "BuildProgram", "ProgramIdle",
+        "TrainProgramChanged", "TrainProgramRemoved", "Progress",
         "UnitMs", "IncludeSilentHelp", "TempoChartAxis", "Target", "MainTarget", "IncludeSilentTargets", "Tolerance",
         "Program", "ProgramEmpty", "BeginTiming", "FinishTiming", "Hit", "TimingBudget", "TimingDriftUnavailable", "TimingNoMatches",
         "TimingAdditional", "TimingLab", "TimingLimits", "TimingArmed", "TimingReport", "TimingRequiresPlayback", "TimingPendingEdits",

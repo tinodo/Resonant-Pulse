@@ -1,0 +1,32 @@
+using ResonantPulse.Core;
+
+namespace ResonantPulse.App;
+
+/// <summary>How the Train page's program card describes the difference between what plays and what the project holds.</summary>
+internal enum ProgramNote
+{
+    /// <summary>What plays is what the project holds, or nothing plays.</summary>
+    None,
+    /// <summary>The project's program was changed since the start: the steps shown are heard from the next Start.</summary>
+    Changed,
+    /// <summary>The project's program was removed since the start: the one that plays keeps going until Stop.</summary>
+    Removed
+}
+
+/// <summary>
+/// What the program card of the Train page shows. Studio edits are heard from the next Start, so the program that plays can
+/// be one the project no longer holds: its status, progress and chart stay for as long as it plays, and a note says which is
+/// which. Without a program to follow, or to be followed, the card says how to get one.
+/// </summary>
+internal readonly record struct TrainProgramView(bool Readouts, ProgramNote Note)
+{
+    /// <param name="edited">The program of the project as it is now (the steps listed on the page).</param>
+    /// <param name="playing">The program of the revision that is playing or paused, or null when nothing plays.</param>
+    public static TrainProgramView Of(IReadOnlyList<ProgramStep> edited, IReadOnlyList<ProgramStep>? playing)
+    {
+        var readouts = edited.Count > 0 || playing is { Count: > 0 };
+        var note = playing is null || playing.SequenceEqual(edited) ? ProgramNote.None
+            : edited.Count == 0 ? ProgramNote.Removed : ProgramNote.Changed;
+        return new(readouts, note);
+    }
+}

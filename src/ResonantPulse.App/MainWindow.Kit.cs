@@ -502,15 +502,22 @@ public sealed partial class MainWindow
         return button;
     }
 
-    /// <summary>A switch with its caption at the left, linked to it for screen readers.</summary>
-    private static StackPanel LabeledSwitch(string captionKey, ToggleSwitch toggle)
+    /// <summary>
+    /// A switch with its caption at the left, linked to it for screen readers. The caption takes the room the switch leaves and
+    /// wraps there, so a long caption (another language, a larger Windows text size) never pushes the pair past the page.
+    /// </summary>
+    private static Grid LabeledSwitch(string captionKey, ToggleSwitch toggle)
     {
         var label = new TextBlock
         {
-            Text = Text.Get(captionKey), Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center
+            Text = Text.Get(captionKey), Style = ResonantStyle("BodyStyle"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
         };
         AutomationProperties.SetLabeledBy(toggle, label);
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, HorizontalAlignment = HorizontalAlignment.Right };
+        var row = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Right };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(toggle, 1);
         row.Children.Add(label);
         row.Children.Add(toggle);
         return row;

@@ -15,6 +15,9 @@ param(
 # (RESONANT_PULSE_HOME), so the real projects and settings are untouched. By default everything happens on a private
 # desktop, so the person at the machine sees nothing and cannot disturb the run.
 $ErrorActionPreference = 'Stop'
+# A 32-bit PowerShell cannot see the controls of a 64-bit application (UI Automation shows only its title bar), so the
+# verifier would fail on its first control. Start this script with a 64-bit PowerShell.
+if (-not [Environment]::Is64BitProcess) { throw 'Run this script in a 64-bit PowerShell: a 32-bit one cannot see the controls of the 64-bit application.' }
 $Exe = [IO.Path]::GetFullPath($Exe)
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
 if (-not (Test-Path -LiteralPath $Exe)) { throw "Build the app first; not found: $Exe" }
@@ -100,8 +103,10 @@ try {
     [void][LocalVerifyWindow]::SetWindowPos($mainWindow, [IntPtr](-1), 0, 0, 0, 0, 0x0043)
     [void][LocalVerifyWindow]::SetForegroundWindow($mainWindow)
     Start-Sleep -Milliseconds 500
-    # The driver must be a separate process from the one that started the application.
-    $shell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    # The driver must be a separate process from the one that started the application. It runs in the same PowerShell as this
+    # script, as Invoke-OnPrivateDesktop.ps1 does: Windows PowerShell and PowerShell 7 each have their own execution policy,
+    # and a machine can allow local scripts in one and refuse every unsigned script (AllSigned) in the other.
+    $shell = (Get-Process -Id $PID).Path
     $audio = if ($SilentAudio) { '-RunAudio' } else { '-NoAudio' }
     & $shell -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'Verify-FirstUse.ps1') -AppProcessId $app.Id `
         -ReportPath (Join-Path $OutputPath 'first-use.json') $audio -NoScreenshots -NoKeyboard

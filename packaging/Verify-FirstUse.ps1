@@ -749,6 +749,17 @@ Select-Song 'StageSong1'
 Wait-Condition { (Get-SongNotes) -eq '' } 'Stage: the second song shows the notes of the first.'
 Select-Song 'StageSong0'
 Wait-Condition { (Get-SongNotes) -eq $songNotes } 'Stage: the notes typed for the first song were not saved before the selection moved on.'
+# The setlist is switched off while songs are being added, moved or removed, so a song cannot be chosen from rows that are about
+# to be replaced: Remove asks for confirmation inside the operation, so while the question is open the list is off, and after
+# Cancel it is on again with every song still in it. (It is not switched off for other operations: that would take the keyboard
+# focus away from it each time a song is chosen.)
+Invoke-Control 'RemoveSong'
+Wait-Condition { $null -ne (Find-Optional 'CloseButton') } 'Stage: Remove did not ask for confirmation.'
+Wait-Condition { -not (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist can still be used while a song is being removed.'
+Invoke-Control 'CloseButton'
+Wait-Absent 'CloseButton'
+Wait-Condition { (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist stayed switched off after the removal was cancelled.'
+Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: cancelling the removal removed a song.'
 # Train: content-sized fields; with no program the page says how to get one; a timing check offers only the command that makes
 # sense now (nothing to press or finish until one is running).
 Select-Destination 'DestinationTrain'

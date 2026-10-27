@@ -263,6 +263,9 @@ public sealed partial class MainWindow : Window
 
     private void BuildPage()
     {
+        // The notes box is about to be replaced. What was typed in it goes with the request that saves it, not with the box, so
+        // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
+        QueueStageNotesSave();
         _instrument = null;
         _beatStrip = null;
         _tempoEdit = null;
@@ -570,6 +573,8 @@ public sealed partial class MainWindow : Window
             args.Handled = true;
             return;
         }
+        // While the window is closing nothing new is started: not a save or an open, not playback.
+        if (_closeFlushing) return;
         if (ctrl && args.Key is VirtualKey.S or VirtualKey.O)
         {
             _ = GuardAsync(args.Key == VirtualKey.S ? SaveProjectAsync : OpenProjectAsync);

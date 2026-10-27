@@ -90,14 +90,26 @@ is specified in `metronome-design.md` and is not changed here.
 - Right: the setlist (the next song marked with text), *Add current project*, up, down, remove; notes for the selected
   song (saved when focus leaves, Esc puts back what was saved). Notes are saved in the order they were typed, none is dropped
   because another save is running, and selecting, moving, removing or starting a song (and closing the window) waits for them.
-  A save that fails keeps the draft in the box and the song selected, and says why. *Lock editing* and *Always on top* are
-  switches on one line in the page header; what the lock does is its tooltip, and the sentence is shown in the setlist card
-  only while the lock is on, where it explains why the setlist commands are greyed out.
+  Each request is told apart by its own number (not by its text) and belongs to the project it was typed in, so a later save
+  of the same words never releases an earlier one and a draft never reaches a replaced project. A save that fails keeps the
+  draft in the box and the song selected, and says why; the page is not rebuilt meanwhile, so what is typed next stays. A
+  draft that failed and whose page is gone is asked for again when the window closes or the project is replaced. The setlist
+  itself is switched off while songs are being added, moved or removed (and only then: switching it off for every operation
+  would take the keyboard focus away from it). *Lock editing* and *Always on top* are
+  switches on one line in the page header, each caption wrapping inside the room it is given; what the lock does is its
+  tooltip, and the sentence is shown in the setlist card only while the lock is on, where it explains why the setlist
+  commands are greyed out.
+- Closing the window commits the field being typed in, then switches every control that edits the project or the settings
+  off (the page area, the audio options and any open panel), waits for the saves, and switches them on again if closing is
+  refused, so nothing typed during the last save can be missed by it.
 - Below 900 DIP the setlist moves under the display.
 
 ### Train
-- **Program:** current step, progress, the planned tempo as a compact chart, the steps as a table, *Edit in Studio*.
-  Without a program: what programs are for, and *Build a program* (Studio) / *Ready-made rhythms* (Library).
+- **Program:** current step, progress (the time played of the whole program), the planned tempo as a compact chart, the steps as a table,
+  *Edit in Studio*. Without a program: what programs are for, and *Build a program* (Studio) / *Ready-made rhythms* (Library).
+  A change made in Studio while the metronome plays is heard from the next Start, so the status, progress and chart follow
+  the program that plays (even one that was removed from the project, until Stop) and a note says that the steps listed are
+  the changed program (or that the program was removed); the page is built again when the run ends.
 - **Live view:** the dial and position.
 - **Timing check** (was "Timing Lab"): states plainly what it does: it compares the moment each key press or Hit
   arrives with the moment each click was scheduled; it does not hear your instrument and does not measure speaker delay.

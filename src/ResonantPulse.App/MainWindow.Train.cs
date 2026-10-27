@@ -27,6 +27,9 @@ public sealed partial class MainWindow
     private string _lastTimingReport = "";
     private readonly TempoCurveState _tempoCurveState = new();
 
+    private TrainProgramView _trainProgramView;
+    private bool _trainRebuilding;
+
     private UIElement BuildTrain()
     {
         // Without a cap the dial's viewbox scales to the full page width inside the scrolling page and fills several screens.
@@ -34,7 +37,11 @@ public sealed partial class MainWindow
         _position = Body("");
         _position.HorizontalAlignment = HorizontalAlignment.Center;
         _position.TextAlignment = TextAlignment.Center;
-        var hasProgram = _document.Program.Count > 0;
+        // What plays can be a program the project no longer holds (a Studio edit is heard from the next Start), so the readouts
+        // follow the revision that plays as well as the project.
+        var view = TrainProgramView.Of(_document.Program, _transport.Snapshot().Revision?.Document.Program);
+        _trainProgramView = view;
+        var hasProgram = view.Readouts;
         // The chart, progress bar and step status only mean something when there is a program to follow.
         _tempoCurve = hasProgram ? new TempoCurve() : null;
         _progress = hasProgram ? new ProgressBar { Minimum = 0, Maximum = 1, Value = 0 } : null;
@@ -50,16 +57,17 @@ public sealed partial class MainWindow
         }
         else
         {
-            var steps = SettingRows(_document.Program.Select(ProgramStepRow).ToArray());
-            programBody = new StackPanel
-            {
-                Spacing = 12,
-                Children =
-                {
-                    _programStatus!, _progress!, Note("TempoChartAxis"), _tempoCurve!, steps,
-                    CommandRow(ActionButton("EditInStudio", "EditProgram", () => SelectView("Studio"), "\uE70F"))
-                }
-            };
+            var body = new StackPanel { Spacing = 12 };
+            body.Children.Add(_programStatus!);
+            body.Children.Add(_progress!);
+            body.Children.Add(Note("TempoChartAxis"));
+            body.Children.Add(_tempoCurve!);
+            // The readouts above follow what plays; the steps below are the project's program. When they differ, the page says so.
+            if (view.Note != ProgramNote.None)
+                body.Children.Add(Note(view.Note == ProgramNote.Removed ? "TrainProgramRemoved" : "TrainProgramChanged"));
+            if (_document.Program.Count > 0) body.Children.Add(SettingRows(_document.Program.Select(ProgramStepRow).ToArray()));
+            body.Children.Add(CommandRow(ActionButton("EditInStudio", "EditProgram", () => SelectView("Studio"), "\uE70F")));
+            programBody = body;
         }
         var program = Card("TrainProgramTitle", programBody, "TrainProgramHelp", id: "ProgramCard");
         var live = Card("NowPlaying", new StackPanel { Spacing = 8, Children = { _instrument, _position } }, id: "LiveCard");

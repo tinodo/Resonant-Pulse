@@ -21,6 +21,7 @@ public sealed partial class MainWindow
     private TextBlock? _stageNotesCaption;
     private TextBlock? _stageLockNote;
     private bool _stageSyncing;
+    private bool _stageRestructuring;
     private readonly StageNotesDraft _stageNotesDraft = new();
     private readonly SaveQueue _stageNotesSaves = new();
 
@@ -97,7 +98,7 @@ public sealed partial class MainWindow
             // The first song added is the one that plays next; later additions never change that.
             if (!HasArmedSong) _armedSong = _document.Setlist.Count - 1;
             RebuildPreservingScroll();
-        }), "\uE710"), () => !_isLocked);
+        }, restructures: true), "\uE710"), () => !_isLocked);
 
         UIElement setlistBody;
         if (songs.Count == 0)
@@ -159,9 +160,9 @@ public sealed partial class MainWindow
                 });
             };
 
-            var up = StageControl(IconButton("\uE74A", "MoveUp", "SongMoveUp", () => RunStageOperationAsync(() => MoveSongAsync(-1))),
+            var up = StageControl(IconButton("\uE74A", "MoveUp", "SongMoveUp", () => RunStageOperationAsync(() => MoveSongAsync(-1), restructures: true)),
                 () => !_isLocked && _armedSong > 0);
-            var down = StageControl(IconButton("\uE74B", "MoveDown", "SongMoveDown", () => RunStageOperationAsync(() => MoveSongAsync(1))),
+            var down = StageControl(IconButton("\uE74B", "MoveDown", "SongMoveDown", () => RunStageOperationAsync(() => MoveSongAsync(1), restructures: true)),
                 () => !_isLocked && HasArmedSong && _armedSong < _document.Setlist.Count - 1);
             var remove = StageControl(ActionButton("Remove", "RemoveSong", () => RunStageOperationAsync(async () =>
             {
@@ -185,7 +186,7 @@ public sealed partial class MainWindow
                         if (!_isClosed) RebuildPreservingScroll();
                     }
                 }
-            }), "\uE74D", ButtonKind.Tertiary), () => !_isLocked && HasArmedSong);
+            }, restructures: true), "\uE74D", ButtonKind.Tertiary), () => !_isLocked && HasArmedSong);
 
             _stageNotesCaption = new TextBlock { Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
             // The box is disabled while a Stage operation runs, so a draft typed in it cannot meet a setlist that is being
@@ -267,6 +268,14 @@ public sealed partial class MainWindow
     private void RefreshStageSelection()
     {
         var armed = HasArmedSong ? _armedSong : -1;
+        // The rows were built for the setlist the page was built from. While an operation that adds or removes songs has
+        // published its change but not yet rebuilt the page, rows and project disagree and there is nothing true to show; the
+        // rebuild that ends that operation shows it.
+        if (_stageList is not null && _stageList.Items.Count != _document.Setlist.Count)
+        {
+            RefreshStageControlState();
+            return;
+        }
         _stageSyncing = true;
         try
         {
@@ -288,9 +297,9 @@ public sealed partial class MainWindow
             }
             if (_stageNotes is not null)
             {
-                // Only a different song loads its saved notes. The same song (a refused selection put back, the lock switched)
-                // keeps the draft in the box.
-                if (_stageNotesDraft.Show(armed, armed >= 0 ? _document.Setlist[armed].Notes : "") is { } shown)
+                // Only a different song (or the same song of another project) loads its saved notes. The same song (a refused
+                // selection put back, the lock switched) keeps the draft in the box.
+                if (_stageNotesDraft.Show(armed, armed >= 0 ? _document.Setlist[armed].Notes : "", _projectGeneration) is { } shown)
                     _stageNotes.Text = shown;
                 _stageNotes.IsReadOnly = _isLocked;
             }
@@ -304,43 +313,49 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Asks for what is in the notes box to be saved, if it is not what the project holds or what is already on its way. Saves
-    /// are applied in the order they were asked for, none is dropped because another is running, and each is for the song the
-    /// box showed when it was asked for. A save that fails leaves the draft in the box and says why.
+    /// are applied in the order they were asked for, none is dropped because another is running, and each is for the song and
+    /// the project the box showed when it was asked for. A save that fails leaves the draft in the box and says why.
     /// </summary>
     private void QueueStageNotesSave()
     {
-        if (_stageNotes is null || _isClosed) return;
-        var text = _stageNotes.Text;
-        if (!_stageNotesDraft.NeedsSave(text)) return;
-        var song = _stageNotesDraft.Request(text);
-        var generation = _projectGeneration;
-        _ = _stageNotesSaves.Enqueue(async () =>
-        {
-            // The project holds the notes once the revised project is published, even if writing the recovery file fails
-            // afterwards (that is reported, and written again when the window closes). A save that was refused (too long, a
-            // locked project, a project that was replaced) never gets there, and its draft stays unsaved.
-            var published = false;
-            await GuardAsync(() => CommitAsync(doc =>
-            {
-                // Queued notes belong to the project they were typed in.
-                if (generation != _projectGeneration) throw new InvalidOperationException(Text.Get("NotesProjectChanged"));
-                if (song >= doc.Setlist.Count) throw new InvalidOperationException(Text.Get("ChooseSong"));
-                doc.Setlist[song].Notes = text;
-            }, false, onPublished: () => published = true));
-            if (published) _stageNotesDraft.Completed(song, text);
-            else _stageNotesDraft.Failed(song, text);
-        });
+        if (_stageNotes is not { } box || _isClosed) return;
+        if (_stageNotesDraft.Ask(box.Text) is { } request) EnqueueStageNotesSave(request);
     }
 
+    private void EnqueueStageNotesSave(NotesRequest request) => _ = _stageNotesSaves.Enqueue(async () =>
+    {
+        // The project holds the notes once the revised project is published, even if writing the recovery file fails
+        // afterwards (that is reported, and written again when the window closes). A save that was refused (too long, a
+        // locked project, a disk that is full) never gets there, and its draft stays unsaved. The page is not rebuilt either
+        // way, so what is being typed in the box meanwhile stays where it is.
+        var published = false;
+        var gone = false;
+        await GuardAsync(() => CommitAsync(doc =>
+        {
+            // Queued notes belong to the project and the song they were typed for. If either is gone the save can never
+            // happen, so it is given up (the error says why) rather than asked for again for ever.
+            if (request.Project != _projectGeneration) { gone = true; throw new InvalidOperationException(Text.Get("NotesProjectChanged")); }
+            if (request.Song >= doc.Setlist.Count) { gone = true; throw new InvalidOperationException(Text.Get("ChooseSong")); }
+            doc.Setlist[request.Song].Notes = request.Text;
+        }, false, editorChange: EditorChangeKind.InPlaceField, onPublished: () => published = true));
+        if (published) _stageNotesDraft.Completed(request);
+        else if (gone) _stageNotesDraft.Abandoned(request);
+        else _stageNotesDraft.Failed(request);
+    });
+
     /// <summary>
-    /// Queues the draft in the notes box and waits until every notes save has finished. False when the draft could not be
-    /// saved: the error has been shown and the draft is still in the box.
+    /// Queues the draft in the notes box and waits until every notes save has finished. A draft the project refused earlier,
+    /// whose page is gone, is asked for again here, so closing the window or replacing the project cannot lose it. False when a
+    /// draft could not be saved: the error has been shown and the draft is still in the box (or asked for again next time).
     /// </summary>
     private async Task<bool> FlushStageNotesAsync()
     {
         QueueStageNotesSave();
+        if (_stageNotes is null && !_isClosed && _stageNotesDraft.RetryFailed(_projectGeneration) is { } retry)
+            EnqueueStageNotesSave(retry);
         await _stageNotesSaves.WhenIdleAsync();
-        return _stageNotes is null || !_stageNotesDraft.NeedsSave(_stageNotes.Text);
+        // With a box, what it holds is saved or on its way; without one, no draft is left that the project refused.
+        return _stageNotes is { } box ? !_stageNotesDraft.NeedsSave(box.Text) : !_stageNotesDraft.HasFailed(_projectGeneration);
     }
 
     private T StageControl<T>(T control, Func<bool>? when = null) where T : Control
@@ -355,16 +370,22 @@ public sealed partial class MainWindow
         if (_isClosed) return;
         foreach (var (control, when) in _stageOperationControls)
             control.IsEnabled = !_stageOperations.IsBusy && (when?.Invoke() ?? true);
+        // Choosing a song while songs are being added, moved or removed would act on rows that are about to be replaced.
+        // Any other operation leaves the list alone: switching it off would take the keyboard focus away from it.
+        if (_stageList is not null) _stageList.IsEnabled = !_stageRestructuring;
     }
 
-    private async Task<bool> RunStageOperationAsync(Func<Task> operation, bool requiresUnlocked = true)
+    private async Task<bool> RunStageOperationAsync(Func<Task> operation, bool requiresUnlocked = true, bool restructures = false)
     {
         // True only when the operation ran: not when another was running, the project was locked, or the notes could not be saved.
         var ran = false;
+        var owns = false;
         try
         {
             var accepted = await _stageOperations.TryRunAsync(async () =>
             {
+                owns = true;
+                _stageRestructuring = restructures;
                 RefreshStageControlState();
                 if (_isClosed) return;
                 // What was typed in the notes belongs to the song it was typed for. It is saved, in order, before anything
@@ -380,7 +401,12 @@ public sealed partial class MainWindow
             if (!accepted && !_isClosed) ShowNotice("StageBusy");
             return ran;
         }
-        finally { RefreshStageControlState(); }
+        finally
+        {
+            // Only the operation that owns the gate ends the restructuring; a refused overlapping request must not.
+            if (owns) _stageRestructuring = false;
+            RefreshStageControlState();
+        }
     }
 
     private int GetArmedSongIndex(PulseDocument document)

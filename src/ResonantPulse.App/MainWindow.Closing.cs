@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using ResonantPulse.App.Localization;
 using ResonantPulse.App.Storage;
 
@@ -32,9 +33,10 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Closing first commits what is being typed, waits for every edit that is still being produced or queued, and then makes
-    /// sure the project and the settings are on disk. Closing the window never loses a change silently: if a change cannot be
-    /// saved the window stays open with the reason shown. Closing it again tries once more, and leaves if that fails too.
+    /// Closing first commits what is being typed, stops everything that could change the project, waits for every edit that is
+    /// still being produced or queued, and then makes sure the project and the settings are on disk. Closing the window never
+    /// loses a change silently: if a change cannot be saved the window stays open with the reason shown. Closing it again tries
+    /// once more, and leaves if that fails too.
     /// </summary>
     private async Task CloseAfterSavingAsync()
     {
@@ -44,6 +46,10 @@ public sealed partial class MainWindow
         var timedOut = false;
         try
         {
+            // A field commits when it loses focus, so the focus moves to something that is not a field. Only then is editing
+            // switched off: what was being typed is in the queues the flush waits for, and nothing new can be typed after it.
+            CommitFocusedField();
+            BlockEditing(true);
             var flush = FlushPendingEditsAsync();
             var finished = await Task.WhenAny(flush, Task.Delay(CloseSaveLimit));
             timedOut = finished != flush;
@@ -61,22 +67,56 @@ public sealed partial class MainWindow
             Close();
             return;
         }
+        // Closing is refused for now: the window is usable again.
+        BlockEditing(false);
         _closeAttemptFailed = true;
         // A save that failed has shown its own error; one that is only slow has shown nothing yet.
         if (timedOut && !_isClosed) ShowNotice("CloseUnsaved");
     }
 
+    private readonly List<Control> _blockedPanels = [];
+
     /// <summary>
-    /// Commits a field that is being edited, waits for the tempo being submitted and for every notes save, and then makes sure the
-    /// project and the settings are on disk as they are now: a write that failed earlier is repeated. False when something could
-    /// not be saved (the error has been shown).
+    /// While the last save is under way nothing may change the project or the settings: a change made now would come after what
+    /// that save wrote and be lost when the window goes. The page area, the audio options and every open panel are switched off
+    /// (a panel is a popup outside the page, so each is switched off by itself), and on again if closing is refused.
+    /// </summary>
+    private void BlockEditing(bool blocked)
+    {
+        Navigation.IsEnabled = !blocked;
+        AudioOptionsButton.IsEnabled = !blocked;
+        if (!blocked)
+        {
+            foreach (var panel in _blockedPanels) panel.IsEnabled = true;
+            _blockedPanels.Clear();
+            return;
+        }
+        if (Root.XamlRoot is not { } xamlRoot) return;
+        foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot))
+        {
+            if (popup.Child is not Control panel || !panel.IsEnabled) continue;
+            panel.IsEnabled = false;
+            _blockedPanels.Add(panel);
+        }
+    }
+
+    /// <summary>
+    /// A field commits when it loses focus, so the focus moves to something that is not a field. A number box keeps its text in
+    /// an inner text box, which is the element that has the focus.
+    /// </summary>
+    private void CommitFocusedField()
+    {
+        if (FocusManager.GetFocusedElement(Root.XamlRoot) is TextBox or ComboBox or Slider)
+            Navigation.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// Waits for the tempo being submitted and for every notes save, and then makes sure the project and the settings are on
+    /// disk as they are now: a write that failed earlier is repeated. False when something could not be saved (the error has
+    /// been shown). Nothing can be edited meanwhile (see <see cref="BlockEditing"/>), so what is written is final.
     /// </summary>
     private async Task<bool> FlushPendingEditsAsync()
     {
-        // A field commits when it loses focus, so the focus moves to something that is not a field. A number box keeps its
-        // text in an inner text box, which is the element that has the focus.
-        if (FocusManager.GetFocusedElement(Root.XamlRoot) is TextBox or ComboBox or Slider)
-            Navigation.Focus(FocusState.Programmatic);
         // The tempo is submitted one step at a time; it is done when the newest value has been committed.
         await _tempoPump;
         var notesSaved = await FlushStageNotesAsync();

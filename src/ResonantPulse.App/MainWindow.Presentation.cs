@@ -16,6 +16,16 @@ public sealed partial class MainWindow
         if (!_isReady || _isClosed) return;
         var snapshot = _transport.Snapshot();
         _transport.FinishCompleted();
+        // The program card of the Train page follows what plays as well as the project. When that changes (a run ends, so a
+        // program that was removed in Studio is no longer playing) the page is built again.
+        if (_view == "Train" && !_trainRebuilding &&
+            _trainProgramView != TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program))
+        {
+            _trainRebuilding = true;
+            try { BuildPage(); }
+            finally { _trainRebuilding = false; }
+            return;
+        }
         var active = snapshot.Revision?.Document ?? _document;
         var plan = snapshot.Plan;
         var frame = plan is null ? 0 : Math.Clamp(snapshot.MusicalFrame, 0, plan.TotalFrames - 1);
