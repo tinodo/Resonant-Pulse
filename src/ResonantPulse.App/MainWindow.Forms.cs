@@ -116,17 +116,21 @@ public sealed partial class MainWindow
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto
     };
 
-    private Button ActionButton(string key, string id, Func<Task> action)
+    private Button ActionButton(string key, string id, Func<Task> action, string? glyph = null,
+        ButtonKind kind = ButtonKind.Secondary)
     {
         var button = new Button { HorizontalContentAlignment = HorizontalAlignment.Center };
-        LabelButton(button, key);
+        if (kind == ButtonKind.Primary) button.Style = ResonantStyle("PrimaryButtonStyle");
+        else if (kind == ButtonKind.Tertiary) button.Style = ResonantStyle("ToolButtonStyle");
+        LabelButton(button, key, glyph);
         Identify(button, id, Text.Get(key));
         button.Click += async (_, _) => await GuardAsync(action);
         return button;
     }
 
-    private Button ActionButton(string key, string id, Action action) =>
-        ActionButton(key, id, () => { action(); return Task.CompletedTask; });
+    private Button ActionButton(string key, string id, Action action, string? glyph = null,
+        ButtonKind kind = ButtonKind.Secondary) =>
+        ActionButton(key, id, () => { action(); return Task.CompletedTask; }, glyph, kind);
 
     private static NumberBox Number(string key, string id, double value, double minimum, double maximum, double increment = 1,
         int fractionDigits = 1)
@@ -227,12 +231,17 @@ public sealed partial class MainWindow
         return number.Value;
     }
 
-    private static int Integer(NumberBox number)
+    private static int Integer(NumberBox number) => Integer(number.Value);
+
+    /// <summary>
+    /// A NumberBox shows a whole number rounded, but reports the fraction typed ("1.9" shows as 2 and is 1.9), so a count must be
+    /// checked rather than cast: the project should hold what the field shows or refuse it with a message.
+    /// </summary>
+    private static int Integer(double value)
     {
-        var value = Value(number);
-        if (value != Math.Truncate(value) || value is < int.MinValue or > int.MaxValue)
-            throw new ArgumentException(Text.Get("WholeNumber"));
-        return (int)value;
+        if (!double.IsFinite(value)) throw new ArgumentException(Text.Get("Error"));
+        if (!WholeNumbers.TryGet(value, out var whole)) throw new ArgumentException(Text.Get("WholeNumber"));
+        return whole;
     }
 
     private async Task<bool> ConfirmAsync(string message, string primary = "Continue")

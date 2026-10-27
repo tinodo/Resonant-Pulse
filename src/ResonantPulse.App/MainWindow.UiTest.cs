@@ -25,24 +25,48 @@ public sealed partial class MainWindow
         var capture = Tiny(new Button());
         var grow = Tiny(new Button());
         var expand = Tiny(new Button());
+        var textScale = Tiny(new Button());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
         Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
         Identify(expand, "UiTestExpandScrollBars", "ui test expand scroll bars");
+        Identify(textScale, "UiTestTextScale", "ui test text scale");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
         // Stands in for a Windows text-size change: the page-tools labels get bigger while the page keeps its size.
         grow.Click += (_, _) => GrowToolLabels(1.6);
         // Stands in for the pointer being over a scroll bar (or Windows set to always show scroll bars), which a private
         // desktop cannot do: the beat strip's bar takes its full, expanded form.
         expand.Click += (_, _) => ExpandScrollBars();
+        // Stands in for the Windows text size changing while the app runs: the toggle between 100 % and 200 %.
+        textScale.Click += (_, _) =>
+        {
+            _uiTestTextScale = _uiTestTextScale >= 2 ? 1 : 2;
+            RaiseTextScaleChanged();
+        };
         var host = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
         host.Children.Add(name);
         host.Children.Add(capture);
         host.Children.Add(grow);
         host.Children.Add(expand);
+        host.Children.Add(textScale);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");
+    }
+
+    // Stands in for a larger Windows text size: with RESONANT_PULSE_UITEST_TEXTSCALE set (for example 2), every width that
+    // follows the text size is worked out as if the text were that big. That is what decides whether a field fits its room or
+    // gives way, which a private desktop cannot show by changing the real system setting (and must not). The hidden
+    // "UiTestTextScale" button does the same while the app runs, and raises the event the real change raises.
+    private static double _uiTestTextScale;
+
+    static partial void AdjustTextScale(ref double scale)
+    {
+        var forced = _uiTestTextScale;
+        if (forced <= 0 && !double.TryParse(Environment.GetEnvironmentVariable("RESONANT_PULSE_UITEST_TEXTSCALE"),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out forced))
+            return;
+        if (forced > scale) scale = forced;
     }
 
     private static T Tiny<T>(T control) where T : Control
@@ -59,7 +83,7 @@ public sealed partial class MainWindow
     {
         if (FindById(Root, "PlaySettingsStrip") is not StackPanel strip) return;
         foreach (var button in strip.Children.OfType<Button>())
-            if (button.Content is StackPanel { Children: [_, TextBlock label] })
+            if (button.Content is Grid { Children: [_, TextBlock label] })
                 label.FontSize *= factor;
     }
 

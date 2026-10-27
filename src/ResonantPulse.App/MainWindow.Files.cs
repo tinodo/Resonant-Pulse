@@ -19,6 +19,16 @@ public sealed partial class MainWindow
             SelectionMode = ListViewSelectionMode.Single
         };
         Identify(_libraryList, "LibraryProjects", Text.Get("Library"));
+        var exportBars = NumberInput("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
+        // The length applies at once, like every setting: the box shows it and the next export uses it. Remembering it for the
+        // next session is best effort; if that fails the error is shown and the value stays, so the box is never put back to a
+        // length the next export would not use.
+        CommitNumber(exportBars, () => _preferences.ExportBars, async value =>
+        {
+            _preferences.ExportBars = Integer(value);
+            await _workspace.SavePreferencesAsync(_preferences);
+        });
+        var exportLength = new StackPanel { Spacing = 4, Children = { Field(exportBars, "UnitBars"), Note("ExportBarsHelp") } };
         var panel = Column(Heading(Text.Get("Library")), _search, _libraryList,
             CommandFlow(
                 ActionButton("Load", "LoadLibraryProject", async () =>
@@ -39,7 +49,7 @@ public sealed partial class MainWindow
                     if (!await ConfirmAsync(Text.Get("Replace"))) return;
                     await ReplaceDocumentAsync(new PulseDocument { Name = Text.Get("OpenPractice") });
                 })),
-            Copy("ExportNotice"),
+            Copy("ExportNotice"), exportLength,
             CommandFlow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false)),
                 ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true))), BuildPresets());
         _ = GuardAsync(RefreshLibraryAsync);
@@ -171,9 +181,11 @@ public sealed partial class MainWindow
     private async Task ExportAsync(bool midi)
     {
         var snapshot = LocalWorkspace.Clone(_document);
+        // One length for the preflight and the export: it is the length the box shows, applied the moment it was committed.
+        var bars = _preferences.ExportBars;
         if (midi)
         {
-            var report = await Task.Run(() => MidiExporter.Preflight(snapshot, _preferences.ExportBars));
+            var report = await Task.Run(() => MidiExporter.Preflight(snapshot, bars));
             if (!report.CanExport)
                 throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", report.Errors));
             if (!await ConfirmAsync(Text.Format("MidiPreflight", report.PulsesPerQuarter, report.MaximumTimingErrorSeconds * 1000)))
@@ -183,7 +195,6 @@ public sealed partial class MainWindow
         if (path is null) return;
         try
         {
-            var bars = _preferences.ExportBars;
             if (midi)
                 await Task.Run(() => MidiExporter.ExportAsync(path, snapshot, bars));
             else

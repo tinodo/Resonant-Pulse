@@ -279,11 +279,25 @@ function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     do {
         $text = (Find-Control 'TransportStatus').Current.Name
         if ($text -like "$prefix*" -and (-not $afterCountIn -or $text -notlike '*Count-in*')) {
+            # A completed stop is reported a few milliseconds before the position readout lands on its final value (3.99 s
+            # reads 00:03 with a second left), so that text is read again until it has been still for a moment.
+            if ($prefix -eq 'Completed') { $text = Get-SettledStatus $text }
             return $text
         }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Expected $prefix transport state, observed: $text"
+}
+function Get-SettledStatus([string]$text) {
+    $stillSince = [DateTime]::UtcNow
+    $limit = [DateTime]::UtcNow.AddSeconds(3)
+    while ([DateTime]::UtcNow -lt $limit) {
+        Start-Sleep -Milliseconds 60
+        $now = (Find-Control 'TransportStatus').Current.Name
+        if ($now -ne $text) { $text = $now; $stillSince = [DateTime]::UtcNow }
+        elseif (([DateTime]::UtcNow - $stillSince).TotalMilliseconds -ge 300) { break }
+    }
+    return $text
 }
 function Set-Number([string]$id, [int]$value) {
     $element = Find-Control $id
@@ -517,12 +531,67 @@ foreach ($size in @(@(400, 720), @(320, 900))) {
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 500
 # Every panel: opens with its fields visible, and an emergency mute (Ctrl+M) works while it owns the keyboard.
+# A field is as wide as what it holds (docs/design/pages-design.md): the box for "100" or "1000" must never stretch to the
+# window. Limits are DIPs at 100 % text size and grow with the Windows text-size setting, so a larger text size is never
+# mistaken for a stretched field.
+$textScale = 1.0
+try {
+    $configured = (Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Accessibility' -ErrorAction Stop).TextScaleFactor
+    if ($configured) { $textScale = [Math]::Max(1.0, $configured / 100.0) }
+} catch { }
+function Test-FieldWidths([string]$where, [hashtable]$limits) {
+    foreach ($id in $limits.Keys) {
+        $width = (Find-Control $id).Current.BoundingRectangle.Width / $scale
+        $limit = $limits[$id] * $textScale
+        if ($width -gt $limit) {
+            throw "${where}: $id is $([Math]::Round($width)) DIP wide, but a field is as wide as its contents (at most $([Math]::Round($limit)) DIP)."
+        }
+    }
+}
+# No page or panel carries an Apply button: a change takes effect as it is made. (Play panels keep Cancel and Done.)
+function Test-NoApplyButtons([string]$where) {
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+    foreach ($button in (Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition)) {
+        $id = $button.Current.AutomationId
+        if ($id -match 'Apply' -or $button.Current.Name -match '^Apply') {
+            throw "${where}: an Apply button is present: '$id' '$($button.Current.Name)'"
+        }
+    }
+}
+function Wait-ToggleState($pattern, $state, [string]$failure) {
+    $limit = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        if ($pattern.Current.ToggleState -eq $state) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw $failure
+}
+# Waits for something on a page other than Play, where the dial that Wait-Until reports in its message does not exist.
+function Wait-Condition([scriptblock]$condition, [string]$failure, [int]$seconds = 8) {
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    do {
+        if (& $condition) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw $failure
+}
+function Select-Destination([string]$id) {
+    $item = Find-Control $id
+    $pattern = $null
+    if ($item.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select() }
+    else { $item.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke() }
+}
 $panels = @(
     @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
-    @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'},
-    @{open=@('TempoEdit');                  field='TempoUnit';         close='TempoOptionsCancel'; focus='TempoOptionsCancel'},
-    @{open=@('PracticeTimer');              field='PracticeSeconds';   close='PracticeTimerOptionsCancel'; focus='PracticeTimerOptionsCancel'},
-    @{open=@('ProjectOptions');             field='DocumentName';      close='ProjectOptionsPanelCancel'; focus='ProjectOptionsPanelCancel'},
+    @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
+      limits=@{MeterBeats=200; MeterDenominator=330; MeterGroups=300; Subdivision=200; Swing=200; CountInBars=200; AudibleBars=200; SilentBars=200}},
+    @{open=@('TempoEdit');                  field='TempoUnit';         close='TempoOptionsCancel'; focus='TempoOptionsCancel'
+      limits=@{Tempo=260; TempoUnit=330}},
+    @{open=@('PracticeTimer');              field='PracticeSeconds';   close='PracticeTimerOptionsCancel'; focus='PracticeTimerOptionsCancel'
+      limits=@{PracticeSeconds=200; PracticeBeats=200; PracticeBars=200}},
+    @{open=@('ProjectOptions');             field='DocumentName';      close='ProjectOptionsPanelCancel'; focus='ProjectOptionsPanelCancel'
+      limits=@{DocumentName=390}},
     @{open=@('PlayHelp');                   field='PlayHelpPanelDone'; close='PlayHelpPanelDone'; focus='PlayHelpPanelDone'},
     @{open=@('AudioOptions');               field='AudioOutputPicker'; close='AudioOptionsClose'; focus='AudioOptionsClose'}
 )
@@ -552,6 +621,7 @@ foreach ($panel in $panels) {
         # Cancel and Done are one pair: the same size, on one line.
         Test-Pair $panel.close ($panel.close -replace 'Cancel$', 'Done')
     }
+    if ($panel.limits) { Test-FieldWidths "Panel $($panel.open[-1])" $panel.limits }
     if ($panel.open[0] -eq 'AudioOptions') {
         # The device list and its refresh button share one height and one centre line.
         Test-Pair 'AudioOutputPicker' 'RefreshAudioOutputs' -HeightOnly
@@ -581,6 +651,60 @@ foreach ($panel in $panels) {
     Invoke-Control $panel.close
     Wait-Absent $panel.field
 }
+# At the smallest windows a panel still fits: its Cancel/Done pair is on screen, and the pair and the fields stay between the
+# panel's own edges. Both failed in a shipped build: a pair wider than a narrow panel poked out and was clipped, and a panel
+# that Windows placed above a button low in a short window was cut off above its footer.
+foreach ($size in @(@(320, 900), @(400, 720))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
+    foreach ($panel in $panels) {
+        if ($panel.close -notlike '*Cancel') { continue }
+        $where = "Panel $($panel.open[-1]) at $($size[0])x$($size[1])"
+        $doneId = $panel.close -replace 'Cancel$', 'Done'
+        Open-Panel $panel.open $panel.field
+        Wait-Settled $panel.field
+        $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+        $edge = (Find-Control $panel.field).Current.BoundingRectangle.Left
+        $cancel = (Find-Control $panel.close).Current.BoundingRectangle
+        $done = (Find-Control $doneId).Current.BoundingRectangle
+        Test-Visible $cancel $windowRect "$where $($panel.close)"
+        Test-Visible $done $windowRect "$where $doneId"
+        $tolerance = 2 * $scale
+        if ($cancel.Left -lt $edge - $tolerance) { throw "${where}: Cancel pokes out of the panel ($($cancel.Left) is left of $edge)." }
+        foreach ($id in $panel.limits.Keys) {
+            $rect = (Find-Control $id).Current.BoundingRectangle
+            # A field scrolled out of view reports no rectangle; its place along the row is checked wherever it has one.
+            if ($rect.IsEmpty) { continue }
+            if ($rect.Left -lt $edge - $tolerance -or $rect.Right -gt $done.Right + $tolerance) {
+                throw "${where}: $id does not fit between the panel's edges ($rect, panel content $edge to $($done.Right))."
+            }
+        }
+        Test-Pair $panel.close $doneId
+        Invoke-Control $panel.close
+        Wait-Absent $panel.field
+    }
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
+# Settings and Library: content-sized fields, a switch that takes effect as it is toggled, and no Apply button.
+Select-Destination 'DestinationSettings'
+Wait-Settled 'Language'
+Test-FieldWidths 'Settings' @{ Language = 330; Theme = 330 }
+Test-NoApplyButtons 'Settings'
+Wait-Absent 'SaveExportBars'
+$motion = (Find-Control 'ReducedMotion').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+$motionBefore = $motion.Current.ToggleState
+$motionAfter = if ($motionBefore -eq [Windows.Automation.ToggleState]::On) { [Windows.Automation.ToggleState]::Off } else { [Windows.Automation.ToggleState]::On }
+$motion.Toggle()
+Wait-ToggleState $motion $motionAfter 'Reduce motion did not change when it was switched.'
+$motion.Toggle()
+Wait-ToggleState $motion $motionBefore 'Reduce motion did not return to its previous state.'
+Select-Destination 'DestinationLibrary'
+Wait-Settled 'ExportBars'
+Test-FieldWidths 'Library' @{ ExportBars = 200 }
+Test-NoApplyButtons 'Library'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
 Invoke-Control 'AudioOptions'
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
@@ -721,6 +845,45 @@ if (-not $playAudio) {
         Set-PracticeLimits 0 0 0
     }
 }
+# Every language keeps its controls on screen. The panels are opened again in Dutch (its labels are the longest of the five), and
+# every button a panel adds must be on screen. A row of buttons that fits in English can lose its last button in another
+# language when layout rounding tips it over the edge: the child is then placed below the row, out of sight, and the checks
+# above (English only) would never notice.
+function Get-AllButtons {
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+    @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition))
+}
+function Test-NewButtonsOnScreen([string]$where, [string[]]$before) {
+    foreach ($button in (Get-AllButtons)) {
+        $id = $button.Current.AutomationId
+        if (-not $id -or $before -contains $id) { continue }
+        if ($button.Current.IsOffscreen -or $button.Current.BoundingRectangle.IsEmpty) {
+            throw "${where}: the button '$id' ('$($button.Current.Name)') is not on screen."
+        }
+    }
+}
+Select-Destination 'DestinationSettings'
+Wait-Settled 'Language'
+Select-Combo 'Language' 'Nederlands'
+Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -ne 'Play' } 'The interface did not switch to Dutch.'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
+foreach ($panel in $panels) {
+    if ($panel.close -notlike '*Cancel') { continue }
+    $before = @(Get-AllButtons | ForEach-Object { $_.Current.AutomationId } | Where-Object { $_ })
+    Open-Panel $panel.open $panel.field
+    Wait-Settled $panel.field
+    Test-NewButtonsOnScreen "Dutch panel $($panel.open[-1])" $before
+    Invoke-Control $panel.close
+    Wait-Absent $panel.field
+}
+Select-Destination 'DestinationSettings'
+Wait-Settled 'Language'
+Select-Combo 'Language' 'English'
+Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -eq 'Play' } 'The interface did not switch back to English.'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;
