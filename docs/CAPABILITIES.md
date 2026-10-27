@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.8 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.9 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -31,7 +31,7 @@ app settings: they act on the session being played, so they live on Play, in one
 strip in the top-right corner directly under the Settings item, in the same
 full-contrast text and level with Settings' right edge. As the window narrows the
 strip drops its words, then takes a row of its own, and it never covers the dial.
-Long strips scroll within their own bounded area with an overflow cue.
+Long strips scroll within their own bounded area with an overflow cue. A strip that fits does not scroll: the gaps between additive groups come out of its room first, so 12/8 shows all twelve beats beside the meter and sound controls. A strip that does not fit keeps room under the beat numbers for its scroll bar, which would otherwise be drawn over them.
 Every panel has Cancel and Done side by side and the same size; Done applies.
 Form rows on every page share one rule: a dropdown, a number box and a text box
 are the same height, buttons in a row match, and a checkbox's label sits on its
@@ -41,7 +41,9 @@ A saved BPM unit that does not divide the written bar (for example 8/8 counted i
 dotted halves) makes the clicks drift against the dial. The unit picker never
 offers such a unit, but an older or imported project can carry one, so Play shows
 a notice with a one-click fix that applies the unit matching the time signature
-and keeps the BPM number, so the click rate is unchanged.
+and keeps the BPM number, so the click rate is unchanged. The notice is one row,
+about 50 DIP high, with the fix beside the title; it wraps the fix below the title
+only when the window is too narrow for both.
 
 Live edits prepare immutable replacement revisions off the audio callback.
 Sound and beat-strength changes switch at the next audio quantum on the same
@@ -238,3 +240,46 @@ not establish acoustic accuracy, live-splice latency, Windows text-size or
 Contrast-theme appearance, full-product acceptance or Store publication. At a
 window width of about 320 DIP the page content still overflows the window, as in
 preview.7; whether to impose a minimum window size is an open product decision.
+
+[Preview 0.1.0-preview.9](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.9)
+makes two refinements after an owner review of preview.8. The unit-mismatch notice
+is one row, about 51 DIP high instead of 109: an InfoBar lays its title and action
+on one row only while the action button is at most 40 DIP tall, and the 44 DIP
+every button in the theme had sent the fix to a second row. The beat strip no
+longer shows a scroll bar for 12/8 (its cells were sized without the gaps between
+additive groups, so the strip overflowed by about 20 DIP, cut off its last beat and
+showed no "More beats" cue), and a strip that does have to scroll keeps room under
+its beat numbers for the scroll bar, which used to be drawn over them. Protected
+main `ea488bf`: main build 40469135784 and CodeQL 40469135742 passed; release
+40469536270 passed fresh hosted tests (234 Core passes of 238 cases, four platform
+skips, and 318 App passes), Windows x64/ARM64 builds and x64 native/package checks,
+including the first-use verifier's new gates (the four meters it steps through,
+6/8, 3/4, 12/8 and 4/4, fit their strip without a scroll bar or cue, 12/8 being
+the widest of the twelve quick picks, and a 64-beat strip leaves room under its
+numbers). Hosted audio, live-edit and counted-stop scenarios
+explicitly reported `not-run-no-output`. The actual public x64 ZIP checksum and
+embedded source/version/run were checked; the ARM64 checksum file matched the
+GitHub digest of the ARM64 ZIP, which was not downloaded and re-hashed. Local
+captures of a build from the same source, using the owner's saved project and its
+language variants, measured the notice at 51 DIP on one row (the fix level with
+the title) in English, Dutch, German, French, Spanish and the light theme, wrapping
+to two rows (97 DIP) at 460 DIP wide, and the 12/8 strip with all twelve beats and
+no bar at 1040x780 and 800x600; the scroll bar forced into its expanded form sat
+under the beat numbers without touching them. The first-use verifier fails on the
+preview.8 build at the 12/8 gate (the run stops there, so the scroll-bar-room gate
+was not exercised against it) and passes on the new build, silent audio
+scenarios included. The shipped x64 binary then ran the exact verifier's audio
+scenarios once more on the Windows default output at an inaudible master gain
+(0.0001, isolated data folder, private desktop): playback advanced, live sound,
+tempo and meter edits were published without stopping, and the counted stops
+passed. It was dry-run on private-desktop copies of the owner's saved state (the
+preview.8-era project, whose notice measured 50.7 DIP with the fix centred, and the
+current project) and installed on the development PC: the owner had closed
+preview.8 (the log records the close command and input 0 s before), so Explorer
+started the new build, it came up responsive and stopped, the saved preferences
+and recovery draft were byte-identical to the pre-install backup, and the Start
+menu shortcut now targets preview.9. No audio was played in the instance installed
+for the owner. This does not establish real-pointer hover or the Windows "always
+show scroll bars" setting on a real desktop, acoustic accuracy, live-splice
+latency, Windows text-size or Contrast-theme appearance, full-product acceptance or
+Store publication.
