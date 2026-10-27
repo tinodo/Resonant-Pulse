@@ -567,6 +567,15 @@ function Wait-ToggleState($pattern, $state, [string]$failure) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw $failure
 }
+# Waits for something on a page other than Play, where the dial that Wait-Until reports in its message does not exist.
+function Wait-Condition([scriptblock]$condition, [string]$failure, [int]$seconds = 8) {
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    do {
+        if (& $condition) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw $failure
+}
 function Select-Destination([string]$id) {
     $item = Find-Control $id
     $pattern = $null
@@ -836,6 +845,45 @@ if (-not $playAudio) {
         Set-PracticeLimits 0 0 0
     }
 }
+# Every language keeps its controls on screen. The panels are opened again in Dutch (its labels are the longest of the five), and
+# every button a panel adds must be on screen. A row of buttons that fits in English can lose its last button in another
+# language when layout rounding tips it over the edge: the child is then placed below the row, out of sight, and the checks
+# above (English only) would never notice.
+function Get-AllButtons {
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+    @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition))
+}
+function Test-NewButtonsOnScreen([string]$where, [string[]]$before) {
+    foreach ($button in (Get-AllButtons)) {
+        $id = $button.Current.AutomationId
+        if (-not $id -or $before -contains $id) { continue }
+        if ($button.Current.IsOffscreen -or $button.Current.BoundingRectangle.IsEmpty) {
+            throw "${where}: the button '$id' ('$($button.Current.Name)') is not on screen."
+        }
+    }
+}
+Select-Destination 'DestinationSettings'
+Wait-Settled 'Language'
+Select-Combo 'Language' 'Nederlands'
+Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -ne 'Play' } 'The interface did not switch to Dutch.'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
+foreach ($panel in $panels) {
+    if ($panel.close -notlike '*Cancel') { continue }
+    $before = @(Get-AllButtons | ForEach-Object { $_.Current.AutomationId } | Where-Object { $_ })
+    Open-Panel $panel.open $panel.field
+    Wait-Settled $panel.field
+    Test-NewButtonsOnScreen "Dutch panel $($panel.open[-1])" $before
+    Invoke-Control $panel.close
+    Wait-Absent $panel.field
+}
+Select-Destination 'DestinationSettings'
+Wait-Settled 'Language'
+Select-Combo 'Language' 'English'
+Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -eq 'Play' } 'The interface did not switch back to English.'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;

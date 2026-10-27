@@ -79,10 +79,18 @@ internal static class FormMetrics
 internal static class WrapRows
 {
     /// <summary>
-    /// The index at which each row starts. A child that does not fit begins a new row; one wider than the row sits alone.
-    /// An infinite or unknown width never wraps.
+    /// Room, in DIP, that a row may exceed its width by before a child wraps. A row arranged at exactly the width it measured
+    /// (any left-aligned row of commands) would otherwise lose its last child to the next row when layout rounding makes the
+    /// children a pixel or two wider than they measured: the child is then placed below the height the row reported, and is
+    /// clipped out of sight.
     /// </summary>
-    internal static IReadOnlyList<int> Starts(IReadOnlyList<double> widths, double available, double spacing)
+    internal const double Slack = 2;
+
+    /// <summary>
+    /// The index at which each row starts. A child that does not fit begins a new row; one wider than the row sits alone.
+    /// An infinite or unknown width never wraps. <paramref name="slack"/> is extra room allowed before a child wraps.
+    /// </summary>
+    internal static IReadOnlyList<int> Starts(IReadOnlyList<double> widths, double available, double spacing, double slack = 0)
     {
         var starts = new List<int>();
         var wraps = double.IsFinite(available) && available > 0;
@@ -96,7 +104,7 @@ internal static class WrapRows
                 continue;
             }
             var needed = used + spacing + widths[index];
-            if (wraps && needed > available)
+            if (wraps && needed > available + slack)
             {
                 starts.Add(index);
                 used = widths[index];

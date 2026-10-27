@@ -125,6 +125,26 @@ public sealed class FormMetricsTests
     }
 
     [TestMethod]
+    public void ARowArrangedAtItsOwnWidthDoesNotLoseItsLastChildToLayoutRounding()
+    {
+        // Three buttons measure 134.7 + 224 + 143 DIP with 8 DIP between them: 517.7. A left-aligned row is arranged at exactly
+        // that width, and layout rounds each child up by a fraction of a pixel. Without slack the last button wrapped in
+        // Arrange only (not in Measure) and was placed below the row, out of sight: the Dutch Library header lost "Save".
+        double[] rounded = [135.3, 224.7, 143.3];
+        const double width = 517.7;
+        Assert.AreEqual(2, WrapRows.Starts(rounded, width, 8).Count);
+        CollectionAssert.AreEqual(new[] { 0 }, WrapRows.Starts(rounded, width, 8, WrapRows.Slack).ToArray());
+    }
+
+    [TestMethod]
+    public void SlackNeverHidesARealOverflow()
+    {
+        // One DIP less than a row needs is rounding; more than the slack is a real overflow and still wraps.
+        CollectionAssert.AreEqual(new[] { 0 }, WrapRows.Starts([100, 100, 100], 319, 10, WrapRows.Slack).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 2 }, WrapRows.Starts([100, 100, 100], 316, 10, WrapRows.Slack).ToArray());
+    }
+
+    [TestMethod]
     public void SpacingCountsTowardsTheRowWidth()
     {
         // 3 x 100 + 2 x 10 = 320 fits exactly; one DIP less does not.

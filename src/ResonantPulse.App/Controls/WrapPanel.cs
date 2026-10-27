@@ -34,7 +34,7 @@ public sealed class WrapPanel : Panel
         var constraint = new Size(availableSize.Width, double.PositiveInfinity);
         foreach (var child in children) child.Measure(constraint);
         var widths = children.Select(child => child.DesiredSize.Width).ToList();
-        var starts = WrapRows.Starts(widths, availableSize.Width, HorizontalSpacing);
+        var starts = WrapRows.Starts(widths, availableSize.Width, HorizontalSpacing, WrapRows.Slack);
         double width = 0, height = 0;
         for (var row = 0; row < starts.Count; row++)
         {
@@ -55,7 +55,7 @@ public sealed class WrapPanel : Panel
     {
         var children = Present();
         var widths = children.Select(child => child.DesiredSize.Width).ToList();
-        var starts = WrapRows.Starts(widths, finalSize.Width, HorizontalSpacing);
+        var starts = WrapRows.Starts(widths, finalSize.Width, HorizontalSpacing, WrapRows.Slack);
         double y = 0;
         for (var row = 0; row < starts.Count; row++)
         {
