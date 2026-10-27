@@ -188,6 +188,7 @@ public sealed partial class MainWindow : Window
         _refresh.Tick += (_, _) => RefreshSnapshot();
         InstallPowerHook(hwnd);
         InstallUiTestHook();
+        InstallCloseFlush();
         Closed += (_, _) =>
         {
             _isClosed = true;

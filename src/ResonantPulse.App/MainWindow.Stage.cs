@@ -21,8 +21,8 @@ public sealed partial class MainWindow
     private TextBlock? _stageNotesCaption;
     private TextBlock? _stageLockNote;
     private bool _stageSyncing;
-    private int _stageNotesSong = -1;
-    private string _stageNotesCommitted = "";
+    private readonly StageNotesDraft _stageNotesDraft = new();
+    private readonly SaveQueue _stageNotesSaves = new();
 
     private bool HasArmedSong => _armedSong >= 0 && _armedSong < _document.Setlist.Count;
 
@@ -34,7 +34,7 @@ public sealed partial class MainWindow
     {
         _stageOperationControls.Clear();
         _stageBadges.Clear();
-        _stageNotesSong = -1;
+        _stageNotesDraft.Reset();
 
         // ---- Now playing -----------------------------------------------------------------------------------------------
         var tempo = Heading("");
@@ -185,19 +185,26 @@ public sealed partial class MainWindow
             }), "\uE74D", ButtonKind.Tertiary), () => !_isLocked && HasArmedSong);
 
             _stageNotesCaption = new TextBlock { Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
-            _stageNotes = new TextBox
+            // The box is disabled while a Stage operation runs, so a draft typed in it cannot meet a setlist that is being
+            // changed under it.
+            _stageNotes = StageControl(new TextBox
             {
                 AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 110, MaxHeight = 220,
                 HorizontalAlignment = HorizontalAlignment.Stretch
-            };
+            }, () => HasArmedSong);
             Identify(_stageNotes, "SongNotes", Text.Get("Notes"));
             AutomationProperties.SetLabeledBy(_stageNotes, _stageNotesCaption);
-            // Notes are saved when the box loses focus (or Esc puts back what was saved), never by a separate button.
-            _stageNotes.LostFocus += async (_, _) => await CommitStageNotesAsync();
+            // Notes are saved when the box loses focus (or Esc puts back what was saved), never by a separate button. A save is
+            // queued behind the ones before it, so a second draft is never refused because the first is still being saved.
+            _stageNotes.LostFocus += (sender, _) =>
+            {
+                // A box that belongs to a page that has been replaced no longer speaks for the notes.
+                if (ReferenceEquals(sender, _stageNotes)) QueueStageNotesSave();
+            };
             _stageNotes.KeyDown += (_, args) =>
             {
                 if (args.Key != Windows.System.VirtualKey.Escape || _stageNotes is null) return;
-                _stageNotes.Text = _stageNotesCommitted;
+                _stageNotes.Text = _stageNotesDraft.Restore();
                 args.Handled = true;
             };
             setlistBody = new StackPanel
@@ -278,10 +285,10 @@ public sealed partial class MainWindow
             }
             if (_stageNotes is not null)
             {
-                _stageNotesSong = armed;
-                _stageNotesCommitted = armed >= 0 ? _document.Setlist[armed].Notes : "";
-                _stageNotes.Text = _stageNotesCommitted;
-                _stageNotes.IsEnabled = armed >= 0;
+                // Only a different song loads its saved notes. The same song (a refused selection put back, the lock switched)
+                // keeps the draft in the box.
+                if (_stageNotesDraft.Show(armed, armed >= 0 ? _document.Setlist[armed].Notes : "") is { } shown)
+                    _stageNotes.Text = shown;
                 _stageNotes.IsReadOnly = _isLocked;
             }
             if (_stageNotesCaption is not null)
@@ -292,24 +299,45 @@ public sealed partial class MainWindow
         RefreshStageControlState();
     }
 
-    private async Task CommitStageNotesAsync()
+    /// <summary>
+    /// Asks for what is in the notes box to be saved, if it is not what the project holds or what is already on its way. Saves
+    /// are applied in the order they were asked for, none is dropped because another is running, and each is for the song the
+    /// box showed when it was asked for. A save that fails leaves the draft in the box and says why.
+    /// </summary>
+    private void QueueStageNotesSave()
     {
-        if (_stageSyncing || _stageNotes is null || _stageNotesSong < 0) return;
-        var value = _stageNotes.Text;
-        var song = _stageNotesSong;
-        if (value == _stageNotesCommitted) return;
-        await GuardAsync(async () =>
+        if (_stageNotes is null || _isClosed) return;
+        var text = _stageNotes.Text;
+        if (!_stageNotesDraft.NeedsSave(text)) return;
+        var song = _stageNotesDraft.Request(text);
+        _ = _stageNotesSaves.Enqueue(async () =>
         {
-            await RunStageOperationAsync(async () =>
+            var applied = false;
+            await GuardAsync(async () =>
             {
                 await CommitAsync(doc =>
                 {
                     if (song >= doc.Setlist.Count) throw new InvalidOperationException(Text.Get("ChooseSong"));
-                    doc.Setlist[song].Notes = value;
+                    doc.Setlist[song].Notes = text;
+                    applied = true;
                 }, false);
-                _stageNotesCommitted = value;
+                // A locked project reports that itself and keeps the draft.
+                if (!applied) throw new OperationCanceledException();
             });
+            if (applied) _stageNotesDraft.Completed(song, text);
+            else _stageNotesDraft.Failed(song, text);
         });
+    }
+
+    /// <summary>
+    /// Queues the draft in the notes box and waits until every notes save has finished. False when the draft could not be
+    /// saved: the error has been shown and the draft is still in the box.
+    /// </summary>
+    private async Task<bool> FlushStageNotesAsync()
+    {
+        QueueStageNotesSave();
+        await _stageNotesSaves.WhenIdleAsync();
+        return _stageNotes is null || !_stageNotesDraft.NeedsSave(_stageNotes.Text);
     }
 
     private T StageControl<T>(T control, Func<bool>? when = null) where T : Control
@@ -328,19 +356,26 @@ public sealed partial class MainWindow
 
     private async Task<bool> RunStageOperationAsync(Func<Task> operation, bool requiresUnlocked = true)
     {
+        // True only when the operation ran: not when another was running, the project was locked, or the notes could not be saved.
+        var ran = false;
         try
         {
             var accepted = await _stageOperations.TryRunAsync(async () =>
             {
                 RefreshStageControlState();
                 if (_isClosed) return;
+                // What was typed in the notes belongs to the song it was typed for. It is saved, in order, before anything
+                // selects, moves or removes a song. If it cannot be saved the operation does not run, so the draft stays where
+                // it is and the song it belongs to stays selected.
+                if (!await FlushStageNotesAsync()) return;
                 if (requiresUnlocked && _isLocked) { ShowNotice("Locked"); return; }
                 await operation();
+                ran = true;
             });
             // An overlapping request is busy, not necessarily editing-locked.
             // No stale keyboard/already-queued action is enqueued.
             if (!accepted && !_isClosed) ShowNotice("StageBusy");
-            return accepted;
+            return ran;
         }
         finally { RefreshStageControlState(); }
     }

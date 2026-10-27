@@ -88,9 +88,11 @@ is specified in `metronome-design.md` and is not changed here.
 - Left: project name, the tempo large (shown once: the dial's own numeral is hidden on this page), meter, position, the dial,
   *Next + count-in* (primary).
 - Right: the setlist (the next song marked with text), *Add current project*, up, down, remove; notes for the selected
-  song (saved when focus leaves, Esc puts back what was saved). *Lock editing* and *Always on top* are switches on one line
-  in the page header; what the lock does is its tooltip, and the sentence is shown in the setlist card only while the lock is
-  on, where it explains why the setlist commands are greyed out.
+  song (saved when focus leaves, Esc puts back what was saved). Notes are saved in the order they were typed, none is dropped
+  because another save is running, and selecting, moving, removing or starting a song (and closing the window) waits for them.
+  A save that fails keeps the draft in the box and the song selected, and says why. *Lock editing* and *Always on top* are
+  switches on one line in the page header; what the lock does is its tooltip, and the sentence is shown in the setlist card
+  only while the lock is on, where it explains why the setlist commands are greyed out.
 - Below 900 DIP the setlist moves under the display.
 
 ### Train

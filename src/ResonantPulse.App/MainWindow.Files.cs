@@ -86,7 +86,22 @@ public sealed partial class MainWindow
 
     private async Task RefreshLibraryAsync()
     {
-        var result = await _workspace.ListAsync();
+        LibraryReadResult result;
+        try { result = await _workspace.ListAsync(); }
+        catch
+        {
+            // Nothing is being looked for any more. The page says it could not look, and the caller reports the reason.
+            _library = [];
+            if (_libraryStatus is not null)
+            {
+                _libraryStatus.Text = Text.Get("LibraryUnreadable");
+                _libraryStatus.Visibility = Visibility.Visible;
+            }
+            if (_libraryEmpty is not null) _libraryEmpty.Visibility = Visibility.Collapsed;
+            if (_libraryNoMatch is not null) _libraryNoMatch.Visibility = Visibility.Collapsed;
+            _libraryList?.Items.Clear();
+            throw;
+        }
         _library = result.Items;
         if (_libraryStatus is not null) _libraryStatus.Visibility = Visibility.Collapsed;
         FilterLibrary();

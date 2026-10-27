@@ -20,14 +20,14 @@ public sealed partial class MainWindow
         return Card("Presets", tiles, "PresetsHelp", id: "PresetsCard");
     }
 
-    private Button PresetTile(LibraryPreset preset)
+    private UIElement PresetTile(LibraryPreset preset)
     {
         var name = Text.Get("Preset_" + preset.Id);
         var description = Text.Get("PresetDesc_" + preset.Id);
         var button = new Button
         {
             Style = ResonantStyle("ChipButtonStyle"),
-            Width = 260 * Math.Max(1, Math.Sqrt(TextSettings.TextScaleFactor)),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             VerticalContentAlignment = VerticalAlignment.Top,
@@ -62,6 +62,10 @@ public sealed partial class MainWindow
                 step.Name = $"{Text.Get("Step")} {document.Program.IndexOf(step) + 1} · {step.StartTempo.ToString("0.0", Text.Culture)} → {step.EndTempo.ToString("0.0", Text.Culture)}";
             await ReplaceDocumentAsync(document);
         });
-        return button;
+        // A tile is as wide as its sentence needs at this text size, but never wider than the card offers: in a narrow window the
+        // text wraps inside the tile instead of being clipped at its right edge.
+        var tile = Fitted(button, scale => 260 * Math.Sqrt(scale));
+        tile.VerticalAlignment = VerticalAlignment.Stretch;
+        return tile;
     }
 }

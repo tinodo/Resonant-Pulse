@@ -735,6 +735,20 @@ Wait-ToggleState $stageLock ([Windows.Automation.ToggleState]::Off) 'Stage: Lock
 Wait-Condition { (Find-Control 'AddCurrentSong').Current.IsEnabled } 'Stage: unlocking did not enable adding a song again.'
 Invoke-Control 'AddCurrentSong'
 Wait-Condition { $null -ne (Find-Optional 'StageSong0') } 'Stage: the added song never appeared in the setlist.'
+# Notes belong to the song they were typed for. A draft that never lost focus is saved when the selection moves on (the list
+# selection is the operation that saves it), the other song shows its own notes, and choosing the first again shows what was saved.
+Invoke-Control 'AddCurrentSong'
+Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: the second song never appeared in the setlist.'
+function Get-SongNotes { (Find-Control 'SongNotes').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
+function Select-Song([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select() }
+$songNotes = 'Verify notes ' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+Select-Song 'StageSong0'
+Wait-Condition { (Find-Control 'SongNotes').Current.IsEnabled } 'Stage: the notes box is disabled although a song is selected.'
+(Find-Control 'SongNotes').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($songNotes)
+Select-Song 'StageSong1'
+Wait-Condition { (Get-SongNotes) -eq '' } 'Stage: the second song shows the notes of the first.'
+Select-Song 'StageSong0'
+Wait-Condition { (Get-SongNotes) -eq $songNotes } 'Stage: the notes typed for the first song were not saved before the selection moved on.'
 # Train: content-sized fields; with no program the page says how to get one; a timing check offers only the command that makes
 # sense now (nothing to press or finish until one is running).
 Select-Destination 'DestinationTrain'

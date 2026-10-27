@@ -121,7 +121,7 @@ public sealed partial class MainWindow
             Grid.SetColumn(actions, 0);
             actions.HorizontalAlignment = HorizontalAlignment.Left;
         }
-        row.Loaded += (_, _) =>
+        void Measure()
         {
             var unbounded = new Size(double.PositiveInfinity, double.PositiveInfinity);
             left.Measure(unbounded);
@@ -129,7 +129,16 @@ public sealed partial class MainWindow
             natural = left.DesiredSize.Width + row.ColumnSpacing + actions.DesiredSize.Width;
             sideBySide = null;
             Arrange();
+        }
+        // The text and the actions grow with the Windows text size, so the width they need is worked out again when it changes.
+        // On a later turn: the text has been laid out at its new size by then.
+        void OnTextScaleChanged() => row.DispatcherQueue?.TryEnqueue(Measure);
+        row.Loaded += (_, _) =>
+        {
+            TextScaleChanged += OnTextScaleChanged;
+            Measure();
         };
+        row.Unloaded += (_, _) => TextScaleChanged -= OnTextScaleChanged;
         row.SizeChanged += (_, _) => Arrange();
         Arrange();
         return row;
@@ -319,6 +328,28 @@ public sealed partial class MainWindow
         var toggle = new ToggleSwitch { IsOn = isOn, OnContent = Text.Get("On"), OffContent = Text.Get("Off"), MinWidth = 0 };
         Identify(toggle, id, Text.Get(captionKey));
         return toggle;
+    }
+
+    /// <summary>
+    /// A control as wide as its rule asks (a function of the Windows text size), never wider than the room it is offered, so
+    /// its text wraps in a narrow window instead of being clipped. While it is on screen it follows the text size.
+    /// </summary>
+    private static FitWidth Fitted(FrameworkElement control, Func<double, double> rule)
+    {
+        var host = new FitWidth { PreferredWidth = rule(TextScale), HorizontalAlignment = HorizontalAlignment.Left };
+        host.Children.Add(control);
+        void Follow()
+        {
+            var wanted = rule(TextScale);
+            if (Math.Abs(wanted - host.PreferredWidth) >= 0.5) host.PreferredWidth = wanted;
+        }
+        host.Loaded += (_, _) =>
+        {
+            TextScaleChanged += Follow;
+            Follow();
+        };
+        host.Unloaded += (_, _) => TextScaleChanged -= Follow;
+        return host;
     }
 
     /// <summary>
