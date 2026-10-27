@@ -36,6 +36,9 @@ public sealed class BeatStrip : StackPanel
 
     public int Count => _cells.Count;
 
+    /// <summary>How many extra gaps the last <see cref="Rebuild"/> put between additive groups.</summary>
+    public int GroupGapCount { get; private set; }
+
     public BeatStrip()
     {
         Orientation = Orientation.Horizontal;
@@ -50,6 +53,7 @@ public sealed class BeatStrip : StackPanel
         Children.Clear();
         _cells.Clear();
         _highlight = -1;
+        GroupGapCount = 0;
         for (var index = 0; index < count; index++)
         {
             var bar = new Rectangle
@@ -75,13 +79,15 @@ public sealed class BeatStrip : StackPanel
             layout.Children.Add(bar);
             Grid.SetRow(number, 1);
             layout.Children.Add(number);
+            var startsGroup = groupStarts.Contains(index) && index > 0;
+            if (startsGroup) GroupGapCount++;
             var button = new Button
             {
                 Content = layout, Padding = new Thickness(0), MinWidth = 0, MinHeight = 0,
                 Width = cellWidth, Height = BarZone + 24, BorderThickness = new Thickness(0),
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 CornerRadius = new CornerRadius(8),
-                Margin = new Thickness(groupStarts.Contains(index) && index > 0 ? 10 : 0, 0, 0, 0)
+                Margin = new Thickness(startsGroup ? PlayLayout.StripGroupGap : 0, 0, 0, 0)
             };
             var captured = index;
             button.Click += (_, _) => BeatInvoked?.Invoke(this, captured);

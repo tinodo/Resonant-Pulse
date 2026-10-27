@@ -2,29 +2,24 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
-## What's new in preview.8
+## What's new in preview.9
 
-An alignment and clarity pass, driven by hands-on feedback:
+Two refinements, driven by hands-on feedback:
 
-- **Time signatures** are centred in their chip and in the picker.
-- **Mute / Unmute** no longer says "click": the sound can be changed.
-- **Timer, Project and Help** are now one strip under Settings, in the same
-  full-contrast text and level with Settings' right edge (they looked disabled
-  and unaligned before). It drops its words, then takes its own row, as the
-  window narrows, and never covers the dial. "Practice" is now "Timer", so the
-  Dutch and German Play page no longer has two items called "Oefenen" / "Üben".
-- **Cancel and Done** are exactly the same size in every panel, and the audio
-  output list and its refresh button share one height and line.
-- **Every page**: dropdowns, number boxes and text boxes are one height, rows of
-  buttons match, checkbox labels sit on their box, Train's dial no longer fills
-  the page, Stage's readouts are centred and an empty Library no longer leaves a
-  blank block.
-- **Clicks out of step with the circle**: a saved project whose BPM unit does not
-  divide its bar (8/8 counted in dotted halves, for example) now shows a notice
-  with a one-click fix. The BPM number is kept, so the click rate is unchanged.
-- The log now records what asked the window to close (the X button, Alt+F4,
-  another program, or Windows ending the session) and how long ago the last key
-  or mouse input was.
+- **The "clicks and circle are out of step" notice is one row.** It appears for a
+  saved project whose BPM unit does not divide its bar (8/8 counted in dotted
+  halves, for example) and offers a one-click fix that keeps the BPM number. The
+  title and the fix now share a line (about 50 DIP high instead of 109), so the
+  dial keeps more of its size. Preview.8's fix button was as tall as every other
+  button, which made the notice move it to a second row at any width. On a
+  narrow window the fix still wraps below the title.
+- **The beat strip's scroll bar no longer covers the beat numbers, and 12/8 no
+  longer needs one.** The strip sized its beats as if the gaps between additive
+  groups did not exist, so 12/8 overflowed by about 20 DIP, cut off its last
+  beat and showed a scroll bar although every beat fits. Now the gaps are taken
+  out of the room first. A strip that really has to scroll (more beats than fit
+  beside the meter and sound controls) keeps room under its numbers for the bar
+  and shows the "More beats" cue.
 
 The metronome is the large, centered primary surface on Play, with the tempo
 inside the cyan/magenta dial. Click the number to type an exact tempo; the -,

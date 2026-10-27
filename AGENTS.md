@@ -24,7 +24,10 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
   `UiTestCapture`; pair each image with UI Automation rectangles to measure
   alignment. A second hidden button, `UiTestGrowToolLabels`, enlarges the
   page-tools labels at run time to stand in for a Windows text-size change,
-  which a test must not alter on the owner's machine. Screenshots,
+  which a test must not alter on the owner's machine, and a third,
+  `UiTestExpandScrollBars`, puts the beat strip's scroll bar into the expanded
+  form it takes under the pointer (a private desktop cannot hover) so its room
+  under the beat numbers can be seen. Screenshots,
   keystrokes and audio are otherwise opt-in (`-Screenshots`, `-Keyboard`,
   `-RunAudio`) and only automatic on GitHub Actions. `-SilentAudio` runs the
   real audio scenarios (Start, live edits, counted stops, pause/resume) on the

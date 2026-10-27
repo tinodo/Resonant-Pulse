@@ -263,10 +263,13 @@ public sealed partial class MainWindow
         stripScroll.SizeChanged += (_, args) =>
         {
             var available = Math.Max(0, args.NewSize.Width - 8);
-            var cell = Math.Clamp(available / Math.Max(1, pulses), 32, 56);
-            strip.SetCellWidth(cell);
+            strip.SetCellWidth(PlayLayout.StripCellWidth(available, pulses, strip.GroupGapCount));
             // Judged from the data, not from the scrollbar the cue itself could create.
-            cue.Visibility = pulses * 32 > available ? Visibility.Visible : Visibility.Collapsed;
+            var scrolls = PlayLayout.StripNeedsScroll(available, pulses, strip.GroupGapCount);
+            cue.Visibility = scrolls ? Visibility.Visible : Visibility.Collapsed;
+            // The scroll bar is drawn over the bottom of the strip. While it scrolls, the strip leaves room for the bar,
+            // so it never covers the beat numbers.
+            strip.Margin = new Thickness(0, 0, 0, scrolls ? PlayLayout.StripScrollBarRoom : 0);
         };
 
         var meterColumn = Captioned("TimeSignature", meter);
@@ -554,12 +557,17 @@ public sealed partial class MainWindow
     /// <summary>
     /// Shown when the saved BPM unit does not divide the bar evenly (an older or imported project), because the clicks then
     /// drift against the dial. One click applies the unit that matches the written beats. It is kept short (the reason is
-    /// in its tooltip and help text), only appears while the dial keeps a usable size (<see cref="PlayLayout.NoticeFits"/>)
-    /// and can be dismissed for this view.
+    /// in its tooltip and help text) and on one row (the action button is the framework's own height, see
+    /// <see cref="PlayLayout.NoticeButtonHeight"/>), only appears while the dial keeps a usable size
+    /// (<see cref="PlayLayout.NoticeFits"/>) and can be dismissed for this view.
     /// </summary>
     private InfoBar BuildUnitNotice(PulseSettings settings)
     {
-        var fix = new Button { Content = Text.Format("UnitMismatchFix", PulseInstrument.NoteUnit(4d / settings.BeatDenominator)) };
+        var fix = new Button
+        {
+            Content = Text.Format("UnitMismatchFix", PulseInstrument.NoteUnit(4d / settings.BeatDenominator)),
+            MinHeight = PlayLayout.NoticeButtonHeight
+        };
         Identify(fix, "UnitMismatchFix", (string)fix.Content);
         fix.Click += async (_, _) => await GuardAsync(() =>
         {
