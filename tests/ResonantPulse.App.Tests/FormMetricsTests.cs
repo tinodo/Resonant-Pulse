@@ -53,6 +53,18 @@ public sealed class FormMetricsTests
     }
 
     [TestMethod]
+    public void ADropDownLimitGrowsWithTheTextSizeSoALongOptionIsNeverCutOff()
+    {
+        Assert.AreEqual(FormMetrics.SelectMaxWidth, FormMetrics.SelectWidth(900));
+        Assert.AreEqual(FormMetrics.SelectMaxWidth * 2, FormMetrics.SelectWidth(900, 2));
+        // 300 DIP of option text at 200 % wants 364 DIP; the 320 limit chosen for 100 % text must not cut it off.
+        Assert.AreEqual(364, FormMetrics.SelectWidth(300, 2));
+        Assert.AreEqual(320, FormMetrics.SelectWidth(300, 1));
+        // A scale below 100 % never shrinks the limits.
+        Assert.AreEqual(FormMetrics.SelectMaxWidth, FormMetrics.SelectWidth(900, 0.5));
+    }
+
+    [TestMethod]
     public void PagesUseTwoColumnsOnlyWhenTheyAreWideEnough()
     {
         Assert.AreEqual(1, FormMetrics.PageColumns(520));

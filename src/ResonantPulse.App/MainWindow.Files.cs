@@ -9,6 +9,8 @@ namespace ResonantPulse.App;
 
 public sealed partial class MainWindow
 {
+    private OrderedCommits? _exportBarsCommits;
+
     private UIElement BuildLibrary()
     {
         _search = Input("Search", "LibrarySearch", "");
@@ -20,7 +22,10 @@ public sealed partial class MainWindow
         };
         Identify(_libraryList, "LibraryProjects", Text.Get("Library"));
         var exportBars = NumberInput("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
-        CommitNumber(exportBars, async value =>
+        // The state belongs to the setting, not to this box: leaving the page and coming back while a save is pending must not
+        // start a second, unordered queue.
+        _exportBarsCommits ??= new OrderedCommits(_preferences.ExportBars);
+        CommitNumber(exportBars, _exportBarsCommits, async value =>
         {
             // Commits run one at a time, so the value to roll back to is always the last one that was saved.
             var bars = Integer(value);

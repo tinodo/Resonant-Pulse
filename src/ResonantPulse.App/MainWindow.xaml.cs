@@ -72,6 +72,12 @@ public sealed partial class MainWindow : Window
         AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
         AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
         Root.SizeChanged += (_, _) => UpdateTitleBarInset();
+        // The Windows text size can change while the app runs. UISettings raises the event on a worker thread; the fields that
+        // are sized from it (the page kit) listen for the UI-thread version.
+        void OnTextScaleChanged(Windows.UI.ViewManagement.UISettings sender, object args) =>
+            DispatcherQueue.TryEnqueue(RaiseTextScaleChanged);
+        TextSettings.TextScaleFactorChanged += OnTextScaleChanged;
+        Closed += (_, _) => TextSettings.TextScaleFactorChanged -= OnTextScaleChanged;
         _noticeTimer.Tick += (_, _) => { _noticeTimer.Stop(); if (Notice.Severity == InfoBarSeverity.Informational) Notice.IsOpen = false; };
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);

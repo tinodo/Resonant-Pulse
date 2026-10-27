@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -31,6 +32,27 @@ public sealed partial class MainWindow
 
     // Lets the local verification build stand in for a larger text size (MainWindow.UiTest.cs); shipped builds have no body.
     static partial void AdjustTextScale(ref double scale);
+
+    /// <summary>
+    /// Raised on the UI thread when the Windows text size changes. A field sized from the text size listens only while it is on
+    /// screen, so a page that is gone never keeps itself alive through this event.
+    /// </summary>
+    private static event Action? TextScaleChanged;
+
+    private static void RaiseTextScaleChanged() => TextScaleChanged?.Invoke();
+
+    /// <summary>
+    /// How a field's preferred width follows the text size (a function of the scale), kept so the width can be worked out
+    /// again if the size changes while the page is open. A field without a rule keeps the width it was given.
+    /// </summary>
+    private static readonly ConditionalWeakTable<FrameworkElement, Func<double, double>> WidthRules = new();
+
+    private static Func<double, double> WidthRuleOf(FrameworkElement control)
+    {
+        if (WidthRules.TryGetValue(control, out var rule)) return rule;
+        var width = control.Width;
+        return _ => width;
+    }
 
     // ---- page structure ----------------------------------------------------------------------------------------------
 
@@ -208,27 +230,36 @@ public sealed partial class MainWindow
 
     // ---- fields: as wide as what they hold ---------------------------------------------------------------------------
 
-    /// <summary>A number box sized to its largest value. The caption comes from <see cref="Field"/>.</summary>
+    /// <summary>
+    /// A number box sized to its largest value, at the current text size and again whenever that changes. The caption comes
+    /// from <see cref="Field"/>. <paramref name="atLeast"/> is a width (a function of the text size) the box must not go below,
+    /// for a box whose digits are drawn larger than the usual 14 pt.
+    /// </summary>
     private static NumberBox NumberInput(string captionKey, string id, double value, double minimum, double maximum,
-        double step = 1, int fractionDigits = 0, bool whole = true)
+        double step = 1, int fractionDigits = 0, bool whole = true, Func<double, double>? atLeast = null)
     {
         var box = whole && fractionDigits == 0
             ? NumberInt(captionKey, id, value, minimum, maximum, step)
             : Number(captionKey, id, value, minimum, maximum, step, fractionDigits);
         box.Header = null;
         box.HorizontalAlignment = HorizontalAlignment.Left;
-        box.Width = FormMetrics.NumberWidth(minimum, maximum, fractionDigits, TextScale);
+        double Rule(double scale) =>
+            Math.Max(FormMetrics.NumberWidth(minimum, maximum, fractionDigits, scale), atLeast?.Invoke(scale) ?? 0);
+        WidthRules.AddOrUpdate(box, Rule);
+        box.Width = Rule(TextScale);
         return box;
     }
 
-    /// <summary>A drop-down as wide as its longest option.</summary>
+    /// <summary>A drop-down as wide as its longest option, at the current text size and again whenever that changes.</summary>
     private static ComboBox Dropdown(string captionKey, string id, string value, IReadOnlyList<Choice> options)
     {
         var combo = SelectChoices(captionKey, id, value, options);
         combo.Header = null;
         combo.HorizontalAlignment = HorizontalAlignment.Left;
-        var labels = options.Select(option => option.Label).Append(value);
-        combo.Width = FormMetrics.SelectWidth(WidestText(labels));
+        var labels = options.Select(option => option.Label).Append(value).ToArray();
+        double Rule(double scale) => FormMetrics.SelectWidth(WidestText(labels), scale);
+        WidthRules.AddOrUpdate(combo, Rule);
+        combo.Width = Rule(TextScale);
         return combo;
     }
 
@@ -251,20 +282,40 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Hosts a field at the width it was sized for but never wider than the room it is offered, so it cannot be clipped by a
-    /// narrow window or a large text size. A number box whose steppers no longer fit switches to compact ones.
+    /// narrow window or a large text size. A number box whose steppers no longer fit switches to compact ones. While it is on
+    /// screen the host follows the Windows text size: if the size changes the preferred width is worked out again, and only the
+    /// width and the stepper style change, so a draft, the caret and the focus stay as they are.
     /// </summary>
     private static FrameworkElement Bounded(FrameworkElement control)
     {
         if ((control is NumberBox || control is ComboBox) && double.IsFinite(control.Width))
         {
-            var preferred = control.Width;
+            var rule = WidthRuleOf(control);
+            var host = new FitWidth { PreferredWidth = control.Width, HorizontalAlignment = HorizontalAlignment.Left };
             control.Width = double.NaN;
             control.HorizontalAlignment = HorizontalAlignment.Stretch;
-            var host = new FitWidth { PreferredWidth = preferred, HorizontalAlignment = HorizontalAlignment.Left };
             host.Children.Add(control);
-            if (control is NumberBox box)
-                host.SizeChanged += (_, args) => box.SpinButtonPlacementMode = FormMetrics.SteppersInline(args.NewSize.Width, preferred)
-                    ? NumberBoxSpinButtonPlacementMode.Inline : NumberBoxSpinButtonPlacementMode.Compact;
+            void UpdateSteppers()
+            {
+                if (control is NumberBox box)
+                    box.SpinButtonPlacementMode = FormMetrics.SteppersInline(host.ActualWidth, host.PreferredWidth)
+                        ? NumberBoxSpinButtonPlacementMode.Inline : NumberBoxSpinButtonPlacementMode.Compact;
+            }
+            void Follow()
+            {
+                var wanted = rule(TextScale);
+                if (Math.Abs(wanted - host.PreferredWidth) < 0.5) return;
+                host.PreferredWidth = wanted;
+                host.UpdateLayout();
+                UpdateSteppers();
+            }
+            host.SizeChanged += (_, _) => UpdateSteppers();
+            host.Loaded += (_, _) =>
+            {
+                TextScaleChanged += Follow;
+                Follow();
+            };
+            host.Unloaded += (_, _) => TextScaleChanged -= Follow;
             return host;
         }
         if (control.HorizontalAlignment == HorizontalAlignment.Stretch && double.IsFinite(control.MaxWidth))
@@ -314,7 +365,10 @@ public sealed partial class MainWindow
     /// </summary>
     private static StackPanel UnitRows(string captionKey, params (NumberBox Box, string UnitKey)[] rows)
     {
-        var width = rows.Max(row => row.Box.Width);
+        // One width for the group, and it follows the text size like any other field: the widest of the boxes' own rules.
+        var rules = rows.Select(row => WidthRuleOf(row.Box)).ToArray();
+        double GroupWidth(double scale) => rules.Max(rule => rule(scale));
+        var width = GroupWidth(TextScale);
         var units = rows.Select(row => Text.Get(row.UnitKey)).ToArray();
         // Equal unit widths make every row wrap at the same width, and line the units up in a column when they fit.
         var unitWidth = Math.Ceiling(WidestText(units));
@@ -322,6 +376,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < rows.Length; index++)
         {
             var box = rows[index].Box;
+            WidthRules.AddOrUpdate(box, GroupWidth);
             box.Width = width;
             AutomationProperties.SetName(box, $"{Text.Get(captionKey)}: {units[index]}");
             var label = new TextBlock
@@ -358,17 +413,18 @@ public sealed partial class MainWindow
     /// Commits run one at a time, in the order they were made: a slow save never lets a later edit overtake it, and a revert
     /// always shows the value of the latest commit that actually succeeded. When a newer edit is already waiting, an older
     /// failure leaves the box alone, because the newer edit decides what it shows.
+    /// <paramref name="commits"/> belongs to the setting and outlives the page: a rebuilt page attaches its new box to it, so a
+    /// save that was pending when the page was rebuilt can neither overwrite a newer edit nor leave the new box out of date.
     /// </summary>
-    private void CommitNumber(NumberBox box, Func<double, Task> commit)
+    private void CommitNumber(NumberBox box, OrderedCommits commits, Func<double, Task> commit)
     {
-        var commits = new OrderedCommits(box.Value);
         var reverting = false;
-        void Revert()
+        commits.Attach(value =>
         {
             reverting = true;
-            box.Value = commits.Committed;
+            box.Value = value;
             reverting = false;
-        }
+        });
         box.ValueChanged += (sender, args) =>
         {
             if (reverting) return;
@@ -381,7 +437,7 @@ public sealed partial class MainWindow
                     applied = true;
                 });
                 return applied;
-            }, Revert);
+            });
         };
     }
 

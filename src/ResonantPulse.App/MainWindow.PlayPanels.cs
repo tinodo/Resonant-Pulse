@@ -183,10 +183,9 @@ public sealed partial class MainWindow
     private OptionPanel BuildTempoPanel()
     {
         var settings = _document.Settings;
-        var tempo = NumberInput("Tempo", "Tempo", settings.Tempo, 1, 1000, 1, 0, whole: false);
-        tempo.FontSize = 24;
         // The digits are drawn at 24 pt, so this box is wider than the 14 pt rule gives.
-        tempo.Width = Math.Max(tempo.Width, 200 * TextScale);
+        var tempo = NumberInput("Tempo", "Tempo", settings.Tempo, 1, 1000, 1, 0, whole: false, atLeast: scale => 200 * scale);
+        tempo.FontSize = 24;
         var unit = Dropdown("Unit", "TempoUnit", Invariant(settings.BeatUnitQuarters), TempoUnitChoices(settings));
         var half = ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, Math.Round(tempo.Value / 2, 1)); });
         var twice = ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, Math.Round(tempo.Value * 2, 1)); });

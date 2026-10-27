@@ -279,11 +279,25 @@ function Wait-Transport([string]$prefix, [bool]$afterCountIn = $false) {
     do {
         $text = (Find-Control 'TransportStatus').Current.Name
         if ($text -like "$prefix*" -and (-not $afterCountIn -or $text -notlike '*Count-in*')) {
+            # A completed stop is reported a few milliseconds before the position readout lands on its final value (3.99 s
+            # reads 00:03 with a second left), so that text is read again until it has been still for a moment.
+            if ($prefix -eq 'Completed') { $text = Get-SettledStatus $text }
             return $text
         }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Expected $prefix transport state, observed: $text"
+}
+function Get-SettledStatus([string]$text) {
+    $stillSince = [DateTime]::UtcNow
+    $limit = [DateTime]::UtcNow.AddSeconds(3)
+    while ([DateTime]::UtcNow -lt $limit) {
+        Start-Sleep -Milliseconds 60
+        $now = (Find-Control 'TransportStatus').Current.Name
+        if ($now -ne $text) { $text = $now; $stillSince = [DateTime]::UtcNow }
+        elseif (([DateTime]::UtcNow - $stillSince).TotalMilliseconds -ge 300) { break }
+    }
+    return $text
 }
 function Set-Number([string]$id, [int]$value) {
     $element = Find-Control $id

@@ -40,9 +40,13 @@ internal static class FormMetrics
         return Math.Ceiling(NumberChrome + characters * DigitWidth * Math.Max(1, textScale));
     }
 
-    /// <summary>Width of a drop-down for options whose longest text measures <paramref name="longestText"/> DIP.</summary>
-    internal static double SelectWidth(double longestText) =>
-        Math.Clamp(Math.Ceiling(longestText + SelectChrome), SelectMinWidth, SelectMaxWidth);
+    /// <summary>
+    /// Width of a drop-down for options whose longest text measures <paramref name="longestText"/> DIP. The text is measured at
+    /// the current Windows text size, so the upper limit grows with it: a long option must not be cut off at 200 % text just
+    /// because a limit chosen for 100 % was reached. Where there is less room, <c>FitWidth</c> gives way.
+    /// </summary>
+    internal static double SelectWidth(double longestText, double textScale = 1) =>
+        Math.Clamp(Math.Ceiling(longestText + SelectChrome), SelectMinWidth, SelectMaxWidth * Math.Max(1, textScale));
 
     /// <summary>
     /// The width a field gets: its own preferred width, but never more than the room it was offered, so a field cannot be
