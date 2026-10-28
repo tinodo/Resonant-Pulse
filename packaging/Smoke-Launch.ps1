@@ -6,9 +6,10 @@ param(
     [string]$PackageFamilyName
 )
 $ErrorActionPreference = 'Stop'
-# This script starts the payload against the machine's real data folder, copies the screen and force-stops the process,
-# so it is restricted to disposable GitHub-hosted runners (as Smoke-Package.ps1 is). On a developer machine use
-# Verify-Local.ps1: isolated data, a private desktop and a refusal of builds that ignore RESONANT_PULSE_HOME.
+# This script starts the payload against the machine's real data folder (after clearing it, so the verification is a first use),
+# copies the screen and force-stops the process, so it is restricted to disposable GitHub-hosted runners (as Smoke-Package.ps1
+# is). On a developer machine use Verify-Local.ps1: isolated data, a private desktop and a refusal of builds that ignore
+# RESONANT_PULSE_HOME.
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
     throw 'Smoke-Launch.ps1 is restricted to disposable GitHub-hosted runners; use packaging\Verify-Local.ps1 on a developer machine.'
 }
@@ -21,6 +22,11 @@ if ($ExistingProcessId) {
         throw 'The supplied process does not belong to the expected application payload.'
     }
 } else {
+    # The verification is a first use: it starts from nothing a run before this one left in the machine's data folder (the
+    # checks add lanes to the project, and the project is restored the next time the application starts). The runner is
+    # disposable, and the check above is why this is safe to do.
+    $dataFolder = Join-Path $env:LOCALAPPDATA 'ResonantPulse'
+    if (Test-Path -LiteralPath $dataFolder) { Remove-Item -LiteralPath $dataFolder -Recurse -Force }
     $process = Start-Process -FilePath $executable -PassThru -RedirectStandardOutput (Join-Path $artifactDirectory 'application-stdout.log') -RedirectStandardError (Join-Path $artifactDirectory 'application-stderr.log')
 }
 try {

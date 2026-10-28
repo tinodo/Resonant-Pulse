@@ -930,6 +930,11 @@ if (-not $playAudio) {
 # checks, so the lanes it adds cannot disturb them.
 Select-Destination 'DestinationStudio'
 Wait-Settled 'AddLane'
+# This check is a first use, so the project starts with no lanes. One that is already there means an earlier run left its project
+# in the data folder (the hosted launchers clear it before each run), which would otherwise show only as a missing control.
+if ($null -ne (Find-Optional 'Lane0Card')) {
+    throw 'Studio: the project already has lanes, but this check starts from a first use. Run it with an empty data folder (RESONANT_PULSE_HOME, or an empty %LOCALAPPDATA%\ResonantPulse on a disposable runner).'
+}
 $null = Find-Control 'StudioEmpty'
 Invoke-Control 'AddLane'
 Invoke-Control 'AddLanePlain'

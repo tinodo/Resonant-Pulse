@@ -106,6 +106,11 @@ public static class PulsePackageActivation
     }
 }
 '@
+    # The verification that follows is a first use. The packaged application also reads the machine's data folder (its own store
+    # falls through to it), where the portable run before this one left its project, so the folder is cleared before the
+    # package is activated. The runner is disposable, and the check at the top of this script is why this is safe to do.
+    $dataFolder = Join-Path $env:LOCALAPPDATA 'ResonantPulse'
+    if (Test-Path -LiteralPath $dataFolder) { Remove-Item -LiteralPath $dataFolder -Recurse -Force }
     $activationPid = [PulsePackageActivation]::Activate("$($installed.PackageFamilyName)!$applicationId")
     if (-not $activationPid) { throw 'Activation returned no application process ID.' }
     $activatedProcess = [Diagnostics.Process]::GetProcessById([int]$activationPid)
