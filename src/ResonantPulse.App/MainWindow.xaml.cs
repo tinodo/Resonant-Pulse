@@ -110,7 +110,7 @@ public sealed partial class MainWindow : Window
         StartButton.Click += async (_, _) => await GuardAsync(TogglePlaybackAsync);
         StopButton.Click += (_, _) =>
         {
-            _transportIntent++;
+            SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();
             _hasPendingEdits = false;
@@ -339,13 +339,26 @@ public sealed partial class MainWindow : Window
             // and only be heard after Stop and Start. A resume keeps the revision it paused on and does not wait.
             if (!retainsRevision)
             {
-                // Stop, a change of output and a power transition end the wait by changing the transport intent. Stop stays
-                // available while Start waits, so a save that stalls cannot leave a start that cannot be cancelled.
+                // Stop, a change of output, a power transition and a replaced project end the wait by superseding the transport
+                // intent (which also cancels the wait, so Start lets go of the busy state at once, not when the queue clears).
+                // Stop stays available while Start waits, so a save that stalls cannot leave a start that cannot be cancelled.
                 var intent = _transportIntent;
+                using var wait = new CancellationTokenSource();
+                _startWait = wait;
                 _startWaitingIntent = intent;
-                RefreshSnapshot();
-                try { await WaitForPendingEditsAsync(); }
-                finally { _startWaitingIntent = null; }
+                try
+                {
+                    // The tempo is submitted one step at a time and the newest request waits outside the queue until the one
+                    // being committed is done, so it is waited for first, as closing does.
+                    await _tempoPump.WaitAsync(wait.Token);
+                    await WaitForPendingEditsAsync(wait.Token);
+                }
+                catch (OperationCanceledException) { return; }
+                finally
+                {
+                    _startWait = null;
+                    _startWaitingIntent = null;
+                }
                 // The window may have begun to close, or the start been cancelled or overtaken, while Start waited.
                 if (intent != _transportIntent || _closeFlushing || _isClosed) return;
                 if (!HasSelectedOutput)
@@ -364,13 +377,29 @@ public sealed partial class MainWindow : Window
     /// <summary>The transport intent of a Start that waits for the edits asked for before it, while it waits.</summary>
     private int? _startWaitingIntent;
 
+    /// <summary>Cancels the wait of a Start that waits for earlier edits, while it waits.</summary>
+    private CancellationTokenSource? _startWait;
+
     /// <summary>True while a Start waits for earlier edits and nothing has cancelled it: Stop is available then, and ends the wait.</summary>
     private bool IsStartPending => _startWaitingIntent is { } waiting && waiting == _transportIntent;
 
-    /// <summary>Returns once every edit asked for before this call has been applied (the edit lock is handed out in the order it was asked for).</summary>
-    private async Task WaitForPendingEditsAsync()
+    /// <summary>
+    /// Ends whatever the transport was about to do. A Start that waits for earlier edits is one such thing: it checks the intent
+    /// when it wakes, and its wait is cancelled so that it lets go of the busy state at once.
+    /// </summary>
+    private void SupersedeTransportIntent()
     {
-        await _edits.WaitAsync();
+        _transportIntent++;
+        _startWait?.Cancel();
+    }
+
+    /// <summary>
+    /// Returns once every edit asked for before this call has been applied (the edit lock is handed out in the order it was
+    /// asked for). <paramref name="cancel"/> ends the wait without taking the lock.
+    /// </summary>
+    private async Task WaitForPendingEditsAsync(CancellationToken cancel = default)
+    {
+        await _edits.WaitAsync(cancel);
         _edits.Release();
     }
 

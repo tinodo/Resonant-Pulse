@@ -253,7 +253,7 @@ public sealed partial class MainWindow
             var replacement = LocalWorkspace.Clone(document);
             await ValidateAsync(replacement);
             await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
-            _transportIntent++;
+            SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();
             RecordUndo();

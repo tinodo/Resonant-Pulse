@@ -79,7 +79,7 @@ public sealed partial class MainWindow
                 try
                 {
                     InvalidateTiming();
-                    _transportIntent++;
+                    SupersedeTransportIntent();
                     _transport.Stop();
                     _ = GuardAsync(SaveRecoveryAsync);
                     RefreshSnapshot();

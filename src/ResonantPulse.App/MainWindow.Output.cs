@@ -43,7 +43,7 @@ public sealed partial class MainWindow
     {
         if (_preferences.OutputId == device.Id && !_isOutputMissing) return;
         InvalidateTiming();
-        _transportIntent++;
+        SupersedeTransportIntent();
         _transport.SuspendForEndpointChange();
         _preferences.OutputId = device.Id;
         _preferences.OutputName = device.Name;
