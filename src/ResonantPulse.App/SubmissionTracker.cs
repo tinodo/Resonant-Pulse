@@ -53,6 +53,9 @@ internal sealed class SubmissionTracker<T> where T : notnull
         return true;
     }
 
+    /// <summary>True while a submitted value has not been answered yet: the project does not hold it, and will (or refuse it).</summary>
+    internal bool IsPending => _unanswered.Count > 0;
+
     /// <summary>What the control shows after a refusal or for an invalid draft: the value on its way, or else <paramref name="held"/>, what the project holds.</summary>
     internal T OnItsWayOr(T held) => TryGetPending(out var onItsWay) ? onItsWay : held;
 

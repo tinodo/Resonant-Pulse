@@ -557,11 +557,18 @@ public sealed partial class MainWindow
     /// newer one is still on its way and decides what the box shows. An empty or invalid draft submits nothing and shows the
     /// value that is on its way (see <see cref="SubmissionTracker{T}"/>), not the one the project still holds; so does a value
     /// that is refused at once while an older one is still in the queue.
+    /// Two boxes that show one setting (the steady tempo and the start of a ramp, only one of which is on screen) pass the same
+    /// <paramref name="shared"/> tracker, so a value typed in either is the newest value of that setting.
+    /// <paramref name="silenced"/> is true while the page writes the box itself, to bring it in line with the project: that is
+    /// not a submission, so it neither reaches <paramref name="commit"/> nor changes what the tracker holds.
+    /// <paramref name="answered"/> runs once each answer has been recorded, whatever it was, so whatever else shows the setting
+    /// can be brought in line with the box.
     /// </summary>
-    private void CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
+    private SubmissionTracker<double> CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit,
+        SubmissionTracker<double>? shared = null, Func<bool>? silenced = null, Action? answered = null)
     {
         var reverting = false;
-        var submissions = new SubmissionTracker<double>();
+        var submissions = shared ?? new SubmissionTracker<double>();
         void Show(double value)
         {
             reverting = true;
@@ -570,7 +577,7 @@ public sealed partial class MainWindow
         }
         box.ValueChanged += async (sender, args) =>
         {
-            if (reverting) return;
+            if (reverting || silenced?.Invoke() == true) return;
             if (!double.IsFinite(args.NewValue))
             {
                 Show(submissions.OnItsWayOr(current()));
@@ -584,7 +591,9 @@ public sealed partial class MainWindow
                 applied = true;
             });
             if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused) Show(submissions.OnItsWayOr(current()));
+            answered?.Invoke();
         };
+        return submissions;
     }
 
     /// <summary>
@@ -592,8 +601,12 @@ public sealed partial class MainWindow
     /// Esc puts back what the setting holds (or, while a draft is on its way, that draft: it is what the setting is about to
     /// hold). A refused draft goes back to what the setting holds, with the reason shown, unless a newer draft was committed
     /// after it or the person has typed on since. The same draft is never committed twice while the first is on its way.
+    /// <paramref name="stale"/> is true once the page the box was built for has been replaced because the project changed (a
+    /// step moved, a lane removed). Taking a box away while it has the focus makes it lose that focus, which commits it, and by
+    /// then what it holds was written for something that may not be at its place any more: it is not committed, and nothing is
+    /// said, because the person did nothing.
     /// </summary>
-    private void CommitText(TextBox box, Func<string> current, Func<string, Task> commit)
+    private SubmissionTracker<string> CommitText(TextBox box, Func<string> current, Func<string, Task> commit, Func<bool>? stale = null)
     {
         var submissions = new SubmissionTracker<string>();
         // The draft last applied as typed: what the setting holds, which may differ from current() when the commit tidies it.
@@ -601,6 +614,7 @@ public sealed partial class MainWindow
         string Held() => submissions.TryGetPending(out var onItsWay) ? onItsWay : settled ?? current();
         async Task CommitDraftAsync()
         {
+            if (stale?.Invoke() == true) return;
             var draft = box.Text;
             if (draft == Held()) return;
             var ticket = submissions.Begin(draft);
@@ -637,16 +651,20 @@ public sealed partial class MainWindow
                 box.Text = Held();
             }
         };
+        return submissions;
     }
 
     /// <summary>
     /// The same contract for a drop-down: a choice commits at once, and a refused one puts the drop-down back to what the
-    /// setting holds, unless a newer choice was made after it.
+    /// setting holds, unless a newer choice was made after it. <paramref name="shared"/> is the tracker to use when something
+    /// else needs to know what is on its way, and <paramref name="answered"/> runs once each answer has been recorded and a
+    /// refusal has put the drop-down back, so what follows the choice (which fields are on screen) is brought in line with it.
     /// </summary>
-    private void CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit)
+    private SubmissionTracker<string> CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit,
+        SubmissionTracker<string>? shared = null, Action? answered = null)
     {
         var reverting = false;
-        var submissions = new SubmissionTracker<string>();
+        var submissions = shared ?? new SubmissionTracker<string>();
         combo.SelectionChanged += async (_, _) =>
         {
             if (reverting || combo.SelectedItem is not Choice choice) return;
@@ -657,11 +675,49 @@ public sealed partial class MainWindow
                 await commit(choice.Value);
                 applied = true;
             });
-            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
-            reverting = true;
-            SelectChoice(combo, submissions.OnItsWayOr(current()));
-            reverting = false;
+            if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused)
+            {
+                reverting = true;
+                SelectChoice(combo, submissions.OnItsWayOr(current()));
+                reverting = false;
+            }
+            answered?.Invoke();
         };
+        return submissions;
+    }
+
+    /// <summary>
+    /// The same contract for a switch: a change commits at once, and a refused one puts the switch back to what the setting
+    /// holds (or to the value of an older change that is still in the queue), unless a newer change was made after it. Whatever
+    /// else shows the setting is brought in line by <paramref name="answered"/>, which runs once each answer has been recorded
+    /// (and a refusal has put the switch back), whether or not the change was applied. <paramref name="shared"/> is the tracker
+    /// to use when that needs to know what is on its way.
+    /// </summary>
+    private SubmissionTracker<bool> CommitSwitch(ToggleSwitch toggle, Func<bool> current, Func<bool, Task> commit,
+        SubmissionTracker<bool>? shared = null, Action? answered = null)
+    {
+        var reverting = false;
+        var submissions = shared ?? new SubmissionTracker<bool>();
+        toggle.Toggled += async (_, _) =>
+        {
+            if (reverting) return;
+            var wanted = toggle.IsOn;
+            var ticket = submissions.Begin(wanted);
+            var applied = false;
+            await GuardAsync(async () =>
+            {
+                await commit(wanted);
+                applied = true;
+            });
+            if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused)
+            {
+                reverting = true;
+                toggle.IsOn = submissions.OnItsWayOr(current());
+                reverting = false;
+            }
+            answered?.Invoke();
+        };
+        return submissions;
     }
 
     private const double SliderTrackWidth = 190;
@@ -672,10 +728,12 @@ public sealed partial class MainWindow
     /// <see cref="GestureCommit"/>), so a drag is one undo step and one write, not one per tick. A refused value puts the slider
     /// back to what the setting holds, unless a newer value was committed after it. The slider is as wide as its track and its
     /// longest value text, and gives way in a narrow card. It waits for the editor gate like the other fields of a lane
-    /// (see <see cref="EditorControl{T}"/>).
+    /// (see <see cref="EditorControl{T}"/>). <paramref name="onSlider"/> is given the slider once it is made, for a caller that
+    /// has to find it again (to give it back the focus, or to renumber it).
     /// </summary>
     private StackPanel SliderField(string captionKey, string id, string accessibleName, int value, int minimum, int maximum,
-        Func<int, string> format, IEnumerable<string> samples, Func<int> current, Func<int, Task> commit)
+        Func<int, string> format, IEnumerable<string> samples, Func<int> current, Func<int, Task> commit,
+        Action<Slider>? onSlider = null)
     {
         var caption = new TextBlock { Text = Text.Get(captionKey), Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
         var slider = EditorControl(new Slider
@@ -685,6 +743,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center
         });
         Identify(slider, id, accessibleName);
+        onSlider?.Invoke(slider);
         AutomationProperties.SetLabeledBy(slider, caption);
         var readout = new TextBlock
         {

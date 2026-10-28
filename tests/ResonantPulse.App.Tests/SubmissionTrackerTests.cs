@@ -166,4 +166,45 @@ public sealed class SubmissionTrackerTests
         tracker.Begin(6);
         Assert.AreEqual(6, tracker.OnItsWayOr(4));
     }
+
+    [TestMethod]
+    public void IsPendingIsTrueFromTheSubmissionUntilItsAnswerWhateverTheAnswerIs()
+    {
+        var tracker = new SubmissionTracker<bool>();
+        Assert.IsFalse(tracker.IsPending);
+        var applied = tracker.Begin(true);
+        Assert.IsTrue(tracker.IsPending);
+        tracker.Resolve(applied, applied: true);
+        Assert.IsFalse(tracker.IsPending);
+        var refused = tracker.Begin(false);
+        Assert.IsTrue(tracker.IsPending);
+        tracker.Resolve(refused, applied: false);
+        Assert.IsFalse(tracker.IsPending);
+    }
+
+    [TestMethod]
+    public void AnOlderSubmissionThatIsStillWaitingKeepsTheControlPendingAfterANewerOneIsRefusedAtOnce()
+    {
+        var tracker = new SubmissionTracker<string>();
+        var older = tracker.Begin("Kick");
+        var newer = tracker.Begin("  ");
+        Assert.AreEqual(SubmissionAnswer.Refused, tracker.Resolve(newer, applied: false));
+        Assert.IsTrue(tracker.IsPending, "Kick is still on its way, so a screen that shows the project must not overwrite the box");
+        Assert.AreEqual(SubmissionAnswer.Applied, tracker.Resolve(older, applied: true));
+        Assert.IsFalse(tracker.IsPending);
+    }
+
+    [TestMethod]
+    public void TwoBoxesThatShowOneSettingShareItsSubmissionsSoAnOlderRefusalPutsNeitherBack()
+    {
+        // The steady tempo and the start of a ramp show one setting, and only one of them is on screen. Both submit to one tracker.
+        var tracker = new SubmissionTracker<double>();
+        var typedInStart = tracker.Begin(1);
+        Assert.AreEqual(1, tracker.OnItsWayOr(60), "both boxes show the value on its way");
+        var typedInSteady = tracker.Begin(80);
+        Assert.AreEqual(SubmissionAnswer.Superseded, tracker.Resolve(typedInStart, applied: false), "the older refusal does not decide");
+        Assert.AreEqual(80, tracker.OnItsWayOr(60), "the newer value is still shown in both boxes");
+        Assert.AreEqual(SubmissionAnswer.Refused, tracker.Resolve(typedInSteady, applied: false));
+        Assert.AreEqual(60, tracker.OnItsWayOr(60), "with nothing on its way both boxes show what the project holds");
+    }
 }

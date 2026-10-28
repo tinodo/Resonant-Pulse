@@ -171,4 +171,35 @@ public sealed class FormMetricsTests
     {
         Assert.AreEqual(0, WrapRows.Starts([], 300, 10).Count);
     }
+
+    [TestMethod]
+    public void ARowThatOnlyJustFitsIsArrangedAsItWasMeasured()
+    {
+        // 183 + 16 + 213 = 412: measured at 409 (the slack allows 411) the second field wraps; arranged at 411, where layout
+        // rounding has added two DIP, the same widths would fit on one row. Measured as two rows and drawn as one, the panel
+        // is centred in room it did not need (an empty band above and below the row).
+        double[] widths = [183, 213];
+        var measured = WrapRows.Starts(widths, 409, 16, WrapRows.Slack);
+        CollectionAssert.AreEqual(new[] { 0, 1 }, measured.ToArray());
+        Assert.AreEqual(1, WrapRows.Starts(widths, 411, 16, WrapRows.Slack).Count, "worked out afresh, this width makes one row");
+        CollectionAssert.AreEqual(new[] { 0, 1 }, WrapRows.Arranged(measured, 409, 2, widths, 411, 16, WrapRows.Slack).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 1 }, WrapRows.Arranged(measured, 409, 2, widths, 407, 16, WrapRows.Slack).ToArray());
+    }
+
+    [TestMethod]
+    public void ARealChangeOfWidthOrChildrenWorksTheRowsOutAgain()
+    {
+        double[] widths = [100, 100, 100];
+        var measured = WrapRows.Starts(widths, 250, 10, WrapRows.Slack);
+        CollectionAssert.AreEqual(new[] { 0, 2 }, measured.ToArray());
+        // A different width (more than the slack apart): the rows follow it.
+        CollectionAssert.AreEqual(new[] { 0 }, WrapRows.Arranged(measured, 250, 3, widths, 330, 10, WrapRows.Slack).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 1, 2 }, WrapRows.Arranged(measured, 250, 3, widths, 150, 10, WrapRows.Slack).ToArray());
+        // A different number of children (one became visible): the measured rows no longer describe the panel.
+        double[] more = [100, 100, 100, 100];
+        CollectionAssert.AreEqual(new[] { 0, 2 }, WrapRows.Arranged(measured, 250, 3, more, 250, 10, WrapRows.Slack).ToArray());
+        // Nothing measured yet, or measured without a width to wrap at: nothing to reuse.
+        CollectionAssert.AreEqual(new[] { 0, 2 }, WrapRows.Arranged(null, double.NaN, -1, widths, 250, 10, WrapRows.Slack).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 2 }, WrapRows.Arranged([0], double.PositiveInfinity, 3, widths, 250, 10, WrapRows.Slack).ToArray());
+    }
 }

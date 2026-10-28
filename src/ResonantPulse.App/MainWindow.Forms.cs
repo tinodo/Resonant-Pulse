@@ -12,88 +12,6 @@ public sealed partial class MainWindow
         public override string ToString() => Label;
     }
 
-    private static StackPanel Column(params UIElement[] children)
-    {
-        var panel = new StackPanel { Spacing = 16 };
-        foreach (var child in children) panel.Children.Add(Aligned(child));
-        return panel;
-    }
-
-    /// <summary>
-    /// A ComboBox keeps its header inside the control, which leaves the box itself 32 DIP tall, while NumberBox and TextBox
-    /// boxes are 44 DIP. Rows of mixed fields therefore misaligned (Settings, Studio). The caption moves above the box and the
-    /// box becomes 44 DIP with the same 4 DIP gap the other fields use.
-    /// </summary>
-    private static UIElement Aligned(UIElement child)
-    {
-        if (child is not ComboBox { Header: TextBlock caption } combo) return child;
-        // The caption moved out, so the implicit style's 44 DIP minimum is now the box itself. No fixed height: the box must
-        // be able to grow with Windows text size.
-        combo.Header = null;
-        combo.HorizontalAlignment = HorizontalAlignment.Stretch;
-        caption.Margin = new Thickness(0, 0, 0, 4);
-        var field = new StackPanel();
-        field.Children.Add(caption);
-        field.Children.Add(combo);
-        return field;
-    }
-
-    private static Grid Flow(params UIElement[] children) => WrapControls(220, false, children);
-
-    private static Grid WrapControls(double minimumWidth, bool stretchHeight, params UIElement[] source)
-    {
-        var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        var children = source.Select(Aligned).ToArray();
-        var panel = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
-        foreach (var child in children)
-        {
-            if (child is not FrameworkElement element)
-                throw new ArgumentException("Form controls must be framework elements.", nameof(source));
-            // Fields keep their own height; commands in one row share the tallest one's height, so a two-line label
-            // never leaves its neighbours shorter.
-            element.VerticalAlignment = stretchHeight ? VerticalAlignment.Stretch : VerticalAlignment.Top;
-            element.HorizontalAlignment = HorizontalAlignment.Stretch;
-            panel.Children.Add(child);
-        }
-        var lastColumns = 0;
-        void Arrange(double width)
-        {
-            var columns = FlowColumns(width, minimumWidth, scale, children.Length);
-            if (columns == lastColumns) return;
-            lastColumns = columns;
-            panel.ColumnDefinitions.Clear();
-            panel.RowDefinitions.Clear();
-            for (var column = 0; column < columns; column++)
-                panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (var row = 0; row < (children.Length + columns - 1) / columns; row++)
-                panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            for (var index = 0; index < children.Length; index++)
-            {
-                if (children[index] is FrameworkElement element)
-                {
-                    Grid.SetColumn(element, index % columns);
-                    Grid.SetRow(element, index / columns);
-                }
-            }
-        }
-        Arrange(0);
-        panel.SizeChanged += (_, args) => Arrange(args.NewSize.Width);
-        return panel;
-    }
-
-    private static int FlowColumns(double width, double minimumWidth, double textScale, int count) =>
-        Math.Clamp((int)Math.Floor((Math.Max(0, width) + 12) /
-            (minimumWidth * Math.Sqrt(textScale) + 12)), 1, Math.Max(1, count));
-
-    private static StackPanel Commands(params UIElement[] children)
-    {
-        var panel = new StackPanel { Spacing = 8 };
-        foreach (var child in children) panel.Children.Add(child);
-        return panel;
-    }
-
-    private static UIElement CommandFlow(params UIElement[] children) => WrapControls(170, true, children);
-
     private static TextBlock Body(string text) => new()
     {
         Text = text, FontSize = 14,
@@ -201,29 +119,6 @@ public sealed partial class MainWindow
     }
 
     private static string Selected(ComboBox combo) => ((Choice)combo.SelectedItem).Value;
-
-    private static VariableSizedWrapGrid AccentFlow()
-    {
-        var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        var panel = new VariableSizedWrapGrid
-        {
-            Orientation = Orientation.Horizontal, ItemWidth = 155 * Math.Sqrt(scale), ItemHeight = 76 * scale
-        };
-        panel.SizeChanged += (_, args) => panel.ItemWidth = Math.Min(Math.Max(100, args.NewSize.Width), 155 * Math.Sqrt(scale));
-        return panel;
-    }
-
-    private static CheckBox Check(string key, string id, bool value)
-    {
-        // The default 5 DIP top padding pushes a centred label below the box's centre; without it they share one line.
-        var check = new CheckBox
-        {
-            Content = new TextBlock { Text = Text.Get(key), TextWrapping = TextWrapping.Wrap }, IsChecked = value, MinHeight = 44,
-            VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 0, 0, 0)
-        };
-        Identify(check, id, Text.Get(key));
-        return check;
-    }
 
     private static double Value(NumberBox number)
     {

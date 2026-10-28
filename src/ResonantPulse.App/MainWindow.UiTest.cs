@@ -32,6 +32,10 @@ public sealed partial class MainWindow
         var ask = Tiny(new Button());
         var holdEdits = Tiny(new Button());
         var releaseEdits = Tiny(new Button());
+        var countControls = Tiny(new Button());
+        var controlCount = Tiny(new TextBox());
+        var showUndoKey = Tiny(new Button());
+        var undoKey = Tiny(new TextBox());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
         Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
@@ -42,6 +46,10 @@ public sealed partial class MainWindow
         Identify(ask, "UiTestAskQuestion", "ui test ask question");
         Identify(holdEdits, "UiTestHoldEdits", "ui test hold edits");
         Identify(releaseEdits, "UiTestReleaseEdits", "ui test release edits");
+        Identify(countControls, "UiTestCountControls", "ui test count editor controls");
+        Identify(controlCount, "UiTestControlCount", "ui test editor control count");
+        Identify(showUndoKey, "UiTestShowUndoKey", "ui test show undo key");
+        Identify(undoKey, "UiTestUndoKey", "ui test undo key");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
         // Stands in for a request that was still loading when the window began to close (an Open validating its file) and now
         // asks whether to replace the project.
@@ -58,18 +66,56 @@ public sealed partial class MainWindow
         // Stands in for edits that are asked for faster than they are applied: from "hold" until "release" every edit waits in the
         // queue, in order, and is applied when the queue is released.
         var heldEdits = false;
-        holdEdits.Click += async (_, _) =>
+        async Task HoldEditsAsync()
         {
             if (heldEdits) return;
             await _edits.WaitAsync();
             heldEdits = true;
-        };
-        releaseEdits.Click += (_, _) =>
+        }
+        void ReleaseEdits()
         {
             if (!heldEdits) return;
             heldEdits = false;
             _edits.Release();
+        }
+        holdEdits.Click += async (_, _) => await HoldEditsAsync();
+        releaseEdits.Click += (_, _) => ReleaseEdits();
+        // The same release for a test that must not move the keyboard focus: invoking a button, or setting the text of a box,
+        // through automation takes the focus, and a box commits its draft when it loses it. The queue is also released when a
+        // file called "release-edits" appears in the capture folder. A file called "slow-edits" (with a number of seconds in it)
+        // makes every edit wait that long under the edit lock before it is validated, and "normal-edits" ends that: a window
+        // in which the edits that follow can be made while one is still on its way.
+        var releaseFlag = Path.Combine(folder, "release-edits");
+        var slowFlag = Path.Combine(folder, "slow-edits");
+        var normalFlag = Path.Combine(folder, "normal-edits");
+        var releasePoll = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        releasePoll.Tick += (_, _) =>
+        {
+            if (File.Exists(releaseFlag))
+            {
+                File.Delete(releaseFlag);
+                ReleaseEdits();
+            }
+            if (File.Exists(slowFlag))
+            {
+                var seconds = double.TryParse(File.ReadAllText(slowFlag).Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 2;
+                File.Delete(slowFlag);
+                _uiTestEditDelay = TimeSpan.FromSeconds(seconds);
+            }
+            if (File.Exists(normalFlag))
+            {
+                File.Delete(normalFlag);
+                _uiTestEditDelay = TimeSpan.Zero;
+            }
         };
+        releasePoll.Start();
+        // Counts the controls that are switched off while an editor operation runs, so that a test can see that building a list of
+        // rows again forgets the controls of the rows it replaced instead of collecting them.
+        countControls.Click += (_, _) =>
+            controlCount.Text = _editorOperationControls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Shows the key that says which changes are one Undo step, so that a test can see that it does not depend on time.
+        showUndoKey.Click += (_, _) => undoKey.Text = _undoKey ?? "(none)";
         // Stands in for a Windows text-size change: the page-tools labels get bigger while the page keeps its size.
         grow.Click += (_, _) => GrowToolLabels(1.6);
         // Stands in for the pointer being over a scroll bar (or Windows set to always show scroll bars), which a private
@@ -92,6 +138,10 @@ public sealed partial class MainWindow
         host.Children.Add(ask);
         host.Children.Add(holdEdits);
         host.Children.Add(releaseEdits);
+        host.Children.Add(countControls);
+        host.Children.Add(controlCount);
+        host.Children.Add(showUndoKey);
+        host.Children.Add(undoKey);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");
@@ -99,6 +149,12 @@ public sealed partial class MainWindow
 
     private TimeSpan _uiTestReplaceHold;
     private TimeSpan _uiTestCloseHold;
+    private TimeSpan _uiTestEditDelay;
+
+    partial void HoldEditForUiTest(ref Task? hold)
+    {
+        if (_uiTestEditDelay > TimeSpan.Zero) hold = Task.Delay(_uiTestEditDelay);
+    }
 
     partial void HoldReplacementForUiTest(ref Task? hold)
     {
@@ -218,6 +274,10 @@ public sealed partial class MainWindow
             await page.RenderAsync(Root);
             var scale = Root.XamlRoot.RasterizationScale;
             await WritePngAsync(Path.Combine(folder, safe + ".png"), await ReadPixelsAsync(page), page.PixelWidth, page.PixelHeight, 96 * scale);
+            // The layout of the page as it was drawn: every element's place and size, for finding what makes a gap.
+            var tree = new System.Text.StringBuilder();
+            DumpTree(PageHost, 0, tree);
+            await File.WriteAllTextAsync(Path.Combine(folder, safe + ".tree.txt"), tree.ToString());
             await File.WriteAllTextAsync(Path.Combine(folder, safe + ".ok"),
                 $"{page.PixelWidth}x{page.PixelHeight} scale {scale}; popups: {(notes.Count == 0 ? "none" : string.Join(" | ", notes))}");
         }
@@ -237,6 +297,19 @@ public sealed partial class MainWindow
                 popup.Child = child;
             }
         }
+    }
+
+    private static void DumpTree(DependencyObject node, int depth, System.Text.StringBuilder text)
+    {
+        if (node is FrameworkElement element)
+        {
+            var id = AutomationProperties.GetAutomationId(element);
+            text.AppendLine($"{new string(' ', depth)}{element.GetType().Name}{(id.Length > 0 ? " #" + id : "")} {element.Visibility} " +
+                $"at ({element.ActualOffset.X:0},{element.ActualOffset.Y:0}) size {element.ActualWidth:0}x{element.ActualHeight:0} " +
+                $"desired {element.DesiredSize.Width:0}x{element.DesiredSize.Height:0}");
+        }
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(node); index++)
+            DumpTree(VisualTreeHelper.GetChild(node, index), depth + 1, text);
     }
 
     private static async Task<byte[]> ReadPixelsAsync(RenderTargetBitmap bitmap)

@@ -37,19 +37,20 @@ public sealed partial class MainWindow
         _studioFocusTargets.Clear();
         var revision = _editorContentRevision;
         // Studio fields apply in turn, off the page. Edits asked for before this page was built and still being applied are not in
-        // the project it is built from, so its cards stay off until they are, and the page is then built again from the project as
-        // it is. Nothing can be typed meanwhile, so nothing is replaced under the person's hands. (The edit lock is free again
-        // once the last edit has been applied, and the page that follows an edit is built after that.)
+        // the project it is built from, so its cards and its commands stay off until they are, and the page is then built again
+        // from the project as it is. Nothing can be typed or clicked meanwhile, so nothing is replaced under the person's hands,
+        // and no command is queued with the revision of a page that is about to be replaced. (The edit lock is free again once the
+        // last edit has been applied, and the page that follows an edit is built after that.)
         var settling = _edits.CurrentCount == 0;
         var wantedFocus = _studioFocusAfterRebuild;
         var undo = EditorControl(IconButton("\uE7A7", "Undo", "StudioUndo",
-            () => RunEditorOperationAsync(revision, () => UndoKeepingFocusAsync(false))), () => !_isLocked && _undo.Count > 0);
+            () => RunEditorOperationAsync(revision, () => UndoKeepingFocusAsync(false))), () => !_isLocked && !settling && _undo.Count > 0);
         var redo = EditorControl(IconButton("\uE7A6", "Redo", "StudioRedo",
-            () => RunEditorOperationAsync(revision, () => UndoKeepingFocusAsync(true))), () => !_isLocked && _redo.Count > 0);
+            () => RunEditorOperationAsync(revision, () => UndoKeepingFocusAsync(true))), () => !_isLocked && !settling && _redo.Count > 0);
         TrackStudioFocus("StudioUndo", undo);
         TrackStudioFocus("StudioRedo", redo);
         var euclidean = BuildEuclideanPanel(revision);
-        var addLane = BuildAddLaneButton(revision, euclidean);
+        var addLane = BuildAddLaneButton(revision, euclidean, settling);
         TrackStudioFocus("AddLane", addLane);
 
         // The one command that makes lanes sits in the header, or in the empty state while there is nothing yet to add to.
@@ -70,7 +71,7 @@ public sealed partial class MainWindow
             editable.Add(empty);
         }
         for (var index = 0; index < _document.Lanes.Count; index++) editable.Add(BuildLaneCard(index));
-        editable.Add(BuildProgramCard());
+        editable.AddRange(BuildProgramSection(revision));
         editable.Add(BuildAdvancedCard(revision));
         // A locked project can be looked at, not changed (the lock is switched on the Stage page), and so can a page that is still
         // settling. Only a control can be disabled, and disabling it disables everything inside, so each card sits in one then.
@@ -118,7 +119,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>"Add lane" with the kinds of lane to start from. A lane is added in one step; Euclidean asks for its numbers first.</summary>
-    private Button BuildAddLaneButton(int revision, OptionPanel euclidean)
+    private Button BuildAddLaneButton(int revision, OptionPanel euclidean, bool settling)
     {
         var button = new Button { Style = ResonantStyle("PrimaryButtonStyle") };
         LabelButton(button, "AddLane", "\uE710");
@@ -154,7 +155,7 @@ public sealed partial class MainWindow
         menu.Items.Add(euclideanItem);
         button.Flyout = menu;
 
-        if (_isLocked) button.IsEnabled = false;
+        if (_isLocked || settling) button.IsEnabled = false;
         else if (_document.Lanes.Count >= LaneEdits.MaxLanes)
         {
             button.IsEnabled = false;
@@ -273,26 +274,6 @@ public sealed partial class MainWindow
             }, "Create");
     }
 
-    /// <summary>The practice program, until its steps get cards of their own: the older editor for each step, inside one card.</summary>
-    private UIElement BuildProgramCard()
-    {
-        var steps = new List<UIElement>();
-        for (var index = 0; index < _document.Program.Count; index++) steps.Add(BuildStepEditor(index));
-        steps.Add(EditorActionButton("AddStep", "AddProgramStep", async () =>
-        {
-            await CommitEditorAsync(doc => doc.Program.Add(new ProgramStep
-            {
-                Name = $"{Text.Get("Step")} {doc.Program.Count + 1}",
-                StartTempo = doc.Settings.Tempo,
-                EndTempo = doc.Settings.Tempo,
-                BeatsPerBar = doc.Settings.BeatsPerBar,
-                BeatDenominator = doc.Settings.BeatDenominator
-            }));
-            RebuildPreservingScroll();
-        }));
-        return Card("TrainProgramTitle", Column(steps.ToArray()), "TrainProgramHelp", id: "ProgramCard");
-    }
-
     /// <summary>What decides the random pattern behind a lane's Chance, with what it does.</summary>
     private UIElement BuildAdvancedCard(int revision)
     {
@@ -305,61 +286,5 @@ public sealed partial class MainWindow
             await CommitStudioAsync(revision, "Seed", doc => doc.Seed = value);
         });
         return Card("Advanced", Field(seed), "AdvancedHelp", id: "AdvancedCard");
-    }
-
-    private UIElement BuildStepEditor(int index)
-    {
-        var step = _document.Program[index];
-        var id = $"Program{index}";
-        var name = Input("Name", id + "Name", step.Name);
-        var start = Number("StartTempo", id + "StartTempo", step.StartTempo, 1, 1000, 0.1);
-        var end = Number("EndTempo", id + "EndTempo", step.EndTempo, 1, 1000, 0.1);
-        var bars = NumberInt("Bars", id + "Bars", step.Bars, 1, 100000);
-        var repeats = NumberInt("Repeats", id + "Repeats", step.Repeats, 1, 1024);
-        var ramp = Select("Ramp", id + "Ramp", step.Ramp, "Constant", "LinearTime", "LinearBeat");
-        var beats = NumberInt("Beats", id + "Beats", step.BeatsPerBar, 1, 64);
-        var denominator = Select("Denominator", id + "Denominator", step.BeatDenominator.ToString(CultureInfo.InvariantCulture), "1", "2", "4", "8", "16", "32", "64");
-        var audible = NumberInt("AudibleBars", id + "Audible", step.AudibleBars, 0, 100000);
-        var silent = NumberInt("SilentBars", id + "Silent", step.SilentBars, 0, 100000);
-        var content = Column(Flow(name, start, end, bars, repeats, ramp, beats, denominator, audible, silent),
-            CommandFlow(EditorActionButton("Apply", id + "Apply", async () =>
-            {
-                await CommitEditorAsync(doc =>
-                {
-                    var edited = doc.Program[index];
-                    edited.Name = name.Text;
-                    edited.StartTempo = Value(start);
-                    edited.EndTempo = Value(end);
-                    edited.Bars = Integer(bars);
-                    edited.Repeats = Integer(repeats);
-                    edited.Ramp = Selected(ramp);
-                    edited.BeatsPerBar = Integer(beats);
-                    edited.BeatDenominator = int.Parse(Selected(denominator), CultureInfo.InvariantCulture);
-                    edited.AudibleBars = Integer(audible);
-                    edited.SilentBars = Integer(silent);
-                });
-                RebuildPreservingScroll();
-            }),
-            EditorActionButton("MoveUp", id + "MoveUp", async () =>
-            {
-                if (index == 0) return;
-                await CommitEditorAsync(doc => (doc.Program[index - 1], doc.Program[index]) = (doc.Program[index], doc.Program[index - 1]));
-                RebuildPreservingScroll();
-            }),
-            EditorActionButton("MoveDown", id + "MoveDown", async () =>
-            {
-                if (index >= _document.Program.Count - 1) return;
-                await CommitEditorAsync(doc => (doc.Program[index + 1], doc.Program[index]) = (doc.Program[index], doc.Program[index + 1]));
-                RebuildPreservingScroll();
-            }),
-            EditorActionButton("Remove", id + "Remove", async () =>
-            {
-                if (!await ConfirmAsync(Text.Format("ConfirmRemove", step.Name), "Remove")) return;
-                await CommitEditorAsync(doc => doc.Program.RemoveAt(index));
-                RebuildPreservingScroll();
-            })));
-        var expander = new Expander { Header = $"{index + 1}. {step.Name}", Content = content, HorizontalAlignment = HorizontalAlignment.Stretch };
-        Identify(expander, id + "Editor", step.Name);
-        return expander;
     }
 }
