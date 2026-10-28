@@ -53,6 +53,14 @@ unused value); sound and beat strengths still follow it live. Hosted checks
 without an audio endpoint, and the unit tests that compare rendered samples,
 do not establish hardware or listening acceptance.
 
+Settings, Library, Stage, Train and Studio follow one page design
+([design notes](docs/design/pages-design.md)): titled pages of cards, fields as
+wide as what they hold, plain-language text and no Apply button, because a change
+takes effect as you make it. **Reduce motion** in Settings makes the marker on the
+circle jump from beat to beat instead of gliding and hides the scrolling tape of
+upcoming clicks. The export length is in Library, next to the export buttons: it
+is the number of bars written to a WAV or MIDI file when the project has no program.
+
 Use the pinned .NET SDK on Windows. The owner has authorized local builds and
 tests on the development PC; keep them serialized, silent and isolated. A test
 instance must set `RESONANT_PULSE_HOME` to a scratch folder so real projects and
