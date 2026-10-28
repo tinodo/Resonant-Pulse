@@ -481,8 +481,7 @@ public sealed partial class MainWindow
                 next.Setlist = LocalWorkspace.Clone(_document).Setlist;
                 InvalidateTiming();
                 _transport.Stop();
-                _undo.Push(_document);
-                _redo.Clear();
+                RecordUndo();
                 _document = next;
                 _recoveryUnsaved = true;
                 _projectGeneration++;

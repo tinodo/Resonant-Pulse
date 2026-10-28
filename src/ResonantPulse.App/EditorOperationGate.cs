@@ -12,17 +12,18 @@ internal enum EditorChangeKind
     /// <summary>Play-page meter, tempo unit, groups and feel; Studio drafts are invalidated but playback may follow live.</summary>
     PlayStructure,
     /// <summary>
-    /// One field changed in place (a song's notes). Nothing on the page was added, removed or reordered, so every control and
-    /// index on it stays valid and the page is not rebuilt, not even when writing the recovery file fails: what is being typed
-    /// meanwhile stays where it is. Never live: it is heard at the next Start, if it concerns playback at all.
+    /// One field changed in place (a song's notes; in Studio a lane's volume, a beat's strength, the seed). Nothing on the page
+    /// was added, removed or reordered, so every control and index on it stays valid and the page is not rebuilt, not even when
+    /// writing the recovery file fails: what is being typed meanwhile stays where it is. Never live: it is heard at the next
+    /// Start, if it concerns playback at all.
     /// </summary>
     InPlaceField
 }
 
 internal static class EditorRevisionPolicy
 {
-    // Only these changes leave every Studio form/index valid: global scalars, and a field changed in place.
-    // Program-step edits and lane edits that add, remove or reorder remain Document changes.
+    // Only these changes leave every Studio form/index valid: global scalars, and a field changed in place. A structural lane
+    // edit (add, remove, duplicate, rotate, convert) and a program-step edit remain Document changes.
     private static bool PreservesDrafts(EditorChangeKind change) =>
         change is EditorChangeKind.MasterGainOnly or EditorChangeKind.GlobalTempoOnly or
             EditorChangeKind.PracticeTimerOnly or EditorChangeKind.SoundAndAccentsOnly or EditorChangeKind.InPlaceField;

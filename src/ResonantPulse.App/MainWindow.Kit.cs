@@ -57,14 +57,18 @@ public sealed partial class MainWindow
     // ---- page structure ----------------------------------------------------------------------------------------------
 
     /// <summary>A scrolling page: title (and an optional line of purpose and page-level actions), then cards.</summary>
-    private static ScrollViewer PageScaffold(string titleKey, string? purposeKey, UIElement? actions, params UIElement[] content)
+    private static ScrollViewer PageScaffold(string titleKey, string? purposeKey, UIElement? actions, params UIElement[] content) =>
+        PageScaffoldText(titleKey, purposeKey is null ? null : Text.Get(purposeKey), actions, content);
+
+    /// <summary>The same page when the line of purpose is worked out (it names the project, for instance).</summary>
+    private static ScrollViewer PageScaffoldText(string titleKey, string? purpose, UIElement? actions, params UIElement[] content)
     {
         var title = new TextBlock { Text = Text.Get(titleKey), Style = ResonantStyle("PageTitleStyle") };
         AutomationProperties.SetHeadingLevel(title, AutomationHeadingLevel.Level1);
         var heading = new StackPanel { Spacing = 4 };
         heading.Children.Add(title);
-        if (purposeKey is not null)
-            heading.Children.Add(new TextBlock { Text = Text.Get(purposeKey), Style = ResonantStyle("NoteStyle") });
+        if (purpose is not null)
+            heading.Children.Add(new TextBlock { Text = purpose, Style = ResonantStyle("NoteStyle") });
         // Stretch with a maximum, not Center: a centred stack is as wide as its content, so a two-pane page that changes its
         // content when its width crosses the breakpoint would change its own width and never settle (a layout cycle). A
         // stretched element with a maximum is centred in a wider slot anyway.
@@ -286,11 +290,12 @@ public sealed partial class MainWindow
     /// for a box whose digits are drawn larger than the usual 14 pt.
     /// </summary>
     private static NumberBox NumberInput(string captionKey, string id, double value, double minimum, double maximum,
-        double step = 1, int fractionDigits = 0, bool whole = true, Func<double, double>? atLeast = null)
+        double step = 1, int fractionDigits = 0, bool whole = true, Func<double, double>? atLeast = null, bool trimmed = false)
     {
+        // A trimmed box shows only the digits a value needs ("4", "0.125"), but keeps the width for the most it can hold.
         var box = whole && fractionDigits == 0
             ? NumberInt(captionKey, id, value, minimum, maximum, step)
-            : Number(captionKey, id, value, minimum, maximum, step, fractionDigits);
+            : Number(captionKey, id, value, minimum, maximum, step, trimmed ? 0 : fractionDigits);
         box.Header = null;
         box.HorizontalAlignment = HorizontalAlignment.Left;
         double Rule(double scale) =>
@@ -360,7 +365,7 @@ public sealed partial class MainWindow
     /// </summary>
     private static FrameworkElement Bounded(FrameworkElement control)
     {
-        if ((control is NumberBox || control is ComboBox) && double.IsFinite(control.Width))
+        if ((control is NumberBox || control is ComboBox || control is TextBox) && double.IsFinite(control.Width))
         {
             var rule = WidthRuleOf(control);
             var host = new FitWidth { PreferredWidth = control.Width, HorizontalAlignment = HorizontalAlignment.Left };
@@ -547,14 +552,20 @@ public sealed partial class MainWindow
     /// they were made and the setting always holds what the box shows. Whatever follows the first await (remembering the
     /// value for the next session) cannot make the box and the setting disagree: if it fails, the error is shown and the
     /// box keeps the value the setting now has.
+    /// A value that belongs to the project is applied in turn by the edit queue instead, so the box may show a newer value
+    /// than the project holds for a moment. A refusal then puts the box back only if no newer value was committed after it: the
+    /// newer one is still on its way and decides what the box shows. An empty or invalid draft submits nothing and shows the
+    /// value that is on its way (see <see cref="SubmissionTracker{T}"/>), not the one the project still holds; so does a value
+    /// that is refused at once while an older one is still in the queue.
     /// </summary>
     private void CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
     {
         var reverting = false;
-        void Revert()
+        var submissions = new SubmissionTracker<double>();
+        void Show(double value)
         {
             reverting = true;
-            box.Value = current();
+            box.Value = value;
             reverting = false;
         }
         box.ValueChanged += async (sender, args) =>
@@ -562,17 +573,194 @@ public sealed partial class MainWindow
             if (reverting) return;
             if (!double.IsFinite(args.NewValue))
             {
-                Revert();
+                Show(submissions.OnItsWayOr(current()));
                 return;
             }
+            var ticket = submissions.Begin(args.NewValue);
             var applied = false;
             await GuardAsync(async () =>
             {
                 await commit(args.NewValue);
                 applied = true;
             });
-            if (!applied) Revert();
+            if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused) Show(submissions.OnItsWayOr(current()));
         };
+    }
+
+    /// <summary>
+    /// The same contract for a text box: nothing is written while typing; Enter or leaving the box commits a changed draft, and
+    /// Esc puts back what the setting holds (or, while a draft is on its way, that draft: it is what the setting is about to
+    /// hold). A refused draft goes back to what the setting holds, with the reason shown, unless a newer draft was committed
+    /// after it or the person has typed on since. The same draft is never committed twice while the first is on its way.
+    /// </summary>
+    private void CommitText(TextBox box, Func<string> current, Func<string, Task> commit)
+    {
+        var submissions = new SubmissionTracker<string>();
+        // The draft last applied as typed: what the setting holds, which may differ from current() when the commit tidies it.
+        string? settled = null;
+        string Held() => submissions.TryGetPending(out var onItsWay) ? onItsWay : settled ?? current();
+        async Task CommitDraftAsync()
+        {
+            var draft = box.Text;
+            if (draft == Held()) return;
+            var ticket = submissions.Begin(draft);
+            var applied = false;
+            await GuardAsync(async () =>
+            {
+                await commit(draft);
+                applied = true;
+            });
+            switch (submissions.Resolve(ticket, applied))
+            {
+                case SubmissionAnswer.Applied:
+                    settled = draft;
+                    break;
+                case SubmissionAnswer.Refused:
+                    settled = null;
+                    // Only the refused draft is put back: whatever was typed after it is the person's to commit. It goes back to
+                    // what the project holds, or to an older draft that is still in the queue (a blank name is refused at once).
+                    if (box.Text == draft) box.Text = Held();
+                    break;
+            }
+        }
+        box.LostFocus += async (_, _) => await CommitDraftAsync();
+        box.KeyDown += async (_, args) =>
+        {
+            if (args.Key == Windows.System.VirtualKey.Enter)
+            {
+                args.Handled = true;
+                await CommitDraftAsync();
+            }
+            else if (args.Key == Windows.System.VirtualKey.Escape)
+            {
+                args.Handled = true;
+                box.Text = Held();
+            }
+        };
+    }
+
+    /// <summary>
+    /// The same contract for a drop-down: a choice commits at once, and a refused one puts the drop-down back to what the
+    /// setting holds, unless a newer choice was made after it.
+    /// </summary>
+    private void CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit)
+    {
+        var reverting = false;
+        var submissions = new SubmissionTracker<string>();
+        combo.SelectionChanged += async (_, _) =>
+        {
+            if (reverting || combo.SelectedItem is not Choice choice) return;
+            var ticket = submissions.Begin(choice.Value);
+            var applied = false;
+            await GuardAsync(async () =>
+            {
+                await commit(choice.Value);
+                applied = true;
+            });
+            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
+            reverting = true;
+            SelectChoice(combo, submissions.OnItsWayOr(current()));
+            reverting = false;
+        };
+    }
+
+    private const double SliderTrackWidth = 190;
+
+    /// <summary>
+    /// A caption above a slider with its value as text beside it, for a percentage or a level. A drag or a held arrow key is
+    /// one gesture: the text follows the thumb, and the value is committed once, when the gesture ends (see
+    /// <see cref="GestureCommit"/>), so a drag is one undo step and one write, not one per tick. A refused value puts the slider
+    /// back to what the setting holds, unless a newer value was committed after it. The slider is as wide as its track and its
+    /// longest value text, and gives way in a narrow card. It waits for the editor gate like the other fields of a lane
+    /// (see <see cref="EditorControl{T}"/>).
+    /// </summary>
+    private StackPanel SliderField(string captionKey, string id, string accessibleName, int value, int minimum, int maximum,
+        Func<int, string> format, IEnumerable<string> samples, Func<int> current, Func<int, Task> commit)
+    {
+        var caption = new TextBlock { Text = Text.Get(captionKey), Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
+        var slider = EditorControl(new Slider
+        {
+            Minimum = minimum, Maximum = maximum, Value = value, StepFrequency = 1, SmallChange = 1, LargeChange = 10,
+            IsThumbToolTipEnabled = false, MinWidth = 96, MinHeight = 44,
+            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center
+        });
+        Identify(slider, id, accessibleName);
+        AutomationProperties.SetLabeledBy(slider, caption);
+        var readout = new TextBlock
+        {
+            Text = format(value), Style = ResonantStyle("BodyStyle"), FontSize = 14, TextWrapping = TextWrapping.NoWrap,
+            TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = Math.Ceiling(WidestText(samples))
+        };
+        // The value as text ("70%", "Left 30") belongs to the slider, so what it says is linked to it, not only drawn beside it.
+        AutomationProperties.GetDescribedBy(slider).Add(readout);
+        var row = new Grid { ColumnSpacing = 12 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(readout, 1);
+        row.Children.Add(slider);
+        row.Children.Add(readout);
+        var host = new FitWidth { PreferredWidth = SliderTrackWidth + row.ColumnSpacing + readout.MinWidth, HorizontalAlignment = HorizontalAlignment.Left };
+        host.Children.Add(row);
+
+        var gesture = new GestureCommit();
+        var reverting = false;
+        var submissions = new SubmissionTracker<int>();
+        async Task CommitGestureAsync()
+        {
+            var wanted = (int)Math.Round(slider.Value);
+            var ticket = submissions.Begin(wanted);
+            var applied = false;
+            await GuardAsync(async () =>
+            {
+                await commit(wanted);
+                applied = true;
+            });
+            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
+            reverting = true;
+            slider.Value = submissions.OnItsWayOr(current());
+            readout.Text = format((int)Math.Round(slider.Value));
+            reverting = false;
+        }
+        slider.ValueChanged += async (_, args) =>
+        {
+            readout.Text = format((int)Math.Round(args.NewValue));
+            if (reverting) return;
+            // The thumb has moved on from any value submitted before: if that one is refused it must not put the slider back
+            // (the new value would be overwritten, and releasing the thumb would commit the value that was put back).
+            submissions.Changed();
+            if (gesture.Changed()) await CommitGestureAsync();
+        };
+        // The slider's own parts handle pointer and key events, so these are heard even when they are marked handled.
+        slider.AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => gesture.PointerDown()), true);
+        var released = new Microsoft.UI.Xaml.Input.PointerEventHandler(async (_, _) =>
+        {
+            if (gesture.PointerUp()) await CommitGestureAsync();
+        });
+        slider.AddHandler(UIElement.PointerReleasedEvent, released, true);
+        slider.AddHandler(UIElement.PointerCaptureLostEvent, released, true);
+        slider.AddHandler(UIElement.PointerCanceledEvent, released, true);
+        static bool StepsValue(Windows.System.VirtualKey key) => key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right
+            or Windows.System.VirtualKey.Up or Windows.System.VirtualKey.Down or Windows.System.VirtualKey.Home
+            or Windows.System.VirtualKey.End or Windows.System.VirtualKey.PageUp or Windows.System.VirtualKey.PageDown;
+        slider.AddHandler(UIElement.KeyDownEvent, new Microsoft.UI.Xaml.Input.KeyEventHandler((_, args) =>
+        {
+            if (StepsValue(args.Key)) gesture.KeyDown();
+        }), true);
+        slider.AddHandler(UIElement.KeyUpEvent, new Microsoft.UI.Xaml.Input.KeyEventHandler(async (_, args) =>
+        {
+            if (StepsValue(args.Key) && gesture.KeyUp()) await CommitGestureAsync();
+        }), true);
+        // A key still held when the focus leaves never reports its release here.
+        slider.LostFocus += async (_, _) =>
+        {
+            if (gesture.KeyUp()) await CommitGestureAsync();
+        };
+
+        var field = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
+        field.Children.Add(caption);
+        field.Children.Add(host);
+        return field;
     }
 
     private static WrapPanel Wrapped(double horizontal, double vertical, UIElement[] children)

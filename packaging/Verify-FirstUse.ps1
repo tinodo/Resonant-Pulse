@@ -248,10 +248,22 @@ function Test-PlayTools {
         $dy = [Math]::Max([Math]::Max($rect.Top - $centreY, $centreY - $rect.Bottom), 0)
         if ([Math]::Sqrt($dx * $dx + $dy * $dy) -lt $radius) { throw "$($names[$index]) covers the metronome's ring: $rect over dial $dial" }
     }
-    $settings = (Find-Control 'DestinationSettings').Current.BoundingRectangle
+    # A focused item draws its focus ring, and UI Automation then reports the ring's rectangle (4 px wider on each side and 2
+    # taller than the item). The application Windows activates (the packaged one) starts with the focus on Settings and its
+    # window active, so the ring is there; a launched build, or one that restored a project, has none. This check is about the
+    # layout, so a focus that sits on Settings is moved to the mute button (always enabled) before it is measured.
+    $settingsItem = Find-Control 'DestinationSettings'
+    if ($settingsItem.Current.HasKeyboardFocus) {
+        try { (Find-Control 'EmergencyMute').SetFocus() } catch { }
+        Start-Sleep -Milliseconds 400
+        $settingsItem = Find-Control 'DestinationSettings'
+    }
+    $settings = $settingsItem.Current.BoundingRectangle
     $labelled = $rects[2].Width -gt 56 * $scale
     if ($labelled -and [Math]::Abs($rects[2].Right - $settings.Right) -gt 3 * $scale) {
-        throw "Help does not line up with the Settings item at the right edge: $($rects[2]) and $settings"
+        $focusNow = [Windows.Automation.AutomationElement]::FocusedElement
+        $focusId = if ($null -eq $focusNow) { 'none' } else { $focusNow.Current.AutomationId }
+        throw "Help does not line up with the Settings item at the right edge: $($rects[2]) and $settings (window $((Get-CurrentWindow).Current.BoundingRectangle), focus on '$focusId')"
     }
     return @{ labelled = $labelled; buttonHeight = $rects[0].Height }
 }
@@ -552,11 +564,12 @@ function Test-FieldWidths([string]$where, [hashtable]$limits) {
     }
 }
 # No page or panel carries an Apply button: a change takes effect as it is made. (Play panels keep Cancel and Done.)
-function Test-NoApplyButtons([string]$where) {
+function Test-NoApplyButtons([string]$where, [string]$except = '') {
     $condition = [Windows.Automation.PropertyCondition]::new(
         [Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
     foreach ($button in (Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition)) {
         $id = $button.Current.AutomationId
+        if ($except -and $id -match $except) { continue }
         if ($id -match 'Apply' -or $button.Current.Name -match '^Apply') {
             throw "${where}: an Apply button is present: '$id' '$($button.Current.Name)'"
         }
@@ -924,6 +937,118 @@ if (-not $playAudio) {
         Set-PracticeLimits 0 0 0
     }
 }
+# Studio: lanes are added from one menu; every field of a lane applies as it is changed (no Apply button on a lane) and the page is
+# not rebuilt, so the focus, the caret and the scroll position stay; each change is one step of Undo. This runs after the playback
+# checks, so the lanes it adds cannot disturb them.
+Select-Destination 'DestinationStudio'
+Wait-Settled 'AddLane'
+# This check is a first use, so the project starts with no lanes. One that is already there means an earlier run left its project
+# in the data folder (the hosted launchers clear it before each run), which would otherwise show only as a missing control.
+if ($null -ne (Find-Optional 'Lane0Card')) {
+    throw 'Studio: the project already has lanes, but this check starts from a first use. Run it with an empty data folder (RESONANT_PULSE_HOME, or an empty %LOCALAPPDATA%\ResonantPulse on a disposable runner).'
+}
+$null = Find-Control 'StudioEmpty'
+Invoke-Control 'AddLane'
+Invoke-Control 'AddLanePlain'
+Wait-Condition { $null -ne (Find-Optional 'Lane0Card') } 'Studio: the new lane never appeared.'
+Wait-Absent 'StudioEmpty'
+Wait-Settled 'Lane0Volume'
+# Adding a lane is an operation of the editor gate: the fields of the page it builds wait for it, then come on.
+Wait-Condition { (Find-Control 'Lane0Volume').Current.IsEnabled } 'Studio: the fields of the new lane stayed switched off after it was added.'
+Test-FieldWidths 'Studio' @{ Lane0Pulses = 200; Lane0Cycle = 240; Lane0Offset = 250; Lane0Sound = 330; DocumentSeed = 200 }
+# The practice-program steps and the exact positions still have their older editors with an Apply button, until they get
+# live fields like a lane's. Nothing else on the page may have one.
+$olderEditors = '^(Program\d+|Lane\d+Event\d+)Apply$'
+Test-NoApplyButtons 'Studio' $olderEditors
+function Get-LaneValue([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.Value }
+function Get-RuntimeKey([string]$id) { (Find-Control $id).GetRuntimeId() -join '.' }
+if ((Get-LaneValue 'Lane0Volume') -ne 70) { throw "Studio: a new lane's volume is $(Get-LaneValue 'Lane0Volume'), not 70." }
+$null = Find-Control 'Lane0Step3'
+Wait-Absent 'Lane0Step4'
+$volumeKey = Get-RuntimeKey 'Lane0Volume'
+(Find-Control 'Lane0Volume').GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).SetValue(35)
+Wait-Condition { (Get-LaneValue 'Lane0Volume') -eq 35 } 'Studio: the volume slider did not take its value.'
+Start-Sleep -Milliseconds 700
+if ((Get-RuntimeKey 'Lane0Volume') -ne $volumeKey) { throw 'Studio: changing a field rebuilt the page, so focus, caret and scroll position would be lost.' }
+(Find-Control 'Lane0Step1').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { (Find-Control 'Lane0Step1').Current.Name -like '*Strong*' } 'Studio: tapping a beat did not make it strong.'
+$pulsesKey = Get-RuntimeKey 'Lane0Pulses'
+Set-Number 'Lane0Pulses' 6
+$null = Find-Control 'Lane0Step5'
+Wait-Absent 'Lane0Step6'
+if ((Get-RuntimeKey 'Lane0Pulses') -ne $pulsesKey) { throw 'Studio: changing the number of clicks rebuilt the page.' }
+$laneMute = (Find-Control 'Lane0Muted').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+$laneMute.Toggle()
+Wait-ToggleState $laneMute ([Windows.Automation.ToggleState]::On) 'Studio: Mute did not switch on.'
+# One step of Undo for each change, newest first: the page then shows the project as it was.
+Wait-Condition { (Find-Control 'StudioUndo').Current.IsEnabled } 'Studio: Undo is not available after changes.'
+Invoke-Control 'StudioUndo'
+Wait-Condition { (Find-Control 'Lane0Muted').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -eq [Windows.Automation.ToggleState]::Off } 'Studio: Undo did not bring Mute back.'
+Invoke-Control 'StudioUndo'
+Wait-Condition { $null -ne (Find-Optional 'Lane0Step3') -and $null -eq (Find-Optional 'Lane0Step4') } 'Studio: Undo did not bring back four clicks.'
+Invoke-Control 'StudioUndo'
+Wait-Condition { (Find-Control 'Lane0Step1').Current.Name -notlike '*Strong*' } 'Studio: Undo did not bring back the beat.'
+Invoke-Control 'StudioUndo'
+Wait-Condition { (Get-LaneValue 'Lane0Volume') -eq 70 } 'Studio: Undo did not bring back the volume.'
+Invoke-Control 'StudioRedo'
+Wait-Condition { (Get-LaneValue 'Lane0Volume') -eq 35 } 'Studio: Redo did not bring the volume change back.'
+# The Euclidean generator is a panel opened from the same menu; Create adds the lane.
+Invoke-Control 'AddLane'
+Invoke-Control 'AddEuclidean'
+$null = Find-Control 'EuclideanAttacks'
+Invoke-Control 'EuclideanOptionsDone'
+Wait-Absent 'EuclideanOptionsDone'
+Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: the Euclidean lane never appeared.'
+Wait-Condition { (Find-Control 'Lane0Volume').Current.IsEnabled } 'Studio: the fields stayed switched off after the Euclidean lane was added.'
+Test-NoApplyButtons 'Studio' $olderEditors
+# An operation that changes what is on the page takes the fields of every lane with it while it runs, so an edit made meanwhile is
+# not queued with the old page and then refused. Remove asks first, inside the operation: while the question is open the fields
+# are off and the command that opened it is not (the keyboard focus returns to it); after Cancel everything is back.
+$laneFields = @('Lane0Name', 'Lane0Muted', 'Lane0Solo', 'Lane0Pulses', 'Lane0Cycle', 'Lane0Offset', 'Lane0Sound', 'Lane0Volume', 'Lane0Pan', 'Lane0Probability', 'Lane0Step0', 'DocumentSeed')
+Invoke-Control 'Lane1More'
+Invoke-Control 'Lane1Remove'
+Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
+foreach ($id in $laneFields) {
+    Wait-Condition { -not (Find-Control $id).Current.IsEnabled } "Studio: $id can still be edited while a lane is being removed."
+}
+if (-not (Find-Control 'Lane0More').Current.IsEnabled) { throw 'Studio: the lane menu is switched off while a lane is being removed, so the keyboard focus has nowhere to return to.' }
+(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
+foreach ($id in $laneFields) {
+    Wait-Condition { (Find-Control $id).Current.IsEnabled } "Studio: $id stayed switched off after the removal was cancelled."
+}
+Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: cancelling the removal removed the lane.'
+if ($sendKeys) {
+    # A beat strip is one tab stop; the arrow keys move between its beats and Up and Down change a beat. Keys are sent only while
+    # the application owns the keyboard.
+    function Send-StripKeys([string]$keys) {
+        if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
+            throw "Keyboard focus is not in the application; refusing to send $keys to another window."
+        }
+        [Windows.Forms.SendKeys]::SendWait($keys)
+        Start-Sleep -Milliseconds 300
+    }
+    function Get-FocusedId { [Windows.Automation.AutomationElement]::FocusedElement.Current.AutomationId }
+    function Wait-Focus([string]$expected, [string]$what) {
+        Wait-Condition { (Get-FocusedId) -eq $expected } "Studio: $what (focus is on '$(Get-FocusedId)', expected '$expected')."
+    }
+    (Find-Control 'Lane0Step0').SetFocus()
+    Wait-Focus 'Lane0Step0' 'the first beat did not take the focus'
+    Send-StripKeys '{RIGHT}'
+    Wait-Focus 'Lane0Step1' 'Right did not move to the next beat'
+    Send-StripKeys '{END}'
+    Wait-Focus 'Lane0Step3' 'End did not move to the last beat'
+    Send-StripKeys '{HOME}'
+    Wait-Focus 'Lane0Step0' 'Home did not move to the first beat'
+    Send-StripKeys '{LEFT}'
+    Wait-Focus 'Lane0Step0' 'Left at the first beat moved the focus'
+    Send-StripKeys '{RIGHT}{RIGHT}'
+    Wait-Focus 'Lane0Step2' 'Right twice did not reach the third beat'
+    Send-StripKeys '{UP}'
+    Wait-Condition { (Find-Control 'Lane0Step2').Current.Name -like '*Strong*' } 'Studio: Up did not make the beat stronger.'
+    Send-StripKeys '{TAB}'
+    Wait-Condition { (Get-FocusedId) -notlike 'Lane0Step*' } 'Studio: Tab did not leave the strip (each beat is a tab stop).'
+}
 # Every language keeps its controls on screen. The panels are opened again in Dutch (its labels are the longest of the five), and
 # every button a panel adds must be on screen. A row of buttons that fits in English can lose its last button in another
 # language when layout rounding tips it over the edge: the child is then placed below the row, out of sight, and the checks
@@ -968,6 +1093,7 @@ foreach ($page in @(
     @{destination='DestinationLibrary'; settle='ExportBars'
       ids=@('NewProject', 'LibraryImport', 'LibraryExportProject', 'LoadLibraryProject', 'SaveToLibrary', 'ExportWav', 'ExportMidi')},
     @{destination='DestinationStage'; settle='StageLock'; ids=@('StageLock', 'AlwaysOnTop', 'AddCurrentSong')},
+    @{destination='DestinationStudio'; settle='AddLane'; ids=@('AddLane', 'StudioUndo', 'StudioRedo', 'Lane0Muted', 'Lane0Solo', 'Lane0More')},
     @{destination='DestinationTrain'; settle='TimingTolerance'; ids=@('EditProgram')})) {
     Select-Destination $page.destination
     Wait-Settled $page.settle

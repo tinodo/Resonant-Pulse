@@ -21,7 +21,7 @@ public sealed partial class MainWindow
     /// every time the panel opens, so a cancelled draft never lingers.
     /// </summary>
     private OptionPanel CreateOptionPanel(string titleKey, string id, UIElement content, string? helpKey,
-        Action? populate, Func<Task<bool>>? apply)
+        Action? populate, Func<Task<bool>>? apply, string doneKey = "CloseOptions")
     {
         var title = new TextBlock
         {
@@ -40,8 +40,8 @@ public sealed partial class MainWindow
             Style = ResonantStyle("PrimaryButtonStyle"),
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch
         };
-        LabelButton(done, "CloseOptions");
-        Identify(done, id + "Done", Text.Get("CloseOptions"));
+        LabelButton(done, doneKey);
+        Identify(done, id + "Done", Text.Get(doneKey));
         var footer = new Grid { ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         Button? cancel = null;
         if (apply is not null)

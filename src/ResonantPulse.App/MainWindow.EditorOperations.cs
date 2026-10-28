@@ -6,27 +6,38 @@ namespace ResonantPulse.App;
 public sealed partial class MainWindow
 {
     private readonly EditorOperationGate _editorOperations = new();
-    private readonly List<Button> _editorOperationControls = [];
+    private readonly List<(Control Control, Func<bool>? Allowed)> _editorOperationControls = [];
     private int? _editorOperationRevision;
 
-    private Button EditorActionButton(string key, string id, Func<Task> action)
+    /// <summary>
+    /// A command that runs through the editor gate. <paramref name="allowed"/> adds the command's own condition (Undo has
+    /// nothing to undo): the command is enabled when no editor operation is running and the condition holds.
+    /// </summary>
+    private Button EditorActionButton(string key, string id, Func<Task> action, Func<bool>? allowed = null)
     {
         var revision = _editorContentRevision;
-        return EditorControl(ActionButton(key, id, () => RunEditorOperationAsync(revision, action)));
+        return EditorControl(ActionButton(key, id, () => RunEditorOperationAsync(revision, action)), allowed);
     }
 
-    private Button EditorControl(Button control)
+    /// <summary>
+    /// A control that waits for the editor gate: it is enabled when no editor operation is running and <paramref name="allowed"/>
+    /// holds. The fields of a lane use it too. A field applies as it is changed, queued behind the edits before it with the
+    /// revision of the page it sits on; an operation that adds, removes, rotates or undoes changes that revision, so an edit made
+    /// while one runs would be queued, then refused, and what was typed lost from a field that still looked editable.
+    /// </summary>
+    private T EditorControl<T>(T control, Func<bool>? allowed = null) where T : Control
     {
-        _editorOperationControls.Add(control);
-        control.IsEnabled = !_editorOperations.IsBusy;
+        _editorOperationControls.Add((control, allowed));
+        control.IsEnabled = !_editorOperations.IsBusy && (allowed?.Invoke() ?? true);
         return control;
     }
 
     private void RefreshEditorControlState()
     {
         if (_isClosed) return;
-        foreach (var control in _editorOperationControls)
-            control.IsEnabled = !_editorOperations.IsBusy;
+        var busy = _editorOperations.IsBusy;
+        foreach (var (control, allowed) in _editorOperationControls)
+            control.IsEnabled = !busy && (allowed?.Invoke() ?? true);
     }
 
     private async Task RunEditorOperationAsync(int revision, Func<Task> action)

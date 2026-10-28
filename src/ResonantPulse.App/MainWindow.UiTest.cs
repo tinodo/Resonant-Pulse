@@ -30,6 +30,8 @@ public sealed partial class MainWindow
         var replace = Tiny(new Button());
         var holdClose = Tiny(new Button());
         var ask = Tiny(new Button());
+        var holdEdits = Tiny(new Button());
+        var releaseEdits = Tiny(new Button());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
         Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
@@ -38,6 +40,8 @@ public sealed partial class MainWindow
         Identify(replace, "UiTestReplaceProject", "ui test replace project");
         Identify(holdClose, "UiTestHoldClose", "ui test hold close");
         Identify(ask, "UiTestAskQuestion", "ui test ask question");
+        Identify(holdEdits, "UiTestHoldEdits", "ui test hold edits");
+        Identify(releaseEdits, "UiTestReleaseEdits", "ui test release edits");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
         // Stands in for a request that was still loading when the window began to close (an Open validating its file) and now
         // asks whether to replace the project.
@@ -50,6 +54,21 @@ public sealed partial class MainWindow
         {
             _uiTestReplaceHold = TimeSpan.FromSeconds(3);
             await GuardAsync(() => ReplaceDocumentAsync(new PulseDocument { Name = "Replacement" }));
+        };
+        // Stands in for edits that are asked for faster than they are applied: from "hold" until "release" every edit waits in the
+        // queue, in order, and is applied when the queue is released.
+        var heldEdits = false;
+        holdEdits.Click += async (_, _) =>
+        {
+            if (heldEdits) return;
+            await _edits.WaitAsync();
+            heldEdits = true;
+        };
+        releaseEdits.Click += (_, _) =>
+        {
+            if (!heldEdits) return;
+            heldEdits = false;
+            _edits.Release();
         };
         // Stands in for a Windows text-size change: the page-tools labels get bigger while the page keeps its size.
         grow.Click += (_, _) => GrowToolLabels(1.6);
@@ -71,6 +90,8 @@ public sealed partial class MainWindow
         host.Children.Add(replace);
         host.Children.Add(holdClose);
         host.Children.Add(ask);
+        host.Children.Add(holdEdits);
+        host.Children.Add(releaseEdits);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");

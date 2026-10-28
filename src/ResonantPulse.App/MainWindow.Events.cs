@@ -27,7 +27,7 @@ public sealed partial class MainWindow
                     }).ToList();
                     edited.Pattern = [];
                 });
-                BuildPage();
+                RebuildPreservingScroll();
             }));
             return panel;
         }
@@ -52,7 +52,7 @@ public sealed partial class MainWindow
                 edited.Events.Add(new RhythmEvent { PositionQuarters = point });
                 edited.Events.Sort((left, right) => left.PositionQuarters.CompareTo(right.PositionQuarters));
             });
-            BuildPage();
+            RebuildPreservingScroll();
         }));
         return panel;
     }
@@ -80,7 +80,7 @@ public sealed partial class MainWindow
                     edited.Probability = Value(probability);
                     edited.Tie = tie.IsChecked == true;
                 });
-                BuildPage();
+                RebuildPreservingScroll();
             }), EditorActionButton("Remove", id + "Remove", async () =>
             {
                 if (!await ConfirmAsync(Text.Format("ConfirmRemove", $"{Text.Get("Step")} {eventIndex + 1}"), "Remove")) return;
@@ -96,7 +96,7 @@ public sealed partial class MainWindow
                         edited.Pattern = [Accent.Silent];
                     }
                 });
-                BuildPage();
+                RebuildPreservingScroll();
             })));
         var expander = new Expander
         {
@@ -105,26 +105,5 @@ public sealed partial class MainWindow
         };
         Identify(expander, id, $"{Text.Get("Step")} {eventIndex + 1}");
         return expander;
-    }
-
-    private UIElement BuildGenerator()
-    {
-        var attacks = NumberInt("Pulses", "EuclideanAttacks", 5, 0, 256);
-        var steps = NumberInt("GridSteps", "EuclideanSteps", 8, 1, 256);
-        var cycle = Number("Cycle", "EuclideanCycle", 4, 0.125, 256, 0.125);
-        var rotation = NumberInt("Rotation", "EuclideanRotation", 0, -256, 256);
-        return Column(Heading(Text.Get("Euclidean")), Flow(attacks, steps, cycle, rotation),
-            EditorActionButton("AddLane", "GenerateEuclidean", async () =>
-            {
-                await CommitEditorAsync(doc =>
-                {
-                    if (doc.Lanes.Count >= 8) throw new ArgumentException(Text.Get("LaneLimit"));
-                    var lane = RhythmGenerators.Euclidean(Integer(attacks), Integer(steps),
-                        Rational.FromDouble(Value(cycle)), Integer(rotation));
-                    lane.Name = $"{Text.Get("Euclidean")} {Integer(attacks)}/{Integer(steps)}";
-                    doc.Lanes.Add(lane);
-                });
-                BuildPage();
-            }));
     }
 }

@@ -206,8 +206,8 @@ public sealed class EditorOperationGateTests
         var revision = 5;
         var capturedEditorRevision = revision;
         revision = EditorRevisionPolicy.Advance(revision, EditorChangeKind.MasterGainOnly);
-        // Default covers lane/event/program edits (including their gain/tempo
-        // fields), reordering, add/remove, replacement, Next and undo/redo.
+        // Default covers structural lane edits (add, remove, duplicate, rotate, convert), exact-event and program edits,
+        // replacement, Next and undo/redo.
         revision = EditorRevisionPolicy.Advance(revision);
         revision = EditorRevisionPolicy.Advance(revision, EditorChangeKind.GlobalTempoOnly);
         var applied = false;

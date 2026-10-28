@@ -110,7 +110,7 @@ public sealed partial class MainWindow : Window
         StartButton.Click += async (_, _) => await GuardAsync(TogglePlaybackAsync);
         StopButton.Click += (_, _) =>
         {
-            _transportIntent++;
+            SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();
             _hasPendingEdits = false;
@@ -261,8 +261,15 @@ public sealed partial class MainWindow : Window
         BuildPage();
     }
 
+    /// <summary>
+    /// Counts how often the page was built. The Studio page, built while edits are still being applied, is built again once they
+    /// are in; that second build is skipped if the page was built again (or left) in the meantime.
+    /// </summary>
+    private int _pageGeneration;
+
     private void BuildPage()
     {
+        _pageGeneration++;
         // The notes box is about to be replaced. What was typed in it goes with the request that saves it, not with the box, so
         // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
         QueueStageNotesSave();
@@ -293,6 +300,7 @@ public sealed partial class MainWindow : Window
         _libraryStatus = null;
         _libraryNoMatch = null;
         _libraryEmpty = null;
+        _editorOperationControls.Clear();
         PageHost.Content = _view switch
         {
             "Studio" => BuildStudio(),
@@ -326,6 +334,39 @@ public sealed partial class MainWindow : Window
         try
         {
             var retainsRevision = _transport.State is TransportState.Paused or TransportState.Faulted;
+            // A new start plays the project as it is after every change asked for before it. Changes are applied in turn, so
+            // Start takes its place in the queue first; a change still being checked would otherwise be left out of what plays
+            // and only be heard after Stop and Start. A resume keeps the revision it paused on and does not wait.
+            if (!retainsRevision)
+            {
+                // Stop, a change of output, a power transition and a replaced project end the wait by superseding the transport
+                // intent (which also cancels the wait, so Start lets go of the busy state at once, not when the queue clears).
+                // Stop stays available while Start waits, so a save that stalls cannot leave a start that cannot be cancelled.
+                var intent = _transportIntent;
+                using var wait = new CancellationTokenSource();
+                _startWait = wait;
+                _startWaitingIntent = intent;
+                try
+                {
+                    // The tempo is submitted one step at a time and the newest request waits outside the queue until the one
+                    // being committed is done, so it is waited for first, as closing does.
+                    await _tempoPump.WaitAsync(wait.Token);
+                    await WaitForPendingEditsAsync(wait.Token);
+                }
+                catch (OperationCanceledException) { return; }
+                finally
+                {
+                    _startWait = null;
+                    _startWaitingIntent = null;
+                }
+                // The window may have begun to close, or the start been cancelled or overtaken, while Start waited.
+                if (intent != _transportIntent || _closeFlushing || _isClosed) return;
+                if (!HasSelectedOutput)
+                {
+                    PromptForOutput();
+                    return;
+                }
+            }
             var startRevision = _documentRevision;
             await _transport.StartAsync(_document, _preferences.OutputId);
             if (!retainsRevision) _hasPendingEdits = startRevision != _documentRevision;
@@ -333,9 +374,42 @@ public sealed partial class MainWindow : Window
         finally { _isBusy = false; RefreshSnapshot(); }
     }
 
-    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
-        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, Action? onPublished = null)
+    /// <summary>The transport intent of a Start that waits for the edits asked for before it, while it waits.</summary>
+    private int? _startWaitingIntent;
+
+    /// <summary>Cancels the wait of a Start that waits for earlier edits, while it waits.</summary>
+    private CancellationTokenSource? _startWait;
+
+    /// <summary>True while a Start waits for earlier edits and nothing has cancelled it: Stop is available then, and ends the wait.</summary>
+    private bool IsStartPending => _startWaitingIntent is { } waiting && waiting == _transportIntent;
+
+    /// <summary>
+    /// Ends whatever the transport was about to do. A Start that waits for earlier edits is one such thing: it checks the intent
+    /// when it wakes, and its wait is cancelled so that it lets go of the busy state at once.
+    /// </summary>
+    private void SupersedeTransportIntent()
     {
+        _transportIntent++;
+        _startWait?.Cancel();
+    }
+
+    /// <summary>
+    /// Returns once every edit asked for before this call has been applied (the edit lock is handed out in the order it was
+    /// asked for). <paramref name="cancel"/> ends the wait without taking the lock.
+    /// </summary>
+    private async Task WaitForPendingEditsAsync(CancellationToken cancel = default)
+    {
+        await _edits.WaitAsync(cancel);
+        _edits.Release();
+    }
+
+    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
+        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, string? coalesceKey = null,
+        Action? onPublished = null)
+    {
+        // When the person made the change, not when the queue reaches it: a slow validation or recovery write must not split quick
+        // changes into several Undo steps, and a queue that drains must not join changes that were made seconds apart.
+        var madeAt = DateTime.UtcNow;
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
         {
@@ -358,14 +432,7 @@ public sealed partial class MainWindow : Window
                 countInChanged = _transport.Snapshot().Revision is { } audible &&
                     audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
             }
-            _undo.Push(_document);
-            if (_undo.Count > 64)
-            {
-                var recent = _undo.Take(64).Reverse().ToArray();
-                _undo.Clear();
-                foreach (var item in recent) _undo.Push(item);
-            }
-            _redo.Clear();
+            RecordUndo(coalesceKey, madeAt);
             _document = revised;
             _recoveryUnsaved = true;
             _documentRevision++;
@@ -388,6 +455,8 @@ public sealed partial class MainWindow : Window
             if (!succeeded) SynchronizeGain();
             if (EditorRevisionPolicy.ShouldRebuild(succeeded, editorChange)) BuildPage();
             else RefreshSnapshot();
+            // Undo and Redo become available (or not) with every change.
+            RefreshEditorControlState();
         });
     }
 
@@ -404,6 +473,30 @@ public sealed partial class MainWindow : Window
         var revision = _documentRevision;
         await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
         if (revision == _documentRevision) _recoveryUnsaved = false;
+    }
+
+    private string? _undoKey;
+    private DateTime _undoKeyAt;
+
+    /// <summary>
+    /// Keeps the project as it is now so Undo can come back to it. An edit that continues a burst on one field (the same
+    /// <paramref name="coalesceKey"/>, soon after the last) joins that burst's undo step instead of adding its own, so
+    /// nudging a value ten times is one step back, not ten. "Soon after" is measured between the moments the changes were
+    /// made (<paramref name="madeAt"/>), not the moments the queue applied them. Called with the edit queue held.
+    /// </summary>
+    private void RecordUndo(string? coalesceKey = null, DateTime? madeAt = null)
+    {
+        var now = madeAt ?? DateTime.UtcNow;
+        var joinsBurst = _undo.Count > 0 && UndoCoalescing.ShouldMerge(_undoKey, coalesceKey, _undoKeyAt, now);
+        _undoKey = coalesceKey;
+        _undoKeyAt = now;
+        _redo.Clear();
+        if (joinsBurst) return;
+        _undo.Push(_document);
+        if (_undo.Count <= 64) return;
+        var recent = _undo.Take(64).Reverse().ToArray();
+        _undo.Clear();
+        foreach (var item in recent) _undo.Push(item);
     }
 
     private static Task ValidateAsync(PulseDocument document) =>
@@ -423,6 +516,8 @@ public sealed partial class MainWindow : Window
             var source = redo ? _redo : _undo;
             var target = redo ? _undo : _redo;
             if (source.Count == 0) return;
+            // The next edit starts a step of its own, even on the field that was just undone.
+            _undoKey = null;
             target.Push(_document);
             _document = source.Pop();
             // The setlist may be shorter now; the song that was up next may not exist any more.
@@ -434,7 +529,7 @@ public sealed partial class MainWindow : Window
             published();
             SynchronizeGain();
             await SaveRecoveryAsync();
-        }, _ => { if (!_isClosed) BuildPage(); });
+        }, _ => { if (!_isClosed) RebuildPreservingScroll(); });
     }
 
     private void SynchronizeGain()
