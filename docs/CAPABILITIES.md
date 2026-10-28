@@ -9,13 +9,13 @@ evidence separately.
 |---|---|---|
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
 | Play and transport | Native pulse instrument with an exact-tempo editor, live -/TAP/+, sheet-music time-signature picker with a custom builder, beat-strength strip, shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; live sound, beat-strength, tempo, meter, tempo-unit, subdivision, swing, group and gap-bar edits spliced at the next pulse | Acoustic/hardware confirmation of live splices (automated checks have not played audible sound; a silent real-device run has passed); structural edits during a finite program (they need Stop + Start); calibrated audible position; tap-in and free-running/no-bar mode. Full visual/usability acceptance remains outstanding |
-| Studio | Lane/event controls, original built-ins and generators | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring |
-| Train | Finite bar-authored programs, ramps and gaps | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
-| Stage | Large instrument/setlist presentation and song controls | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
-| Library and files | Local projects/preferences/recovery, WAV and checked MIDI export | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
+| Studio | Lane cards (name, Mute, Solo, rotate/invert/copy/remove, the strength of each beat as a strip, clicks per cycle, cycle length, start offset, sound, volume, pan, chance), an Add lane menu with original built-ins and a Euclidean generator with a preview, practice-program steps as cards (tempo curve, bars, repeats, own time signature, silent bars, a grouped-beats project handled with Clear grouping), custom beat positions kept as exact fractions with strength, volume, chance and tie, edits applied in the order made, Undo/Redo | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring. A change made in Studio while the metronome plays is saved at once but heard only after Stop and Start |
+| Train | Practice program status, progress, planned-tempo chart and readable step rows; finite bar-authored programs, ramps and gaps (authored in Studio); a timing check whose Start, Hit and Finish are on only when they make sense | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
+| Stage | Now playing (the tempo once, large) beside a Setlist; the selected song as Up next, said in words, and selecting never interrupts playback; Next + count-in on the first screen; Lock editing and Always on top switches; notes saved when focus leaves the box | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
+| Library and files | Local projects/preferences/recovery; My projects with search, name and date, and Open once a project is chosen; ready-made rhythms with a name, a sentence, meter and tempo; WAV and checked MIDI export, with the export length (the bars written when the project has no program) beside the export buttons | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
-| Accessibility/localization | Five-language source dictionaries, keyboard and automation handling, theme-aware controls | Musician translation review, Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance |
-| Distribution | Published GitHub preview 0.1.0-preview.9 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Accessibility/localization | Five-language source dictionaries (a test checks that every string exists in all five with matching placeholders), keyboard and automation handling, theme-aware controls, a Reduce motion switch (the marker jumps from beat to beat and the tape of upcoming clicks is hidden; also on whenever Windows has animation effects off), fields that give way in narrow windows and at larger text sizes | Musician translation review (the new and rewritten Dutch, German, French and Spanish text was written with GitHub Copilot; docs/design/glossary.md lists the terms to check first), Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance, Windows text sizes above 100% on the real setting |
+| Distribution | Published GitHub preview 0.1.0-preview.10 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -283,3 +283,49 @@ for the owner. This does not establish real-pointer hover or the Windows "always
 show scroll bars" setting on a real desktop, acoustic accuracy, live-splice
 latency, Windows text-size or Contrast-theme appearance, full-product acceptance or
 Store publication.
+
+[Preview 0.1.0-preview.10](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.10)
+is a page-design round after an owner review of preview.9. Timer, Project, Help and
+Settings had fields as wide as the window, an "Apply edits" button in the middle of a
+form and settings nobody could explain, and Library, Stage, Train and Studio had had
+little thought. They, and the panels on Play, now follow one design
+(docs/design/pages-design.md): titled pages of cards, fields as wide as what they
+hold, plain-language text, empty states that say what to do next and no Apply button,
+because a change takes effect as it is made and one the project refuses goes back to
+the value it holds and says why. "Reduce motion" is a switch that makes the marker on
+the circle jump from beat to beat instead of gliding and hides the scrolling tape of
+upcoming clicks; it is also on whenever Windows has animation effects off. The export
+length (the bars written to a WAV or MIDI file when the project has no program; a
+program decides its own length) moved to Library, next to the export buttons. Studio
+lanes and practice-program steps are cards, custom beat positions are rows that keep a
+click exact (a whole number, a fraction or a decimal), and edits are applied in the
+order they are made: a Start waits for the edits asked for before it, and a Stop
+cancels a Start that is still waiting. What is changed in Studio while the metronome
+plays is saved at once and heard after Stop and Start. Protected main `e3c6836`: main
+build 40779798042 and CodeQL 40779798161 passed; release 40780682093 passed fresh
+hosted tests (234 Core passes of 238 cases, four platform skips, with no engine change
+since preview.9, and 499 App passes), Windows x64/ARM64 builds and x64 native/package
+checks, including the first-use verifier's gates for the redesigned pages. Hosted
+audio, live-edit and counted-stop scenarios explicitly reported `not-run-no-output`.
+The actual public x64 ZIP checksum and embedded source/version/run were checked; the
+ARM64 checksum file matched the GitHub digest of the ARM64 ZIP, which was not
+downloaded and re-hashed. The hosted Windows x64 check failed repeatedly on the
+page-design branch (and on a rerun of the previous green run): a step name box that
+was taken away with its page after a Move up committed a stale draft and left an error
+notice open under the page. That is fixed, and the first-use verifier now reports any
+open error notice. The shipped x64 binary then ran the exact verifier's audio
+scenarios on the Windows default output at an inaudible master gain (0.0001, isolated
+data folder, private desktop): playback advanced, live sound, beat-strength, tempo and
+meter edits were published without stopping, and the counted stops passed. It was
+dry-run on private-desktop copies of the owner's saved state (the current state,
+whose last page is Settings, so the app opened there, and the preview.8-era state,
+which opened on Play) and installed
+on the development PC without being started: preview.9 stays on disk, the saved
+preferences and recovery draft were byte-identical after startup and exit, and the
+Start menu shortcut now targets preview.10. No audio was played in any instance
+started for the owner. This does not establish acoustic accuracy, live-splice latency,
+Windows text sizes above 100% on the real setting, Contrast-theme appearance, a
+native-speaking musician's review of the new Dutch, German, French and Spanish text
+(docs/design/glossary.md lists the terms to check first), full-product acceptance or
+Store publication. When Windows activates the packaged app, keyboard focus starts on
+Settings (initial focus is not managed yet), so its focus ring can show at launch.
