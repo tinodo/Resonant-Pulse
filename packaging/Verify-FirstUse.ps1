@@ -248,10 +248,22 @@ function Test-PlayTools {
         $dy = [Math]::Max([Math]::Max($rect.Top - $centreY, $centreY - $rect.Bottom), 0)
         if ([Math]::Sqrt($dx * $dx + $dy * $dy) -lt $radius) { throw "$($names[$index]) covers the metronome's ring: $rect over dial $dial" }
     }
-    $settings = (Find-Control 'DestinationSettings').Current.BoundingRectangle
+    # A focused item draws its focus ring, and UI Automation then reports the ring's rectangle (4 px wider on each side and 2
+    # taller than the item). The application Windows activates (the packaged one) starts with the focus on Settings and its
+    # window active, so the ring is there; a launched build, or one that restored a project, has none. This check is about the
+    # layout, so a focus that sits on Settings is moved to the mute button (always enabled) before it is measured.
+    $settingsItem = Find-Control 'DestinationSettings'
+    if ($settingsItem.Current.HasKeyboardFocus) {
+        try { (Find-Control 'EmergencyMute').SetFocus() } catch { }
+        Start-Sleep -Milliseconds 400
+        $settingsItem = Find-Control 'DestinationSettings'
+    }
+    $settings = $settingsItem.Current.BoundingRectangle
     $labelled = $rects[2].Width -gt 56 * $scale
     if ($labelled -and [Math]::Abs($rects[2].Right - $settings.Right) -gt 3 * $scale) {
-        throw "Help does not line up with the Settings item at the right edge: $($rects[2]) and $settings"
+        $focusNow = [Windows.Automation.AutomationElement]::FocusedElement
+        $focusId = if ($null -eq $focusNow) { 'none' } else { $focusNow.Current.AutomationId }
+        throw "Help does not line up with the Settings item at the right edge: $($rects[2]) and $settings (window $((Get-CurrentWindow).Current.BoundingRectangle), focus on '$focusId')"
     }
     return @{ labelled = $labelled; buttonHeight = $rects[0].Height }
 }
