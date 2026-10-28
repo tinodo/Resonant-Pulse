@@ -28,6 +28,11 @@ public sealed class WrapPanel : Panel
 
     private List<UIElement> Present() => Children.Where(child => child.Visibility == Visibility.Visible).ToList();
 
+    // The rows decided when the panel was last measured, for the arrangement to use (see WrapRows.Arranged).
+    private IReadOnlyList<int>? _measuredStarts;
+    private double _measuredWidth = double.NaN;
+    private int _measuredCount = -1;
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var children = Present();
@@ -35,6 +40,9 @@ public sealed class WrapPanel : Panel
         foreach (var child in children) child.Measure(constraint);
         var widths = children.Select(child => child.DesiredSize.Width).ToList();
         var starts = WrapRows.Starts(widths, availableSize.Width, HorizontalSpacing, WrapRows.Slack);
+        _measuredStarts = starts;
+        _measuredWidth = availableSize.Width;
+        _measuredCount = children.Count;
         double width = 0, height = 0;
         for (var row = 0; row < starts.Count; row++)
         {
@@ -55,7 +63,7 @@ public sealed class WrapPanel : Panel
     {
         var children = Present();
         var widths = children.Select(child => child.DesiredSize.Width).ToList();
-        var starts = WrapRows.Starts(widths, finalSize.Width, HorizontalSpacing, WrapRows.Slack);
+        var starts = WrapRows.Arranged(_measuredStarts, _measuredWidth, _measuredCount, widths, finalSize.Width, HorizontalSpacing, WrapRows.Slack);
         double y = 0;
         for (var row = 0; row < starts.Count; row++)
         {

@@ -558,7 +558,7 @@ public sealed partial class MainWindow
     /// value that is on its way (see <see cref="SubmissionTracker{T}"/>), not the one the project still holds; so does a value
     /// that is refused at once while an older one is still in the queue.
     /// </summary>
-    private void CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
+    private SubmissionTracker<double> CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
     {
         var reverting = false;
         var submissions = new SubmissionTracker<double>();
@@ -585,6 +585,7 @@ public sealed partial class MainWindow
             });
             if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused) Show(submissions.OnItsWayOr(current()));
         };
+        return submissions;
     }
 
     /// <summary>
@@ -593,7 +594,7 @@ public sealed partial class MainWindow
     /// hold). A refused draft goes back to what the setting holds, with the reason shown, unless a newer draft was committed
     /// after it or the person has typed on since. The same draft is never committed twice while the first is on its way.
     /// </summary>
-    private void CommitText(TextBox box, Func<string> current, Func<string, Task> commit)
+    private SubmissionTracker<string> CommitText(TextBox box, Func<string> current, Func<string, Task> commit)
     {
         var submissions = new SubmissionTracker<string>();
         // The draft last applied as typed: what the setting holds, which may differ from current() when the commit tidies it.
@@ -637,13 +638,14 @@ public sealed partial class MainWindow
                 box.Text = Held();
             }
         };
+        return submissions;
     }
 
     /// <summary>
     /// The same contract for a drop-down: a choice commits at once, and a refused one puts the drop-down back to what the
     /// setting holds, unless a newer choice was made after it.
     /// </summary>
-    private void CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit)
+    private SubmissionTracker<string> CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit)
     {
         var reverting = false;
         var submissions = new SubmissionTracker<string>();
@@ -662,6 +664,36 @@ public sealed partial class MainWindow
             SelectChoice(combo, submissions.OnItsWayOr(current()));
             reverting = false;
         };
+        return submissions;
+    }
+
+    /// <summary>
+    /// The same contract for a switch: a change commits at once, and a refused one puts the switch back to what the setting
+    /// holds (or to the value of an older change that is still in the queue), unless a newer change was made after it. Whatever
+    /// else shows the setting is brought in line by <paramref name="commit"/>, once it has finished, whether or not the change
+    /// was applied.
+    /// </summary>
+    private SubmissionTracker<bool> CommitSwitch(ToggleSwitch toggle, Func<bool> current, Func<bool, Task> commit)
+    {
+        var reverting = false;
+        var submissions = new SubmissionTracker<bool>();
+        toggle.Toggled += async (_, _) =>
+        {
+            if (reverting) return;
+            var wanted = toggle.IsOn;
+            var ticket = submissions.Begin(wanted);
+            var applied = false;
+            await GuardAsync(async () =>
+            {
+                await commit(wanted);
+                applied = true;
+            });
+            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
+            reverting = true;
+            toggle.IsOn = submissions.OnItsWayOr(current());
+            reverting = false;
+        };
+        return submissions;
     }
 
     private const double SliderTrackWidth = 190;

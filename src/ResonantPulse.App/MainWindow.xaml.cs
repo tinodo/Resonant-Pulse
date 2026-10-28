@@ -571,7 +571,9 @@ public sealed partial class MainWindow : Window
         _noticeTimer.Stop();
         Notice.Severity = InfoBarSeverity.Error;
         Notice.Title = Text.Get(key);
-        Notice.Message = $"{ErrorText.Explain(exception)}\n{Text.Format("ErrorDiagnostics", Diagnostics.LogPath)}";
+        Notice.Message = exception is UserMessageException
+            ? ErrorText.Explain(exception)
+            : $"{ErrorText.Explain(exception)}\n{Text.Format("ErrorDiagnostics", Diagnostics.LogPath)}";
         Notice.IsOpen = true;
     }
 

@@ -956,10 +956,7 @@ Wait-Settled 'Lane0Volume'
 # Adding a lane is an operation of the editor gate: the fields of the page it builds wait for it, then come on.
 Wait-Condition { (Find-Control 'Lane0Volume').Current.IsEnabled } 'Studio: the fields of the new lane stayed switched off after it was added.'
 Test-FieldWidths 'Studio' @{ Lane0Pulses = 200; Lane0Cycle = 240; Lane0Offset = 250; Lane0Sound = 330; DocumentSeed = 200 }
-# The practice-program steps and the exact positions still have their older editors with an Apply button, until they get
-# live fields like a lane's. Nothing else on the page may have one.
-$olderEditors = '^(Program\d+|Lane\d+Event\d+)Apply$'
-Test-NoApplyButtons 'Studio' $olderEditors
+Test-NoApplyButtons 'Studio'
 function Get-LaneValue([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.Value }
 function Get-RuntimeKey([string]$id) { (Find-Control $id).GetRuntimeId() -join '.' }
 if ((Get-LaneValue 'Lane0Volume') -ne 70) { throw "Studio: a new lane's volume is $(Get-LaneValue 'Lane0Volume'), not 70." }
@@ -1000,7 +997,7 @@ Invoke-Control 'EuclideanOptionsDone'
 Wait-Absent 'EuclideanOptionsDone'
 Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: the Euclidean lane never appeared.'
 Wait-Condition { (Find-Control 'Lane0Volume').Current.IsEnabled } 'Studio: the fields stayed switched off after the Euclidean lane was added.'
-Test-NoApplyButtons 'Studio' $olderEditors
+Test-NoApplyButtons 'Studio'
 # An operation that changes what is on the page takes the fields of every lane with it while it runs, so an edit made meanwhile is
 # not queued with the old page and then refused. Remove asks first, inside the operation: while the question is open the fields
 # are off and the command that opened it is not (the keyboard focus returns to it); after Cancel everything is back.
@@ -1018,6 +1015,138 @@ foreach ($id in $laneFields) {
     Wait-Condition { (Find-Control $id).Current.IsEnabled } "Studio: $id stayed switched off after the removal was cancelled."
 }
 Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: cancelling the removal removed the lane.'
+function Get-Box([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
+function Get-StepValue([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.Value }
+function Show-Control([string]$id) {
+    # Brings a control that is below the first screen into view, the way a person scrolls to it.
+    try { (Find-Control $id).GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView() } catch { }
+    Start-Sleep -Milliseconds 400
+}
+# The exact positions of the Euclidean lane are rows that open to fields applying as they are changed: no Apply button, the row is
+# not rebuilt, a typed position is read exactly, one outside the cycle is refused and the box goes back.
+Show-Control 'Lane1Positions'
+Wait-Condition { $null -ne (Find-Optional 'Lane1Event7') } 'Studio: the Euclidean lane lists fewer than eight positions.'
+Wait-Absent 'Lane1Event1Position'
+(Find-Control 'Lane1Event1').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+Wait-Condition { $null -ne (Find-Optional 'Lane1Event1Position') } 'Studio: opening a position did not show its fields.'
+if ((Get-Box 'Lane1Event1Position') -ne '0.5') { throw "Studio: the second position shows '$(Get-Box 'Lane1Event1Position')', not 0.5." }
+Test-FieldWidths 'Studio' @{ Lane1Event1Position = 190; Lane1Event1Accent = 330 }
+Test-NoApplyButtons 'Studio'
+$positionKey = Get-RuntimeKey 'Lane1Event1Position'
+# A box commits when it loses focus, and setting its text through automation does not give it the focus: it is focused first, the
+# way a person clicks into it, and left by moving the focus on.
+(Find-Control 'Lane1Event1Position').SetFocus()
+Set-Text 'Lane1Event1Position' '0.75'
+(Find-Control 'Lane1AddEvent').SetFocus()
+Wait-Condition { (Find-Control 'Lane1Event1').Current.Name -like '*0.75*' } 'Studio: a typed position did not reach the title of its row.'
+if ((Get-RuntimeKey 'Lane1Event1Position') -ne $positionKey) { throw 'Studio: changing a position rebuilt its row.' }
+(Find-Control 'Lane1Event1Position').SetFocus()
+Set-Text 'Lane1Event1Position' '4'
+(Find-Control 'Lane1AddEvent').SetFocus()
+Wait-Condition { (Get-Box 'Lane1Event1Position') -eq '0.75' } 'Studio: a position outside the cycle was kept in the box.'
+Start-Sleep -Milliseconds 700
+if ((Get-Box 'Lane1Event1Position') -ne '0.75') { throw "Studio: a position outside the cycle came back into the box ('$(Get-Box 'Lane1Event1Position')')." }
+Invoke-Control 'Lane1AddEvent'
+Wait-Condition { $null -ne (Find-Optional 'Lane1Event8') } 'Studio: Add position did not add a ninth row.'
+# A lane that plays a pattern is converted to positions with one command, and Undo brings the pattern back.
+Show-Control 'Lane0Positions'
+(Find-Control 'Lane0Positions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+Wait-Condition { $null -ne (Find-Optional 'Lane0ConvertEvents') } 'Studio: a pattern lane offers no way to convert it to positions.'
+Invoke-Control 'Lane0ConvertEvents'
+Wait-Condition { $null -ne (Find-Optional 'Lane0Event3') -and $null -eq (Find-Optional 'Lane0ConvertEvents') } 'Studio: converting the pattern did not list its positions.'
+Invoke-Control 'StudioUndo'
+# The lane has no positions again, so its list starts closed (as it does for a new project) and the command is inside it.
+Wait-Condition { $null -eq (Find-Optional 'Lane0Event3') -and $null -ne (Find-Optional 'Lane0Positions') } 'Studio: Undo did not bring the pattern back.'
+(Find-Control 'Lane0Positions').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+Wait-Condition { $null -ne (Find-Optional 'Lane0ConvertEvents') } 'Studio: Undo did not offer to convert the pattern again.'
+# The practice program: one card for each step. Every field applies as it is changed (the page is not rebuilt), the tempo behaviour
+# decides which tempo boxes show, leaving bars silent shows a sentence with two boxes, and steps can be moved, copied and removed.
+Show-Control 'AddProgramStep'
+$null = Find-Control 'ProgramCard'
+Wait-Absent 'Program0Card'
+# Said when a click that was accepted adds nothing: what the page shows, and whether a second click does what the first should have.
+function Get-AddStepDiagnostics {
+    $present = @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
+        ForEach-Object { $_.Current.Name } | Where-Object { $_ -like '*operation*' -or $_ -like '*document changed*' -or $_ -like '*could not*' } | Select-Object -Unique)
+    function State([string]$id) { $e = Find-Optional $id; if ($null -eq $e) { 'missing' } else { "enabled=$($e.Current.IsEnabled)" } }
+    $focus = [Windows.Automation.AutomationElement]::FocusedElement
+    $second = 'not tried'
+    try {
+        if ((Find-Optional 'AddProgramStep').Current.IsEnabled) {
+            (Find-Optional 'AddProgramStep').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Seconds 3
+            $second = "step card after a second click: $($null -ne (Find-Optional 'Program0Card'))"
+        }
+    } catch { $second = "second click failed: $($_.Exception.Message)" }
+    "(add step: $(State 'AddProgramStep'); undo: $(State 'StudioUndo'); program card: $($null -ne (Find-Optional 'ProgramCard')); focus: $($focus.Current.AutomationId); notices: $($present -join ' | '); $second)"
+}
+Invoke-Control 'AddProgramStep'
+try { Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Studio: Add step did not add a step card.' }
+catch { throw "$($_.Exception.Message) $(Get-AddStepDiagnostics)" }
+Wait-Settled 'Program0Bars'
+Test-FieldWidths 'Studio' @{ Program0Name = 300; Program0Ramp = 330; Program0Tempo = 200; Program0Bars = 200; Program0Repeats = 200; Program0Beats = 200; Program0Denominator = 330 }
+Test-NoApplyButtons 'Studio'
+if ($null -eq (Find-Optional 'Program0Tempo') -or $null -ne (Find-Optional 'Program0StartTempo')) { throw 'Studio: a steady step must show one tempo, not from and to.' }
+$barsKey = Get-RuntimeKey 'Program0Bars'
+Set-Number 'Program0Bars' 12
+Wait-Condition { (Get-StepValue 'Program0Bars') -eq 12 } 'Studio: the bars box did not take its value.'
+Start-Sleep -Milliseconds 700
+# A box shows what was typed until the project refuses it, and then goes back: read again after the project had its say.
+if ((Get-StepValue 'Program0Bars') -ne 12) { throw "Studio: the bars box went back to $(Get-StepValue 'Program0Bars'), so the project did not take 12." }
+if ((Get-RuntimeKey 'Program0Bars') -ne $barsKey) { throw 'Studio: changing a step field rebuilt the page, so the focus and the scroll position would be lost.' }
+(Find-Control 'Program0Tempo').GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).SetValue([double]92.5)
+Select-Combo 'Program0Ramp' 'Linear in seconds'
+Wait-Condition { $null -ne (Find-Optional 'Program0StartTempo') -and $null -ne (Find-Optional 'Program0EndTempo') -and $null -eq (Find-Optional 'Program0Tempo') } 'Studio: a ramp must show a start and an end tempo instead of one.'
+if ((Get-StepValue 'Program0StartTempo') -ne 92.5) { throw "Studio: the start tempo of the ramp shows $(Get-StepValue 'Program0StartTempo'), not the 92.5 that was set." }
+Set-Number 'Program0EndTempo' 140
+Select-Combo 'Program0Ramp' 'Constant'
+Wait-Condition { $null -ne (Find-Optional 'Program0Tempo') -and $null -eq (Find-Optional 'Program0EndTempo') } 'Studio: a steady step must show one tempo again.'
+if ((Get-StepValue 'Program0Tempo') -ne 92.5) { throw "Studio: back to steady, the tempo shows $(Get-StepValue 'Program0Tempo'), not 92.5." }
+$stepRest = (Find-Control 'Program0Rest').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+if ($null -ne (Find-Optional 'Program0Audible')) { throw 'Studio: the silent-bars boxes show while the switch is off.' }
+$stepRest.Toggle()
+Wait-Condition { $null -ne (Find-Optional 'Program0Audible') -and $null -ne (Find-Optional 'Program0Silent') } 'Studio: leaving bars silent did not show its two boxes.'
+Set-Number 'Program0Audible' 3
+Set-Number 'Program0Silent' 5
+Wait-Condition { (Get-StepValue 'Program0Silent') -eq 5 } 'Studio: the silent-bars box did not take its value.'
+Start-Sleep -Milliseconds 700
+if ((Get-StepValue 'Program0Silent') -ne 5 -or (Get-StepValue 'Program0Audible') -ne 3) { throw "Studio: the silent-bars boxes went back to $(Get-StepValue 'Program0Audible') and $(Get-StepValue 'Program0Silent'), so the project did not take 3 and 5." }
+$stepRest.Toggle()
+Wait-Absent 'Program0Audible'
+# Steps are added at the end, moved, copied, and removed after a question.
+Invoke-Control 'AddProgramStep'
+Wait-Condition { $null -ne (Find-Optional 'Program1Card') } 'Studio: the second step never appeared.'
+Wait-Condition { -not (Find-Control 'Program0MoveUp').Current.IsEnabled -and (Find-Control 'Program1MoveUp').Current.IsEnabled } 'Studio: only a step that is not first can move up.'
+$secondName = Get-Box 'Program1Name'
+Invoke-Control 'Program1MoveUp'
+Wait-Condition { (Get-Box 'Program0Name') -eq $secondName } 'Studio: Move up did not put the second step first.'
+Invoke-Control 'Program0More'
+Invoke-Control 'Program0Duplicate'
+Wait-Condition { $null -ne (Find-Optional 'Program2Card') } 'Studio: Duplicate did not add a copy.'
+Wait-Condition { (Get-Box 'Program1Name') -like '*(copy)' } 'Studio: the copy is not named after its original.'
+Show-Control 'Program2More'
+Invoke-Control 'Program2More'
+Invoke-Control 'Program2Remove'
+Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
+(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
+$null = Find-Control 'Program2Card'
+Invoke-Control 'Program2More'
+Invoke-Control 'Program2Remove'
+Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Studio: Remove did not ask again.'
+(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'Program2Card') } 'Studio: removing a step did not take its card away.'
+Test-NoApplyButtons 'Studio'
+# The remaining steps are taken away too: with a program the Play page leaves the tempo and the time signature to the program, and
+# the checks that follow use those controls.
+foreach ($stepIndex in 1, 0) {
+    Invoke-Control "Program${stepIndex}More"
+    Invoke-Control "Program${stepIndex}Remove"
+    Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "Studio: Remove did not ask about step $($stepIndex + 1)."
+    (Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Condition { $null -eq (Find-Optional "Program${stepIndex}Card") } "Studio: removing step $($stepIndex + 1) did not take its card away."
+}
+Wait-Condition { $null -ne (Find-Optional 'AddProgramStep') -and $null -ne (Find-Optional 'ProgramCard') } 'Studio: the program card did not come back to its empty state.'
 if ($sendKeys) {
     # A beat strip is one tab stop; the arrow keys move between its beats and Up and Down change a beat. Keys are sent only while
     # the application owns the keyboard.
@@ -1099,6 +1228,22 @@ foreach ($page in @(
     Wait-Settled $page.settle
     foreach ($id in $page.ids) { Test-OnScreen "Dutch page $($page.destination)" $id }
 }
+# The program is below the lanes: it is scrolled to, and the commands of its steps must be on screen in Dutch too. The English
+# checks took their steps away (with a program the Play page leaves the tempo and the time signature to the program), so a step
+# is added for this check and taken away again.
+Select-Destination 'DestinationStudio'
+Wait-Settled 'AddLane'
+Show-Control 'AddProgramStep'
+Test-OnScreen 'Dutch Studio program' 'AddProgramStep'
+Invoke-Control 'AddProgramStep'
+Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Dutch Studio program: Add step did not add a step card.'
+Show-Control 'Program0Card'
+foreach ($id in 'Program0Name', 'Program0MoveUp', 'Program0MoveDown', 'Program0More') { Test-OnScreen 'Dutch Studio program' $id }
+Invoke-Control 'Program0More'
+Invoke-Control 'Program0Remove'
+Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Dutch Studio program: Remove did not ask for confirmation.'
+(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Dutch Studio program: removing the step did not take its card away.'
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'
 Select-Combo 'Language' 'English'

@@ -4,10 +4,17 @@ using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Localization;
 
+/// <summary>
+/// An error whose message was written for the person using the app, in their language (a position that is outside its cycle, a
+/// program that is too long). It is shown as it is, without the pointer to the diagnostic log that an unexpected failure gets.
+/// </summary>
+internal class UserMessageException(string message) : Exception(message);
+
 internal static class ErrorText
 {
     public static string Explain(Exception exception)
     {
+        if (exception is UserMessageException) return exception.Message;
         // Typed export outcomes take precedence even over a coincidentally
         // known localized Message. Recovery semantics never depend on parsing
         // Core's English diagnostics or on the generic IOException classifier.
@@ -52,6 +59,8 @@ internal static class ErrorText
         if (message.Contains("Swing", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorSwing");
         if (message.Contains("Constant", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorRamp");
         if (message.Contains("gap", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorGap");
+        // A grouped time signature chosen while program steps still have another one (before the generic group message).
+        if (message.Contains("matching program meters", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorGroupMeters");
         if (message.Contains("group", StringComparison.OrdinalIgnoreCase)) return Text.Get("ErrorGroup");
         if (message.Contains("density", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("4096", StringComparison.Ordinal) || message.Contains("million", StringComparison.OrdinalIgnoreCase) ||

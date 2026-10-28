@@ -113,4 +113,18 @@ internal static class WrapRows
         }
         return starts;
     }
+
+    /// <summary>
+    /// The rows to arrange. A panel is arranged at the width it was measured at, give or take what layout rounding adds; when a
+    /// row only just fits, "measured" and "arranged" would otherwise disagree about it. The panel would then be measured as two
+    /// rows and drawn as one, and the layout system centres a panel that is smaller than the room it asked for: an empty band
+    /// above and below the row. So the rows that were measured are used again when the width is the same to within
+    /// <paramref name="slack"/> and the panel still has the same children; otherwise they are worked out again.
+    /// </summary>
+    internal static IReadOnlyList<int> Arranged(IReadOnlyList<int>? measured, double measuredWidth, int measuredCount,
+        IReadOnlyList<double> widths, double finalWidth, double spacing, double slack = 0) =>
+        measured is not null && measuredCount == widths.Count && double.IsFinite(measuredWidth) && double.IsFinite(finalWidth) &&
+        Math.Abs(measuredWidth - finalWidth) <= slack
+            ? measured
+            : Starts(widths, finalWidth, spacing, slack);
 }

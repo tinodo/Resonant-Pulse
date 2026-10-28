@@ -42,7 +42,12 @@ public sealed class PageTextTests
         "LaneChance", "LaneChanceHelp", "LaneSoloHelp", "LaneMuteHelp", "LaneMore", "LaneCopySuffix", "LaneNameRequired",
         "EuclideanHits", "EuclideanSteps", "EuclideanExplain", "EuclideanInvalid", "EuclideanWhole", "EuclideanPreviewName", "Create",
         "Advanced",
-        "AdvancedHelp", "SeedLabel", "SeedInvalid"
+        "AdvancedHelp", "SeedLabel", "SeedInvalid",
+        "StepsEmptyTitle", "StepsEmptyBody", "StepLimit", "StepNameCaption", "StepField", "StepRampHelp", "UnitBpm", "StepGapSwitch",
+        "StepGapSentence", "StepGapHelp", "StepMeterGrouped", "ProgramTooLong", "StepLength", "StepBarsPlayed", "StepNameRequired",
+        "PositionsHelp", "PositionsConvert", "PositionsConvertHelp", "PositionsAdd", "PositionLimit", "PositionField", "PositionName",
+        "PositionTied", "PositionInvalid", "PositionRange", "PositionTaken", "PositionPrecise", "PositionGone", "PositionStrength",
+        "PositionTie", "PositionChance"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>
@@ -54,6 +59,8 @@ public sealed class PageTextTests
     [
         "VersionLine/de", "VersionLine/fr", "KeyCtrl/nl", "KeyCtrl/fr", "KeyCtrl/es",
         "UnitMs/nl", "UnitMs/de", "UnitMs/fr", "UnitMs/es",
+        "UnitBpm/nl", "UnitBpm/de", "UnitBpm/fr", "UnitBpm/es",
+        "PositionField/de", "PositionField/fr", "PositionName/de", "PositionName/fr",
         "LaneGroupVariation/de", "LaneGroupVariation/fr"
     ];
 
@@ -187,6 +194,41 @@ public sealed class PageTextTests
             StringAssert.Contains(locked, InLanguage(language, () => Text.Get("Lock")), language);
             foreach (var line in new[] { purpose, beat, field, euclid, left, right, locked })
                 Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{language}: {line}");
+        }
+    }
+
+    [TestMethod]
+    public void TheProgramAndPositionSentencesFillEveryPlaceholderInEveryLanguage()
+    {
+        foreach (var language in Languages)
+        {
+            var field = InLanguage(language, () => Text.Format("StepField", 3, Text.Get("Bars")));
+            StringAssert.Contains(field, "3", language);
+            var caption = InLanguage(language, () => Text.Format("StepNameCaption", 4));
+            StringAssert.Contains(caption, "4", language);
+            var ramp = InLanguage(language, () => Text.Format("StepRampHelp", Text.Get("LinearTime"), Text.Get("LinearBeat")));
+            StringAssert.Contains(ramp, Get(language, "LinearTime"), language);
+            StringAssert.Contains(ramp, Get(language, "LinearBeat"), language);
+            var longProgram = InLanguage(language, () => Text.Format("ProgramTooLong", "100,000", "4,096"));
+            StringAssert.Contains(longProgram, "100,000", language);
+            StringAssert.Contains(longProgram, "4,096", language);
+            var range = InLanguage(language, () => Text.Format("PositionRange", "4"));
+            StringAssert.Contains(range, "4", language);
+            var name = InLanguage(language, () => Text.Format("PositionName", 7));
+            StringAssert.Contains(name, "7", language);
+            foreach (var line in new[] { field, caption, ramp, longProgram, range, name })
+                Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{language}: {line}");
+        }
+    }
+
+    [TestMethod]
+    public void TheSilentBarsSentenceHasAPlaceForEachOfItsTwoBoxesInEveryLanguage()
+    {
+        foreach (var language in Languages)
+        {
+            var parts = SentenceTemplate.Split(Get(language, "StepGapSentence"));
+            CollectionAssert.AreEquivalent(new[] { 0, 1 }, parts.Where(part => part.Text is null).Select(part => part.Slot).ToArray(), language);
+            Assert.IsTrue(parts.Any(part => part.Text is { Length: > 0 }), $"{language}: no words around the boxes");
         }
     }
 

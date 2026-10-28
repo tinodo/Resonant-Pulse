@@ -166,4 +166,31 @@ public sealed class SubmissionTrackerTests
         tracker.Begin(6);
         Assert.AreEqual(6, tracker.OnItsWayOr(4));
     }
+
+    [TestMethod]
+    public void IsPendingIsTrueFromTheSubmissionUntilItsAnswerWhateverTheAnswerIs()
+    {
+        var tracker = new SubmissionTracker<bool>();
+        Assert.IsFalse(tracker.IsPending);
+        var applied = tracker.Begin(true);
+        Assert.IsTrue(tracker.IsPending);
+        tracker.Resolve(applied, applied: true);
+        Assert.IsFalse(tracker.IsPending);
+        var refused = tracker.Begin(false);
+        Assert.IsTrue(tracker.IsPending);
+        tracker.Resolve(refused, applied: false);
+        Assert.IsFalse(tracker.IsPending);
+    }
+
+    [TestMethod]
+    public void AnOlderSubmissionThatIsStillWaitingKeepsTheControlPendingAfterANewerOneIsRefusedAtOnce()
+    {
+        var tracker = new SubmissionTracker<string>();
+        var older = tracker.Begin("Kick");
+        var newer = tracker.Begin("  ");
+        Assert.AreEqual(SubmissionAnswer.Refused, tracker.Resolve(newer, applied: false));
+        Assert.IsTrue(tracker.IsPending, "Kick is still on its way, so a screen that shows the project must not overwrite the box");
+        Assert.AreEqual(SubmissionAnswer.Applied, tracker.Resolve(older, applied: true));
+        Assert.IsFalse(tracker.IsPending);
+    }
 }

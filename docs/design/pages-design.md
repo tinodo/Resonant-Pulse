@@ -47,7 +47,7 @@ is specified in `metronome-design.md` and is not changed here.
 - Sliders commit when the gesture ends (pointer release, key up); arrow-key steps within half a second are one gesture. A drag is never an undo step per tick.
 - One undo step per completed gesture. Edits to the same field in one session coalesce.
 - A setting that belongs to the app (a preference, such as the export length) is applied at once, exactly like Theme or Language: the field shows it, the next use of it sees it, and remembering it for the next session is best effort. If that save fails the error is shown and the value stays, so the field, the setting and what is used next are never different values. The file is written from the values held when the write lock is taken, not when the save was asked for, so several overlapping saves always end with the latest value of every setting. Preferences are never rolled back: a rollback would leave a window in which another save could persist a value that is then withdrawn.
-- A value that belongs to the *project* is published only after it is accepted, and every change is queued on the UI thread in order, so a second quick edit is never dropped or refused. Structural commands (add, remove, move) wait for the queue first, and while one runs the fields of the page are off with the other commands (an edit made then would be queued with the old page and refused). A page that is built while edits are still being applied (Studio, after a quick trip to another page) stays off until they are in and is then built again from the project as it is, so it never changes under someone who has started to use it. A fresh Start waits for the edits asked for before it (a tempo step that is still on its way included), so what plays includes them; Stop stays available while it waits and cancels the start at once, as do a change of output, a power transition and a replaced project. If a change is refused, the control returns to the value the project holds, or to the value of an earlier change that still waits in the queue (a blank name is refused at once, before the name typed a moment ago has been applied), and shows the reason.
+- A value that belongs to the *project* is published only after it is accepted, and every change is queued on the UI thread in order, so a second quick edit is never dropped or refused. Structural commands (add, remove, move) wait for the queue first, and while one runs the fields of the page are off with the other commands (an edit made then would be queued with the old page and refused). A page that is built while edits are still being applied (Studio, after a quick trip to another page) stays off until they are in, its fields and its Undo, Redo and Add lane commands included, and is then built again from the project as it is, so it never changes under someone who has started to use it. A fresh Start waits for the edits asked for before it (a tempo step that is still on its way included), so what plays includes them; Stop stays available while it waits and cancels the start at once, as do a change of output, a power transition and a replaced project. If a change is refused, the control returns to the value the project holds, or to the value of an earlier change that still waits in the queue (a blank name is refused at once, before the name typed a moment ago has been applied), and shows the reason.
 - A count is checked, never truncated: a number box *shows* 1.9 as 2 but reports 1.9, so a fractional bar count is refused with a message instead of saving 1.
 - Every setting says when it is heard: *now*, *next beat* or *after Stop, then Start*. While the metronome plays, tempo, meter, sound and beat strength follow live; lane and program edits (Studio) are saved at once and heard after Stop and Start (a Start that resumes a pause keeps the revision it paused on), and the page says so in one sentence.
 - After a change that rebuilds part of a page, focus, caret and scroll position stay where they were; after a removal, focus moves to the neighbouring item or to the Add command.
@@ -136,7 +136,7 @@ is specified in `metronome-design.md` and is not changed here.
 - **Lanes:** one card per lane: name, mute and solo, a *More* menu (rotate, invert, duplicate, remove with a
   confirmation). Three groups: *Rhythm* (the *Beat strength* strip, tap to change as on Play, then clicks per cycle,
   cycle length, start offset), *Sound* (click sound, volume, pan) and *Variation* (chance). *Custom beat positions* is an
-  expander for the per-event table, explained as exact placement within the cycle.
+  expander for exact placement within the cycle (see below).
 - **Edits apply as they are made.** Nothing rebuilds the page, so focus, caret and scroll stay; a slider commits when the
   drag or the held key ends. Undo steps: one for each field per burst (the same field again within 2 seconds, measured from
   the moment each change was made, is the same step), one for each add, remove, duplicate, rotate and invert. While one of
@@ -154,9 +154,40 @@ is specified in `metronome-design.md` and is not changed here.
   5 hits as evenly as possible over 8 steps"), a live pattern preview (● ○ ● ● ○ ...; a screen reader hears it as part of
   the preview's name), *Create* and *Cancel*. A blank or fractional box says to enter whole numbers; more hits than steps
   says that.
-- **Program:** one card per step: name, move up and down, remove; tempo from and to, bars, repeats, ramp, meter; "play N
-  bars, then N silent" as one sentence-shaped row. *Add step*. (Until step 4 of the delivery below, the older editor for
-  each step sits inside one card.)
+- **Program:** a heading (what a program is, with *Add step*), then one card per step: its name with *Move up*, *Move down*
+  and a *More* menu (copy, remove after a question), then *Tempo* (steady, or from one tempo to another: the choice decides
+  which boxes show, so a steady step has one tempo box and a ramp has a start and an end tempo, with one sentence saying
+  what the two kinds of ramp mean), *Length* (bars, repeats), *Time signature* (beats and beat note; both are off, with the
+  reason, while the project groups its beats, because the project then insists on its own time signature) and *Practice
+  aids* (a switch for leaving some bars silent, which shows "Play [2] bars, then [2] bars silent"; the sentence is cut at
+  its places, so a language that puts the numbers in another order gets its boxes in that order). With no steps the heading
+  gives way to a card that says what a program is and offers *Add step*. Every field applies as it is changed, with one undo
+  step for each field per burst; adding, moving, copying and removing change which cards are on the page, so it is built
+  again and the focus goes to the new step's name, to the command that was being used on the step that moved (the other one
+  when it has reached the end), to the copy, or to the neighbour of the step removed (to *Add step* when none is left). A
+  program the project would refuse (more than 100,000 bars in all, more than 4,096 steps once repeats are counted, more
+  than 1,024 steps) is explained in words, with what to change, and the box goes back. Switching to a steady tempo makes
+  the end tempo the start tempo, which the project insists on; choosing a ramp keeps both, so the step sounds the same until
+  the end tempo is changed. The two silent-bars numbers always change together (both above zero, or both zero). Choosing a
+  time signature with grouped beats on Play while a step has another one is explained in words (every step must use it), not
+  as a problem with the groups.
+- **Custom beat positions** (inside a lane): what exact positions are ("place each click exactly, measured in quarter notes
+  from the start of the cycle; use fractions such as 1/3 for triplets"). A lane that plays a pattern offers *Convert the
+  pattern to positions* (the same clicks, now movable one by one; Undo brings the pattern back). A lane with positions lists
+  them, one row each: "Position 2 · 0.75 · Medium", with "tied" and so on when it applies, so a closed list can be read. A
+  row opens to *Position* (a whole number, a fraction or a decimal, in the language's own decimal format; kept exact, never
+  rounded to a grid), *Strength*, *Volume*, *Chance* and *Tied*, which apply as they are changed, and *Remove* after a
+  question. A position outside the cycle, one that another position already has, one more precise than the project keeps (a
+  fraction of more than 256 bits, such as 1e-100), and text that is no position are refused in words and the box goes back.
+  A position moved past another puts the list in order again, keeps the row open and keeps the focus where it was in that
+  row (a person who typed a position and pressed Tab is still on the strength). A position is found by where it is, not by
+  its place in the list, when an edit is applied: edits wait in a queue, so a strength changed right after a position was
+  moved still changes that position, and the rows are built again if they were replaced while an edit waited. A position typed
+  as the place it already has (0.75, then 3/4) changes nothing, however many such edits wait, and the answer to an earlier
+  edit never replaces what has been typed in the box since. *Add
+  position* puts a new one in the middle of the longest gap, open, with its box selected; when a lane is full (256) the
+  button is off and its tooltip says why. Rows are built when opened, so a lane with many positions costs nothing until one is looked at. Removing the last
+  position leaves one silent click, so the lane stays quiet instead of starting to play an even pattern.
 - **Advanced:** the random seed, with what it does ("the same seed gives the same random pattern every time").
 - Empty state: what a lane is, with *Add lane*, which offers the 3 in 4 pattern among its kinds.
 
@@ -188,7 +219,7 @@ not been reviewed by a native musician; the release notes say so and the glossar
 | Library | "Looking for projects..." | what it is, how to fill it | first 1000 shown; unreadable files named | buttons disabled with the reason |
 | Stage | none | no songs: what a setlist is, *Add current project* | a song that cannot start says why | locked: switch shown, setlist edits disabled and explained |
 | Train | none | no program: what it is, where to build one | a timing run that was invalidated says so | a run in progress: *Start* disabled, *Finish* enabled |
-| Studio | none | no lanes: what a lane is, *Add lane* | an edit that cannot be saved reverts and says why | Undo and Redo disabled when empty, with their labels; locked: every card disabled and explained |
+| Studio | none | no lanes: what a lane is, *Add lane*; no steps: what a program is, *Add step* | an edit that cannot be saved reverts and says why; a position, a program or a name the project would refuse is explained in words | Undo and Redo disabled when empty, with their labels; locked: every card disabled and explained |
 
 Destructive actions (remove lane, step or song; replace the project) name the thing and the consequence, and say whether
 Undo brings it back.

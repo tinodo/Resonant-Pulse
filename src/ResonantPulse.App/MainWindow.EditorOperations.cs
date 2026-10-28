@@ -10,20 +10,11 @@ public sealed partial class MainWindow
     private int? _editorOperationRevision;
 
     /// <summary>
-    /// A command that runs through the editor gate. <paramref name="allowed"/> adds the command's own condition (Undo has
-    /// nothing to undo): the command is enabled when no editor operation is running and the condition holds.
-    /// </summary>
-    private Button EditorActionButton(string key, string id, Func<Task> action, Func<bool>? allowed = null)
-    {
-        var revision = _editorContentRevision;
-        return EditorControl(ActionButton(key, id, () => RunEditorOperationAsync(revision, action)), allowed);
-    }
-
-    /// <summary>
-    /// A control that waits for the editor gate: it is enabled when no editor operation is running and <paramref name="allowed"/>
-    /// holds. The fields of a lane use it too. A field applies as it is changed, queued behind the edits before it with the
-    /// revision of the page it sits on; an operation that adds, removes, rotates or undoes changes that revision, so an edit made
-    /// while one runs would be queued, then refused, and what was typed lost from a field that still looked editable.
+    /// Registers a control so it is switched off while an editor operation runs: it is enabled when no editor operation is running
+    /// and <paramref name="allowed"/> (the control's own condition: Undo has nothing to undo) holds. The fields of a lane, of a
+    /// program step and of an exact position use it too. A field applies as it is changed, queued behind the edits before it with
+    /// the revision of the page it sits on; an operation that adds, removes, rotates, moves or undoes changes that revision, so an
+    /// edit made while one runs would be queued, then refused, and what was typed lost from a field that still looked editable.
     /// </summary>
     private T EditorControl<T>(T control, Func<bool>? allowed = null) where T : Control
     {
@@ -39,6 +30,10 @@ public sealed partial class MainWindow
         foreach (var (control, allowed) in _editorOperationControls)
             control.IsEnabled = !busy && (allowed?.Invoke() ?? true);
     }
+
+    /// <summary>A control that is no longer on the page is not switched on and off with the others, and can be released.</summary>
+    private void ForgetEditorControl(Control control) =>
+        _editorOperationControls.RemoveAll(entry => ReferenceEquals(entry.Control, control));
 
     private async Task RunEditorOperationAsync(int revision, Func<Task> action)
     {

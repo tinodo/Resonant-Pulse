@@ -24,8 +24,11 @@ public sealed partial class MainWindow
     /// too; that is reported, and the caller puts the field back. If the person left Studio and came back while the edit waited,
     /// the page they came back to was built from the project as it was before the edit: it stays off until the edit is in, and
     /// is then built again (see <see cref="BuildStudio"/>), so it never changes under someone who has started to use it.
+    /// <paramref name="onPublished"/> runs under the edit lock the moment the project holds the edit, before any edit that was
+    /// asked for after this one is applied: state that later edits depend on belongs there, not in <paramref name="edit"/>, which
+    /// can still be refused afterwards.
     /// </summary>
-    private async Task CommitStudioAsync(int revision, string coalesceKey, Action<PulseDocument> edit)
+    private async Task CommitStudioAsync(int revision, string? coalesceKey, Action<PulseDocument> edit, Action? onPublished = null)
     {
         var applied = false;
         try
@@ -34,7 +37,7 @@ public sealed partial class MainWindow
             {
                 edit(doc);
                 applied = true;
-            }, expectedRevision: revision, editorChange: EditorChangeKind.InPlaceField, coalesceKey: coalesceKey);
+            }, expectedRevision: revision, editorChange: EditorChangeKind.InPlaceField, coalesceKey: coalesceKey, onPublished: onPublished);
         }
         catch (EditorRevisionChangedException)
         {
@@ -257,10 +260,11 @@ public sealed partial class MainWindow
         // ---- exact positions -------------------------------------------------------------------------------------------------
         var positions = new Expander
         {
-            Header = Text.Get("CustomPositions"), Content = BuildExactEvents(index), IsExpanded = exact,
+            Header = Text.Get("CustomPositions"), Content = BuildPositions(index, revision), IsExpanded = exact,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
         Identify(positions, id + "Positions", Named("CustomPositions"));
+        TrackStudioFocus(id + "Positions", positions);
 
         var body = new StackPanel { Spacing = 12 };
         body.Children.Add(header);
