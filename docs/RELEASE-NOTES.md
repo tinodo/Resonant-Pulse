@@ -47,7 +47,10 @@ Studio, and the panels on Play, now follow one design.
   pattern. The practice program is one card per step: its tempo curve (steady
   or a ramp) decides which tempo boxes show, beside bars, repeats, the step's
   own time signature and optional silent bars, and a program the project would
-  refuse is explained in words. *Custom beat positions* are rows that open to
+  refuse is explained in words. When the project groups its beats (7/8 as
+  2+2+3) every step keeps the project's time signature; **Clear grouping** on
+  the step takes the grouping off, keeping the program, so each step can have
+  its own again (Undo brings it back). *Custom beat positions* are rows that open to
   place a click exactly (a whole number, a fraction such as 1/3 or a decimal,
   kept exact) with its strength, volume, chance and tie; a pattern lane
   converts to positions in one step, and Undo brings the pattern back. Every

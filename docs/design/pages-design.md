@@ -158,7 +158,10 @@ is specified in `metronome-design.md` and is not changed here.
   and a *More* menu (copy, remove after a question), then *Tempo* (steady, or from one tempo to another: the choice decides
   which boxes show, so a steady step has one tempo box and a ramp has a start and an end tempo, with one sentence saying
   what the two kinds of ramp mean), *Length* (bars, repeats), *Time signature* (beats and beat note; both are off, with the
-  reason, while the project groups its beats, because the project then insists on its own time signature) and *Practice
+  reason, while the project groups its beats, because the project then insists on its own time signature; the card offers
+  *Clear grouping*, which takes the grouping off the project and keeps the program, so each step can have its own time
+  signature again, and Undo brings the grouping back: Play offers no time signature while there is a program, so the way
+  out is on the card) and *Practice
   aids* (a switch for leaving some bars silent, which shows "Play [2] bars, then [2] bars silent"; the sentence is cut at
   its places, so a language that puts the numbers in another order gets its boxes in that order). With no steps the heading
   gives way to a card that says what a program is and offers *Add step*. Every field applies as it is changed, with one undo
@@ -168,7 +171,10 @@ is specified in `metronome-design.md` and is not changed here.
   program the project would refuse (more than 100,000 bars in all, more than 4,096 steps once repeats are counted, more
   than 1,024 steps) is explained in words, with what to change, and the box goes back. Switching to a steady tempo makes
   the end tempo the start tempo, which the project insists on; choosing a ramp keeps both, so the step sounds the same until
-  the end tempo is changed. The two silent-bars numbers always change together (both above zero, or both zero). Choosing a
+  the end tempo is changed. The steady box and the start box are one tempo shown in two places, and only one is on screen:
+  what is typed in either is one submission, a value that waits for the project is shown in both, and once it has been
+  answered (applied, or refused with the reason) both show what the project holds, or a newer value that is still on its
+  way. The two silent-bars numbers always change together (both above zero, or both zero). Choosing a
   time signature with grouped beats on Play while a step has another one is explained in words (every step must use it), not
   as a problem with the groups.
 - **Custom beat positions** (inside a lane): what exact positions are ("place each click exactly, measured in quarter notes

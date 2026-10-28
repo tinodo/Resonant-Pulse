@@ -1244,6 +1244,36 @@ Invoke-Control 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Dutch Studio program: Remove did not ask for confirmation.'
 (Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Dutch Studio program: removing the step did not take its card away.'
+# A project that groups its beats (7/8 as 2+2+3) gives every step the project's own time signature, so the two fields are off, and
+# Play offers no time signature while there is a program: the card itself offers Clear grouping, which keeps the program. The
+# command must be on screen in Dutch too. The step is taken away and 4/4 chosen again, so nothing is left behind.
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
+Select-Meter '7_8' '7/8'
+Select-Destination 'DestinationStudio'
+Wait-Settled 'AddLane'
+Show-Control 'AddProgramStep'
+Invoke-Control 'AddProgramStep'
+Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Grouped Studio program: Add step did not add a step card.'
+Show-Control 'Program0Card'
+Wait-Condition { $null -ne (Find-Optional 'Program0ClearGrouping') } 'Grouped Studio program: the card does not offer to clear the grouping.'
+foreach ($id in 'Program0Beats', 'Program0Denominator') {
+    if ((Find-Control $id).Current.IsEnabled) { throw "Grouped Studio program: $id is on while the project groups its beats." }
+}
+Show-Control 'Program0ClearGrouping'
+Test-OnScreen 'Grouped Studio program' 'Program0ClearGrouping'
+Invoke-Control 'Program0ClearGrouping'
+Wait-Condition { $null -eq (Find-Optional 'Program0ClearGrouping') } 'Grouped Studio program: Clear grouping is still offered after it was used.'
+Wait-Condition { (Find-Control 'Program0Beats').Current.IsEnabled -and (Find-Control 'Program0Denominator').Current.IsEnabled } 'Grouped Studio program: clearing the grouping did not turn the time signature fields on.'
+Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Grouped Studio program: clearing the grouping took the step away.'
+Invoke-Control 'Program0More'
+Invoke-Control 'Program0Remove'
+Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Grouped Studio program: Remove did not ask for confirmation.'
+(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Grouped Studio program: removing the step did not take its card away.'
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
+Select-Meter '4_4' '4/4'
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'
 Select-Combo 'Language' 'English'

@@ -557,11 +557,18 @@ public sealed partial class MainWindow
     /// newer one is still on its way and decides what the box shows. An empty or invalid draft submits nothing and shows the
     /// value that is on its way (see <see cref="SubmissionTracker{T}"/>), not the one the project still holds; so does a value
     /// that is refused at once while an older one is still in the queue.
+    /// Two boxes that show one setting (the steady tempo and the start of a ramp, only one of which is on screen) pass the same
+    /// <paramref name="shared"/> tracker, so a value typed in either is the newest value of that setting.
+    /// <paramref name="silenced"/> is true while the page writes the box itself, to bring it in line with the project: that is
+    /// not a submission, so it neither reaches <paramref name="commit"/> nor changes what the tracker holds.
+    /// <paramref name="answered"/> runs once each answer has been recorded, whatever it was, so whatever else shows the setting
+    /// can be brought in line with the box.
     /// </summary>
-    private SubmissionTracker<double> CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
+    private SubmissionTracker<double> CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit,
+        SubmissionTracker<double>? shared = null, Func<bool>? silenced = null, Action? answered = null)
     {
         var reverting = false;
-        var submissions = new SubmissionTracker<double>();
+        var submissions = shared ?? new SubmissionTracker<double>();
         void Show(double value)
         {
             reverting = true;
@@ -570,7 +577,7 @@ public sealed partial class MainWindow
         }
         box.ValueChanged += async (sender, args) =>
         {
-            if (reverting) return;
+            if (reverting || silenced?.Invoke() == true) return;
             if (!double.IsFinite(args.NewValue))
             {
                 Show(submissions.OnItsWayOr(current()));
@@ -584,6 +591,7 @@ public sealed partial class MainWindow
                 applied = true;
             });
             if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused) Show(submissions.OnItsWayOr(current()));
+            answered?.Invoke();
         };
         return submissions;
     }

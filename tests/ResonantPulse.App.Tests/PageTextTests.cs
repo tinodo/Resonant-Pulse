@@ -44,7 +44,7 @@ public sealed class PageTextTests
         "Advanced",
         "AdvancedHelp", "SeedLabel", "SeedInvalid",
         "StepsEmptyTitle", "StepsEmptyBody", "StepLimit", "StepNameCaption", "StepField", "StepRampHelp", "UnitBpm", "StepGapSwitch",
-        "StepGapSentence", "StepGapHelp", "StepMeterGrouped", "ProgramTooLong", "StepLength", "StepBarsPlayed", "StepNameRequired",
+        "StepGapSentence", "StepGapHelp", "StepMeterGrouped", "ClearGrouping", "ProgramTooLong", "StepLength", "StepBarsPlayed", "StepNameRequired",
         "PositionsHelp", "PositionsConvert", "PositionsConvertHelp", "PositionsAdd", "PositionLimit", "PositionField", "PositionName",
         "PositionTied", "PositionInvalid", "PositionRange", "PositionTaken", "PositionPrecise", "PositionGone", "PositionStrength",
         "PositionTie", "PositionChance"
@@ -229,6 +229,24 @@ public sealed class PageTextTests
             var parts = SentenceTemplate.Split(Get(language, "StepGapSentence"));
             CollectionAssert.AreEquivalent(new[] { 0, 1 }, parts.Where(part => part.Text is null).Select(part => part.Slot).ToArray(), language);
             Assert.IsTrue(parts.Any(part => part.Text is { Length: > 0 }), $"{language}: no words around the boxes");
+        }
+    }
+
+    [TestMethod]
+    public void TheGroupedStepNotePointsToTheCommandOnTheCardNotToAnotherPage()
+    {
+        // Play offers no time signature while there is a program, so the way out is the command on the card itself.
+        var grouping = new Dictionary<string, string>
+        {
+            ["en"] = "grouping", ["nl"] = "groepering", ["de"] = "Gruppierung", ["fr"] = "groupement", ["es"] = "agrupación"
+        };
+        foreach (var language in Languages)
+        {
+            var note = Get(language, "StepMeterGrouped");
+            var command = Get(language, "ClearGrouping");
+            Assert.IsTrue(note.Contains(grouping[language], StringComparison.OrdinalIgnoreCase), $"{language}: the note does not name the grouping: {note}");
+            Assert.IsTrue(command.Contains(grouping[language], StringComparison.OrdinalIgnoreCase), $"{language}: the command does not name the grouping: {command}");
+            Assert.IsFalse(note.Contains(Get(language, "Play"), StringComparison.OrdinalIgnoreCase), $"{language}: the note sends the person to another page: {note}");
         }
     }
 

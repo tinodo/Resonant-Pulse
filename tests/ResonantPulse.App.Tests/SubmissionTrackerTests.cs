@@ -193,4 +193,18 @@ public sealed class SubmissionTrackerTests
         Assert.AreEqual(SubmissionAnswer.Applied, tracker.Resolve(older, applied: true));
         Assert.IsFalse(tracker.IsPending);
     }
+
+    [TestMethod]
+    public void TwoBoxesThatShowOneSettingShareItsSubmissionsSoAnOlderRefusalPutsNeitherBack()
+    {
+        // The steady tempo and the start of a ramp show one setting, and only one of them is on screen. Both submit to one tracker.
+        var tracker = new SubmissionTracker<double>();
+        var typedInStart = tracker.Begin(1);
+        Assert.AreEqual(1, tracker.OnItsWayOr(60), "both boxes show the value on its way");
+        var typedInSteady = tracker.Begin(80);
+        Assert.AreEqual(SubmissionAnswer.Superseded, tracker.Resolve(typedInStart, applied: false), "the older refusal does not decide");
+        Assert.AreEqual(80, tracker.OnItsWayOr(60), "the newer value is still shown in both boxes");
+        Assert.AreEqual(SubmissionAnswer.Refused, tracker.Resolve(typedInSteady, applied: false));
+        Assert.AreEqual(60, tracker.OnItsWayOr(60), "with nothing on its way both boxes show what the project holds");
+    }
 }

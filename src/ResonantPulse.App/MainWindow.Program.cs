@@ -67,7 +67,7 @@ public sealed partial class MainWindow
         // The visible caption stays as it is; the name a screen reader hears says which step the field belongs to.
         void Qualify(FrameworkElement control, string captionKey, string? unitKey = null) =>
             AutomationProperties.SetName(control, unitKey is null ? Named(captionKey) : $"{Named(captionKey)} ({Text.Get(unitKey)})");
-        // A number box that is brought in line with the project must not commit what it was set to.
+        // While the page sets a number box itself, to bring it in line with the project, the box does not submit what it was set to.
         var syncing = false;
 
         // ---- header: name, move, more -----------------------------------------------------------------------------------
@@ -113,12 +113,11 @@ public sealed partial class MainWindow
         var steadyTempo = EditorControl(NumberInput("TempoTab", id + "Tempo", step.StartTempo, 1, 1000, 1, 1, whole: false, trimmed: true));
         var startTempo = EditorControl(NumberInput("StartTempo", id + "StartTempo", step.StartTempo, 1, 1000, 1, 1, whole: false, trimmed: true));
         var endTempo = EditorControl(NumberInput("EndTempo", id + "EndTempo", step.EndTempo, 1, 1000, 1, 1, whole: false, trimmed: true));
-        var steadyCommit = CommitNumber(steadyTempo, () => Now().StartTempo,
-            value => syncing ? Task.CompletedTask : Change("Tempo", item => ProgramEdits.SetStartTempo(item, value)));
-        var startCommit = CommitNumber(startTempo, () => Now().StartTempo,
-            value => syncing ? Task.CompletedTask : Change("StartTempo", item => ProgramEdits.SetStartTempo(item, value)));
-        var endCommit = CommitNumber(endTempo, () => Now().EndTempo,
-            value => syncing ? Task.CompletedTask : Change("EndTempo", item => ProgramEdits.SetEndTempo(item, value)));
+        // The steady box and the start box show one setting, the start tempo, and only one of them is on screen. They share their
+        // submissions, so a value typed in either is the newest value of that setting; when its answer comes back, applied or
+        // refused, both boxes are brought in line with what the project holds, or with a newer value that is still on its way.
+        var startSubmissions = new SubmissionTracker<double>();
+        var endSubmissions = new SubmissionTracker<double>();
         var rampField = Field(ramp);
         var steadyField = Field(steadyTempo, "UnitBpm");
         var startField = Field(startTempo, "UnitBpm");
@@ -145,15 +144,16 @@ public sealed partial class MainWindow
             var current = Now();
             var steady = ProgramEdits.IsSteady(current);
             // A box that has a value on its way shows that value (the project does not hold it yet, and will), not the one the
-            // project holds now; overwriting it would leave the box different from the project once that value is applied. The
-            // steady box and the start box are the same tempo.
-            var start = steadyCommit.OnItsWayOr(startCommit.OnItsWayOr(current.StartTempo));
+            // project holds now; overwriting it would leave the box different from the project once that value is applied. A value
+            // that was refused is not on its way any more, so both boxes show what the project holds. The steady box and the start
+            // box are the same tempo.
+            var start = startSubmissions.OnItsWayOr(current.StartTempo);
             syncing = true;
             try
             {
                 steadyTempo.Value = start;
                 startTempo.Value = start;
-                endTempo.Value = endCommit.OnItsWayOr(current.EndTempo);
+                endTempo.Value = endSubmissions.OnItsWayOr(current.EndTempo);
             }
             finally { syncing = false; }
             Present(steadyField, steady);
@@ -161,6 +161,12 @@ public sealed partial class MainWindow
             Present(endField, !steady);
             rampHelp.Visibility = steady ? Visibility.Collapsed : Visibility.Visible;
         }
+        CommitNumber(steadyTempo, () => Now().StartTempo, value => Change("Tempo", item => ProgramEdits.SetStartTempo(item, value)),
+            startSubmissions, () => syncing, ShowTempoFields);
+        CommitNumber(startTempo, () => Now().StartTempo, value => Change("StartTempo", item => ProgramEdits.SetStartTempo(item, value)),
+            startSubmissions, () => syncing, ShowTempoFields);
+        CommitNumber(endTempo, () => Now().EndTempo, value => Change("EndTempo", item => ProgramEdits.SetEndTempo(item, value)),
+            endSubmissions, () => syncing, ShowTempoFields);
         CommitChoice(ramp, () => Now().Ramp, async value =>
         {
             try { await Change("Ramp", item => ProgramEdits.SetRamp(item, value)); }
@@ -192,6 +198,7 @@ public sealed partial class MainWindow
         // switches them.
         var meterFixed = ProgramEdits.MeterIsFixed(_document.Settings);
         var beats = EditorControl(NumberInput("BeatsTop", id + "Beats", step.BeatsPerBar, 1, 64), () => !meterFixed);
+        TrackStudioFocus(id + "Beats", beats);
         CommitNumber(beats, () => Now().BeatsPerBar, value =>
         {
             var count = Integer(value);
@@ -246,16 +253,14 @@ public sealed partial class MainWindow
         });
         audibleCommit = CommitNumber(audible, () => Now().AudibleBars > 0 ? Now().AudibleBars : ProgramEdits.DefaultAudibleBars, value =>
         {
-            if (syncing) return Task.CompletedTask;
             var count = Integer(value);
             return ChangeGap("Audible", item => item.AudibleBars = count);
-        });
+        }, silenced: () => syncing);
         silentCommit = CommitNumber(silent, () => Now().SilentBars > 0 ? Now().SilentBars : ProgramEdits.DefaultSilentBars, value =>
         {
-            if (syncing) return Task.CompletedTask;
             var count = Integer(value);
             return ChangeGap("Silent", item => item.SilentBars = count);
-        });
+        }, silenced: () => syncing);
         CommitSwitch(rest, () => ProgramEdits.HasSilentBars(Now()), async on =>
         {
             try { await Change("Rest", item => ProgramEdits.SetSilentBars(item, on)); }
@@ -272,7 +277,15 @@ public sealed partial class MainWindow
         body.Children.Add(FieldRow(barsField, repeatsField));
         body.Children.Add(SectionHeading("TimeSignature"));
         body.Children.Add(FieldRow(beatsField, denominatorField));
-        if (meterFixed) body.Children.Add(Note("StepMeterGrouped"));
+        if (meterFixed)
+        {
+            body.Children.Add(Note("StepMeterGrouped"));
+            // The way out is on the card that explains why the fields are off: Play offers no time signature while there is a program.
+            var clear = EditorControl(ActionButton("ClearGrouping", id + "ClearGrouping",
+                () => RunEditorOperationAsync(revision, () => ClearGroupingAsync(index))));
+            TrackStudioFocus(id + "ClearGrouping", clear);
+            body.Children.Add(CommandRow(clear));
+        }
         body.Children.Add(SectionHeading("SectionTraining"));
         body.Children.Add(SettingRow("StepGapSwitch", "StepGapHelp", rest));
         body.Children.Add(gapRow);
@@ -354,6 +367,18 @@ public sealed partial class MainWindow
         await CommitEditorAsync(doc => doc.Program.RemoveAt(index));
         // The next step takes the place of the one removed; after the last, the one before it; with none left, Add step.
         FocusAfterRebuild(_document.Program.Count == 0 ? "AddProgramStep" : $"Program{Math.Min(index, _document.Program.Count - 1)}Name");
+        RebuildPreservingScroll();
+    }
+
+    /// <summary>
+    /// Takes the grouping (2+2+3) off the project and keeps the program: with no grouping every step may have a time signature of
+    /// its own, so the fields that were off are on again. Undo puts the grouping back. The focus goes to the time signature of the
+    /// step whose command was used.
+    /// </summary>
+    private async Task ClearGroupingAsync(int index)
+    {
+        await CommitEditorAsync(doc => doc.Settings.Groups = []);
+        FocusAfterRebuild($"Program{index}Beats", $"Program{index}Name");
         RebuildPreservingScroll();
     }
 }
