@@ -22,11 +22,11 @@ public sealed partial class MainWindow
     /// they were made, and the page is not rebuilt: the field already shows the value. If the project changed under this page
     /// (a lane was removed) the page is refreshed and the edit refused, as for any editor command. A locked project refuses it
     /// too; that is reported, and the caller puts the field back. If the person left Studio and came back while the edit waited,
-    /// the new page was built from the project as it was before the edit, so it is built again once the edit is in.
+    /// the page they came back to was built from the project as it was before the edit: it stays off until the edit is in, and
+    /// is then built again (see <see cref="BuildStudio"/>), so it never changes under someone who has started to use it.
     /// </summary>
     private async Task CommitStudioAsync(int revision, string coalesceKey, Action<PulseDocument> edit)
     {
-        var generation = _pageGeneration;
         var applied = false;
         try
         {
@@ -40,11 +40,6 @@ public sealed partial class MainWindow
         {
             if (!_isClosed) RebuildPreservingScroll();
             throw;
-        }
-        finally
-        {
-            // Also when the recovery write failed after the edit was published: the project holds the edit either way.
-            if (applied && generation != _pageGeneration && _view == "Studio" && !_isClosed) RebuildPreservingScroll();
         }
         if (!applied) throw new OperationCanceledException();
     }

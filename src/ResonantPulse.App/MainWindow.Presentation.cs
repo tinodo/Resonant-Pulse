@@ -134,7 +134,7 @@ public sealed partial class MainWindow
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }
         StartButton.IsEnabled = !_isBusy && !_closeFlushing && (snapshot.State == TransportState.Playing || HasSelectedOutput);
-        StopButton.IsEnabled = snapshot.State != TransportState.Stopped;
+        StopButton.IsEnabled = snapshot.State != TransportState.Stopped || IsStartPending;
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
         {

@@ -36,6 +36,12 @@ public sealed partial class MainWindow
     {
         _studioFocusTargets.Clear();
         var revision = _editorContentRevision;
+        // Studio fields apply in turn, off the page. Edits asked for before this page was built and still being applied are not in
+        // the project it is built from, so its cards stay off until they are, and the page is then built again from the project as
+        // it is. Nothing can be typed meanwhile, so nothing is replaced under the person's hands. (The edit lock is free again
+        // once the last edit has been applied, and the page that follows an edit is built after that.)
+        var settling = _edits.CurrentCount == 0;
+        var wantedFocus = _studioFocusAfterRebuild;
         var undo = EditorControl(IconButton("\uE7A7", "Undo", "StudioUndo",
             () => RunEditorOperationAsync(revision, () => UndoKeepingFocusAsync(false))), () => !_isLocked && _undo.Count > 0);
         var redo = EditorControl(IconButton("\uE7A6", "Redo", "StudioRedo",
@@ -66,10 +72,11 @@ public sealed partial class MainWindow
         for (var index = 0; index < _document.Lanes.Count; index++) editable.Add(BuildLaneCard(index));
         editable.Add(BuildProgramCard());
         editable.Add(BuildAdvancedCard(revision));
-        // A locked project can be looked at, not changed (the lock is switched on the Stage page). Only a control can be
-        // disabled, and disabling it disables everything inside, so each card sits in one while the lock is on.
+        // A locked project can be looked at, not changed (the lock is switched on the Stage page), and so can a page that is still
+        // settling. Only a control can be disabled, and disabling it disables everything inside, so each card sits in one then.
+        var inert = _isLocked || settling;
         foreach (var card in editable)
-            cards.Add(!_isLocked ? card : new ContentControl
+            cards.Add(!inert ? card : new ContentControl
             {
                 Content = card, IsEnabled = false, IsTabStop = false,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top
@@ -93,7 +100,21 @@ public sealed partial class MainWindow
                     if (target is TextBox box) box.SelectAll();
                 });
         }
+        if (settling) _ = GuardAsync(() => SettleStudioAsync(_pageGeneration, wantedFocus));
         return page;
+    }
+
+    /// <summary>
+    /// Builds the Studio page again, from the project as it is, once the edits that were still being applied when it was built
+    /// are in (see <see cref="BuildStudio"/>). Nothing happens if the person has gone to another page, or the page was built
+    /// again for another reason, meanwhile: that build decides for itself whether it has to wait.
+    /// </summary>
+    private async Task SettleStudioAsync(int generation, string[]? focus)
+    {
+        await WaitForPendingEditsAsync();
+        if (_isClosed || generation != _pageGeneration || _view != "Studio") return;
+        if (focus is not null) FocusAfterRebuild(focus);
+        RebuildPreservingScroll();
     }
 
     /// <summary>"Add lane" with the kinds of lane to start from. A lane is added in one step; Euclidean asks for its numbers first.</summary>

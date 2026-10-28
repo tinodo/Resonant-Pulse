@@ -262,9 +262,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Counts how often the page was built. An edit made on one page is applied later, in turn; if the page was built again in
-    /// the meantime (the person went to another page and came back), the new page was built from the project as it was before
-    /// the edit, and has to be built again once the edit is in.
+    /// Counts how often the page was built. The Studio page, built while edits are still being applied, is built again once they
+    /// are in; that second build is skipped if the page was built again (or left) in the meantime.
     /// </summary>
     private int _pageGeneration;
 
@@ -340,9 +339,20 @@ public sealed partial class MainWindow : Window
             // and only be heard after Stop and Start. A resume keeps the revision it paused on and does not wait.
             if (!retainsRevision)
             {
-                await WaitForPendingEditsAsync();
-                // The window may have begun to close while Start waited: nothing new starts then.
-                if (_closeFlushing || _isClosed) return;
+                // Stop, a change of output and a power transition end the wait by changing the transport intent. Stop stays
+                // available while Start waits, so a save that stalls cannot leave a start that cannot be cancelled.
+                var intent = _transportIntent;
+                _startWaitingIntent = intent;
+                RefreshSnapshot();
+                try { await WaitForPendingEditsAsync(); }
+                finally { _startWaitingIntent = null; }
+                // The window may have begun to close, or the start been cancelled or overtaken, while Start waited.
+                if (intent != _transportIntent || _closeFlushing || _isClosed) return;
+                if (!HasSelectedOutput)
+                {
+                    PromptForOutput();
+                    return;
+                }
             }
             var startRevision = _documentRevision;
             await _transport.StartAsync(_document, _preferences.OutputId);
@@ -350,6 +360,12 @@ public sealed partial class MainWindow : Window
         }
         finally { _isBusy = false; RefreshSnapshot(); }
     }
+
+    /// <summary>The transport intent of a Start that waits for the edits asked for before it, while it waits.</summary>
+    private int? _startWaitingIntent;
+
+    /// <summary>True while a Start waits for earlier edits and nothing has cancelled it: Stop is available then, and ends the wait.</summary>
+    private bool IsStartPending => _startWaitingIntent is { } waiting && waiting == _transportIntent;
 
     /// <summary>Returns once every edit asked for before this call has been applied (the edit lock is handed out in the order it was asked for).</summary>
     private async Task WaitForPendingEditsAsync()
