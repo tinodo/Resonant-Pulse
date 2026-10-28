@@ -61,6 +61,9 @@ public sealed partial class MainWindow : Window
     /// <summary>Implemented only in local verification builds (MainWindow.UiTest.cs, -p:UiTest=true).</summary>
     partial void InstallUiTestHook();
 
+    /// <summary>Implemented only in local verification builds: makes an edit wait before it is validated, to widen a race.</summary>
+    partial void HoldEditForUiTest(ref Task? hold);
+
     public MainWindow()
     {
         Diagnostics.Write("MainWindow XAML initialization beginning");
@@ -418,6 +421,9 @@ public sealed partial class MainWindow : Window
                 EditorOperationGate.EnsureRevision(revision, _editorContentRevision);
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
+            Task? hold = null;
+            HoldEditForUiTest(ref hold);
+            if (hold is not null) await hold;
             await ValidateAsync(revised);
             // Live-eligible edits follow the running transport (sound at the next quantum, tempo/meter/feel at the
             // next pulse). This happens before the document is replaced so a failed update changes nothing.

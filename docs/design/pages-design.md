@@ -179,14 +179,19 @@ is specified in `metronome-design.md` and is not changed here.
   rounded to a grid), *Strength*, *Volume*, *Chance* and *Tied*, which apply as they are changed, and *Remove* after a
   question. A position outside the cycle, one that another position already has, one more precise than the project keeps (a
   fraction of more than 256 bits, such as 1e-100), and text that is no position are refused in words and the box goes back.
-  A position moved past another puts the list in order again, keeps the row open and keeps the focus where it was in that
-  row (a person who typed a position and pressed Tab is still on the strength). A position is found by where it is, not by
-  its place in the list, when an edit is applied: edits wait in a queue, so a strength changed right after a position was
-  moved still changes that position, and the rows are built again if they were replaced while an edit waited. A position typed
-  as the place it already has (0.75, then 3/4) changes nothing, however many such edits wait, and the answer to an earlier
-  edit never replaces what has been typed in the box since. *Add
+  A position moved past another puts the list in order again. The rows are not built again: each stays on screen, so a draft
+  in a box, the focus and whether a row is open stay where they were, and only the numbers change ("Position 3" is
+  "Position 2" once a position has gone before it). The row that has the focus does not move; the others move around it, so a
+  person who typed a position and pressed Tab is still on the strength, one who was typing in another row is still typing,
+  and a slider keeps its focus. A row is told apart by where its position is, not by its place in the list, when an edit is
+  applied: edits wait in a queue, so a strength changed right after a position was moved (or after it was moved twice) still
+  changes that position. The Undo step an edit belongs to is told apart by the row as well, not by where its position is, so
+  moving a position twice in a short while is one step back. A position typed as the place it already has (0.75, then 3/4)
+  changes nothing, however many such edits wait, and the answer to an earlier edit never replaces what has been typed in the
+  box since. What the project holds is shown even when the recovery file could not be written afterwards (the error is still
+  reported): a position that moved is in its new place, an added one is on the list and a removed one is gone. *Add
   position* puts a new one in the middle of the longest gap, open, with its box selected; when a lane is full (256) the
-  button is off and its tooltip says why. Rows are built when opened, so a lane with many positions costs nothing until one is looked at. Removing the last
+  button is off and its tooltip says why. The fields of a row are built when it is opened, so a lane with many positions costs nothing until one is looked at. Removing the last
   position leaves one silent click, so the lane stays quiet instead of starting to play an even pattern.
 - **Advanced:** the random seed, with what it does ("the same seed gives the same random pattern every time").
 - Empty state: what a lane is, with *Add lane*, which offers the 3 in 4 pattern among its kinds.

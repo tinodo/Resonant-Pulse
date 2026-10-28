@@ -34,6 +34,8 @@ public sealed partial class MainWindow
         var releaseEdits = Tiny(new Button());
         var countControls = Tiny(new Button());
         var controlCount = Tiny(new TextBox());
+        var showUndoKey = Tiny(new Button());
+        var undoKey = Tiny(new TextBox());
         Identify(name, "UiTestCaptureName", "ui test capture name");
         Identify(capture, "UiTestCapture", "ui test capture");
         Identify(grow, "UiTestGrowToolLabels", "ui test grow tool labels");
@@ -46,6 +48,8 @@ public sealed partial class MainWindow
         Identify(releaseEdits, "UiTestReleaseEdits", "ui test release edits");
         Identify(countControls, "UiTestCountControls", "ui test count editor controls");
         Identify(controlCount, "UiTestControlCount", "ui test editor control count");
+        Identify(showUndoKey, "UiTestShowUndoKey", "ui test show undo key");
+        Identify(undoKey, "UiTestUndoKey", "ui test undo key");
         capture.Click += async (_, _) => await CaptureAsync(folder, name.Text);
         // Stands in for a request that was still loading when the window began to close (an Open validating its file) and now
         // asks whether to replace the project.
@@ -78,20 +82,40 @@ public sealed partial class MainWindow
         releaseEdits.Click += (_, _) => ReleaseEdits();
         // The same release for a test that must not move the keyboard focus: invoking a button, or setting the text of a box,
         // through automation takes the focus, and a box commits its draft when it loses it. The queue is also released when a
-        // file called "release-edits" appears in the capture folder.
+        // file called "release-edits" appears in the capture folder. A file called "slow-edits" (with a number of seconds in it)
+        // makes every edit wait that long under the edit lock before it is validated, and "normal-edits" ends that: a window
+        // in which the edits that follow can be made while one is still on its way.
         var releaseFlag = Path.Combine(folder, "release-edits");
+        var slowFlag = Path.Combine(folder, "slow-edits");
+        var normalFlag = Path.Combine(folder, "normal-edits");
         var releasePoll = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         releasePoll.Tick += (_, _) =>
         {
-            if (!File.Exists(releaseFlag)) return;
-            File.Delete(releaseFlag);
-            ReleaseEdits();
+            if (File.Exists(releaseFlag))
+            {
+                File.Delete(releaseFlag);
+                ReleaseEdits();
+            }
+            if (File.Exists(slowFlag))
+            {
+                var seconds = double.TryParse(File.ReadAllText(slowFlag).Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 2;
+                File.Delete(slowFlag);
+                _uiTestEditDelay = TimeSpan.FromSeconds(seconds);
+            }
+            if (File.Exists(normalFlag))
+            {
+                File.Delete(normalFlag);
+                _uiTestEditDelay = TimeSpan.Zero;
+            }
         };
         releasePoll.Start();
         // Counts the controls that are switched off while an editor operation runs, so that a test can see that building a list of
         // rows again forgets the controls of the rows it replaced instead of collecting them.
         countControls.Click += (_, _) =>
             controlCount.Text = _editorOperationControls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Shows the key that says which changes are one Undo step, so that a test can see that it does not depend on time.
+        showUndoKey.Click += (_, _) => undoKey.Text = _undoKey ?? "(none)";
         // Stands in for a Windows text-size change: the page-tools labels get bigger while the page keeps its size.
         grow.Click += (_, _) => GrowToolLabels(1.6);
         // Stands in for the pointer being over a scroll bar (or Windows set to always show scroll bars), which a private
@@ -116,6 +140,8 @@ public sealed partial class MainWindow
         host.Children.Add(releaseEdits);
         host.Children.Add(countControls);
         host.Children.Add(controlCount);
+        host.Children.Add(showUndoKey);
+        host.Children.Add(undoKey);
         Grid.SetRowSpan(host, 4);
         Root.Children.Add(host);
         Diagnostics.Write("UI test capture hook installed (local verification build)");
@@ -123,6 +149,12 @@ public sealed partial class MainWindow
 
     private TimeSpan _uiTestReplaceHold;
     private TimeSpan _uiTestCloseHold;
+    private TimeSpan _uiTestEditDelay;
+
+    partial void HoldEditForUiTest(ref Task? hold)
+    {
+        if (_uiTestEditDelay > TimeSpan.Zero) hold = Task.Delay(_uiTestEditDelay);
+    }
 
     partial void HoldReplacementForUiTest(ref Task? hold)
     {

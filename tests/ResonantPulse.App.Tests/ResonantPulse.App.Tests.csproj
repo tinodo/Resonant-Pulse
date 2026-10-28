@@ -20,6 +20,7 @@
     <Compile Include="../../src/ResonantPulse.App/StudioRules.cs" Link="App/StudioRules.cs" />
     <Compile Include="../../src/ResonantPulse.App/SubmissionTracker.cs" Link="App/SubmissionTracker.cs" />
     <Compile Include="../../src/ResonantPulse.App/ProgramRules.cs" Link="App/ProgramRules.cs" />
+    <Compile Include="../../src/ResonantPulse.App/RowOrder.cs" Link="App/RowOrder.cs" />
     <Compile Include="../../src/ResonantPulse.App/WholeNumbers.cs" Link="App/WholeNumbers.cs" />
     <Compile Include="../../src/ResonantPulse.App/PracticeFormat.cs" Link="App/PracticeFormat.cs" />
     <Compile Include="../../src/ResonantPulse.App/PresetSummary.cs" Link="App/PresetSummary.cs" />

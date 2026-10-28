@@ -704,10 +704,12 @@ public sealed partial class MainWindow
     /// <see cref="GestureCommit"/>), so a drag is one undo step and one write, not one per tick. A refused value puts the slider
     /// back to what the setting holds, unless a newer value was committed after it. The slider is as wide as its track and its
     /// longest value text, and gives way in a narrow card. It waits for the editor gate like the other fields of a lane
-    /// (see <see cref="EditorControl{T}"/>).
+    /// (see <see cref="EditorControl{T}"/>). <paramref name="onSlider"/> is given the slider once it is made, for a caller that
+    /// has to find it again (to give it back the focus, or to renumber it).
     /// </summary>
     private StackPanel SliderField(string captionKey, string id, string accessibleName, int value, int minimum, int maximum,
-        Func<int, string> format, IEnumerable<string> samples, Func<int> current, Func<int, Task> commit)
+        Func<int, string> format, IEnumerable<string> samples, Func<int> current, Func<int, Task> commit,
+        Action<Slider>? onSlider = null)
     {
         var caption = new TextBlock { Text = Text.Get(captionKey), Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
         var slider = EditorControl(new Slider
@@ -717,6 +719,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center
         });
         Identify(slider, id, accessibleName);
+        onSlider?.Invoke(slider);
         AutomationProperties.SetLabeledBy(slider, caption);
         var readout = new TextBlock
         {
