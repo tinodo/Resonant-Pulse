@@ -165,6 +165,10 @@ public sealed class PageTextTests
         {
             var purpose = InLanguage(language, () => Text.Format("StudioPurpose", "My groove"));
             StringAssert.Contains(purpose, "My groove", language);
+            // The sentence says how to hear the changes in the app's own words for the two buttons (a Start that resumes a
+            // pause keeps the revision it paused on, so "the next Start" would be wrong).
+            StringAssert.Contains(purpose, InLanguage(language, () => Text.Get("Stop")), language);
+            StringAssert.Contains(purpose, InLanguage(language, () => Text.Get("Start")), language);
             var beat = InLanguage(language, () => Text.Format("LaneBeatName", 2, 3, Text.Get("LevelStrong")));
             StringAssert.Contains(beat, "2", language);
             StringAssert.Contains(beat, "3", language);

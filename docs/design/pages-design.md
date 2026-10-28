@@ -47,9 +47,9 @@ is specified in `metronome-design.md` and is not changed here.
 - Sliders commit when the gesture ends (pointer release, key up); arrow-key steps within half a second are one gesture. A drag is never an undo step per tick.
 - One undo step per completed gesture. Edits to the same field in one session coalesce.
 - A setting that belongs to the app (a preference, such as the export length) is applied at once, exactly like Theme or Language: the field shows it, the next use of it sees it, and remembering it for the next session is best effort. If that save fails the error is shown and the value stays, so the field, the setting and what is used next are never different values. The file is written from the values held when the write lock is taken, not when the save was asked for, so several overlapping saves always end with the latest value of every setting. Preferences are never rolled back: a rollback would leave a window in which another save could persist a value that is then withdrawn.
-- A value that belongs to the *project* is published only after it is accepted, and every change is queued on the UI thread in order, so a second quick edit is never dropped or refused. Structural commands (add, remove, move) wait for the queue first. If a change is refused, the control returns to the value the project holds and shows the reason.
+- A value that belongs to the *project* is published only after it is accepted, and every change is queued on the UI thread in order, so a second quick edit is never dropped or refused. Structural commands (add, remove, move) wait for the queue first, and while one runs the fields of the page are off with the other commands (an edit made then would be queued with the old page and refused). If a change is refused, the control returns to the value the project holds, or to the value of an earlier change that still waits in the queue (a blank name is refused at once, before the name typed a moment ago has been applied), and shows the reason.
 - A count is checked, never truncated: a number box *shows* 1.9 as 2 but reports 1.9, so a fractional bar count is refused with a message instead of saving 1.
-- Every setting says when it is heard: *now*, *next beat* or *next Start*. While the metronome plays, tempo, meter, sound and beat strength follow live; lane and program edits (Studio) are saved at once and heard the next time you press Start, and the page says so in one sentence.
+- Every setting says when it is heard: *now*, *next beat* or *after Stop, then Start*. While the metronome plays, tempo, meter, sound and beat strength follow live; lane and program edits (Studio) are saved at once and heard after Stop and Start (a Start that resumes a pause keeps the revision it paused on), and the page says so in one sentence.
 - After a change that rebuilds part of a page, focus, caret and scroll position stay where they were; after a removal, focus moves to the neighbouring item or to the Add command.
 
 ## 4. Pages
@@ -129,7 +129,7 @@ is specified in `metronome-design.md` and is not changed here.
   chance)*; *Start*, *Hit (F)*, *Finish*; the result as short lines.
 
 ### Studio
-- Header: one sentence ("Editing “name”. Changes are saved as you make them and heard the next time you press Start.");
+- Header: one sentence ("Editing “name”. Changes are saved as you make them. Press Stop, then Start, to hear them.");
   Undo and Redo as icon buttons (there are no keyboard shortcuts for them yet); *Add lane* as a menu: 4 clicks over 4
   beats, 3 over 4 (polyrhythm), 3 over 3 (polymeter) and *Euclidean...*. While there are no lanes the one *Add lane*
   button sits in the empty-state card instead of the header.
@@ -138,8 +138,9 @@ is specified in `metronome-design.md` and is not changed here.
   cycle length, start offset), *Sound* (click sound, volume, pan) and *Variation* (chance). *Custom beat positions* is an
   expander for the per-event table, explained as exact placement within the cycle.
 - **Edits apply as they are made.** Nothing rebuilds the page, so focus, caret and scroll stay; a slider commits when the
-  drag or the held key ends. Undo steps: one for each field per burst (the same field again within 2 seconds is the same
-  step), one for each add, remove, duplicate, rotate and invert. While the project is locked (Stage) every card is
+  drag or the held key ends. Undo steps: one for each field per burst (the same field again within 2 seconds, measured from
+  the moment each change was made, is the same step), one for each add, remove, duplicate, rotate and invert. While one of
+  those runs (Remove asks first), the fields of every lane are off, and the *More* menu is not; they are on again when it ends. While the project is locked (Stage) every card is
   disabled and the page says why, naming the page and the switch as the language does. Undo and Redo rebuild the page, so the
   focus is put back on the command that was used (on the other one when it has nothing left to do), and a beat that was
   tapped while the number of clicks was being lowered is ignored, not reported as an error.

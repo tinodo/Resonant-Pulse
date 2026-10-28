@@ -184,12 +184,25 @@ public sealed class StudioRulesTests
     public void TheArrowKeysStopAtTheStrongestAndTheQuietest()
     {
         var lane = Lane(4, Accent.Strong, Accent.Normal, Accent.Normal, Accent.Silent);
-        LaneEdits.ChangeAccent(lane, 0, 1, wrap: false);
+        Assert.IsFalse(LaneEdits.ChangeAccent(lane, 0, 1, wrap: false), "up on the strongest beat changes nothing");
         Assert.AreEqual(Accent.Strong, lane.Pattern[0]);
-        LaneEdits.ChangeAccent(lane, 3, -1, wrap: false);
+        Assert.IsFalse(LaneEdits.ChangeAccent(lane, 3, -1, wrap: false), "down on the quietest beat changes nothing");
         Assert.AreEqual(Accent.Silent, lane.Pattern[3]);
-        LaneEdits.ChangeAccent(lane, 1, -1, wrap: false);
+        Assert.IsTrue(LaneEdits.ChangeAccent(lane, 1, -1, wrap: false));
         Assert.AreEqual(Accent.Soft, lane.Pattern[1]);
+    }
+
+    [TestMethod]
+    public void AnArrowKeyAtTheEndOfTheScaleLeavesThePatternExactlyAsItWas()
+    {
+        // No edit is made for it, so nothing is saved, Undo gets no empty step and Redo is not cleared.
+        var lane = Lane(3, Accent.Strong, Accent.Soft, Accent.Silent);
+        var before = lane.Pattern.ToArray();
+        Assert.IsFalse(LaneEdits.ChangeAccent(lane, 0, 1, wrap: false));
+        Assert.IsFalse(LaneEdits.ChangeAccent(lane, 2, -1, wrap: false));
+        Assert.IsFalse(LaneEdits.ChangeAccent(lane, 0, 5, wrap: false));
+        CollectionAssert.AreEqual(before, lane.Pattern);
+        Assert.IsTrue(LaneEdits.ChangeAccent(lane, 0, 5, wrap: true), "a tap always goes round, so it always changes something");
     }
 
     [TestMethod]
@@ -263,5 +276,43 @@ public sealed class StudioRulesTests
         var copy = LaneEdits.CopyName(longest, " (copy)");
         Assert.AreEqual(LaneEdits.MaxNameLength, copy.Length);
         Assert.IsTrue(copy.EndsWith(" (copy)", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void ACopyNameIsNeverCutInsideACharacterThatTakesTwoCodeUnits()
+    {
+        const string suffix = " (copy)";
+        var keep = LaneEdits.MaxNameLength - suffix.Length;
+        // The cut would fall between the two halves of the emoji: the whole character goes, not half of it.
+        var split = new string('x', keep - 1) + "😀" + new string('y', 20);
+        var cutBefore = LaneEdits.CopyName(split, suffix);
+        Assert.IsFalse(cutBefore.Any(char.IsSurrogate), "no half of a character is left");
+        Assert.AreEqual(new string('x', keep - 1) + suffix, cutBefore);
+        Assert.IsTrue(cutBefore.Length <= LaneEdits.MaxNameLength);
+
+        // The cut falls just after the emoji: it stays whole.
+        var whole = new string('x', keep - 2) + "😀" + new string('y', 20);
+        var cutAfter = LaneEdits.CopyName(whole, suffix);
+        Assert.AreEqual(new string('x', keep - 2) + "😀" + suffix, cutAfter);
+        Assert.AreEqual(LaneEdits.MaxNameLength, cutAfter.Length);
+    }
+
+    [TestMethod]
+    public void ACycleOfBeatsIsMeasuredInTheProjectsOwnWrittenBeats()
+    {
+        // "4 beats" is four clicks of the main pattern: a quarter note in 4/4, an eighth in 6/8, a half note in 3/2.
+        Assert.AreEqual(4, LaneEdits.CycleQuarters(4, 4));
+        Assert.AreEqual(3, LaneEdits.CycleQuarters(3, 4));
+        Assert.AreEqual(2, LaneEdits.CycleQuarters(4, 8));
+        Assert.AreEqual(1.5, LaneEdits.CycleQuarters(3, 8));
+        Assert.AreEqual(8, LaneEdits.CycleQuarters(4, 2));
+        Assert.AreEqual(1, LaneEdits.CycleQuarters(4, 16));
+        // Whatever the time signature, the lane that is made is one the project accepts.
+        foreach (var denominator in new[] { 1, 2, 4, 8, 16, 32, 64 })
+        foreach (var beats in new[] { 3, 4 })
+        {
+            var lane = new RhythmLane { Pulses = 3, CycleQuarters = LaneEdits.CycleQuarters(beats, denominator), Pattern = [Accent.Normal, Accent.Normal, Accent.Normal] };
+            AssertAccepted(lane);
+        }
     }
 }

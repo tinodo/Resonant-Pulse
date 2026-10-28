@@ -112,8 +112,9 @@ internal static class LaneEdits
 
     /// <summary>
     /// Changes one beat's strength (silent, soft, normal, strong). A tap wraps round; the arrow keys stop at the ends. The
-    /// whole pattern is written out, so the beats around it keep the strength they showed. False when the lane has no such beat
-    /// (the number of clicks was lowered a moment ago and the strip has not caught up): nothing is changed.
+    /// whole pattern is written out, so the beats around it keep the strength they showed. False when nothing changes: the lane
+    /// has no such beat (the number of clicks was lowered a moment ago and the strip has not caught up), or an arrow key was
+    /// pressed on the strongest or the quietest beat. The caller then makes no edit, so nothing is saved and Undo gets no empty step.
     /// </summary>
     internal static bool ChangeAccent(RhythmLane lane, int step, int delta, bool wrap)
     {
@@ -121,7 +122,9 @@ internal static class LaneEdits
         if (step < 0 || step >= accents.Length) return false;
         var levels = Enum.GetValues<Accent>().Length;
         var next = (int)accents[step] + delta;
-        accents[step] = (Accent)(wrap ? ((next % levels) + levels) % levels : Math.Clamp(next, 0, levels - 1));
+        var changed = (Accent)(wrap ? ((next % levels) + levels) % levels : Math.Clamp(next, 0, levels - 1));
+        if (changed == accents[step]) return false;
+        accents[step] = changed;
         lane.Pattern = accents;
         return true;
     }
@@ -166,7 +169,22 @@ internal static class LaneEdits
         }
     }
 
-    /// <summary>The name of a copy: the original with a suffix, cut to fit the longest name the project accepts.</summary>
-    internal static string CopyName(string name, string suffix) =>
-        (name.Length + suffix.Length <= MaxNameLength ? name : name[..(MaxNameLength - suffix.Length)]) + suffix;
+    /// <summary>
+    /// The name of a copy: the original with a suffix, cut to fit the longest name the project accepts. The cut never lands
+    /// inside a character that takes two code units (an emoji, a rarer script): that would leave half of it in the name.
+    /// </summary>
+    internal static string CopyName(string name, string suffix)
+    {
+        if (name.Length + suffix.Length <= MaxNameLength) return name + suffix;
+        var keep = MaxNameLength - suffix.Length;
+        if (keep > 0 && char.IsHighSurrogate(name[keep - 1])) keep--;
+        return name[..Math.Max(keep, 0)] + suffix;
+    }
+
+    /// <summary>
+    /// The length of a lane's cycle, in quarter notes, for a cycle of <paramref name="beats"/> beats of the project's time
+    /// signature: a beat is one written beat (an eighth in 6/8, a half note in 3/2), because that is what the main pattern
+    /// clicks and what "4 beats" means to a player. The cycle box itself counts in quarter notes.
+    /// </summary>
+    internal static double CycleQuarters(int beats, int beatDenominator) => beats * (4.0 / beatDenominator);
 }

@@ -953,6 +953,8 @@ Invoke-Control 'AddLanePlain'
 Wait-Condition { $null -ne (Find-Optional 'Lane0Card') } 'Studio: the new lane never appeared.'
 Wait-Absent 'StudioEmpty'
 Wait-Settled 'Lane0Volume'
+# Adding a lane is an operation of the editor gate: the fields of the page it builds wait for it, then come on.
+Wait-Condition { (Find-Control 'Lane0Volume').Current.IsEnabled } 'Studio: the fields of the new lane stayed switched off after it was added.'
 Test-FieldWidths 'Studio' @{ Lane0Pulses = 200; Lane0Cycle = 240; Lane0Offset = 250; Lane0Sound = 330; DocumentSeed = 200 }
 # The practice-program steps and the exact positions still have their older editors with an Apply button, until they get
 # live fields like a lane's. Nothing else on the page may have one.
@@ -997,7 +999,25 @@ $null = Find-Control 'EuclideanAttacks'
 Invoke-Control 'EuclideanOptionsDone'
 Wait-Absent 'EuclideanOptionsDone'
 Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: the Euclidean lane never appeared.'
+Wait-Condition { (Find-Control 'Lane0Volume').Current.IsEnabled } 'Studio: the fields stayed switched off after the Euclidean lane was added.'
 Test-NoApplyButtons 'Studio' $olderEditors
+# An operation that changes what is on the page takes the fields of every lane with it while it runs, so an edit made meanwhile is
+# not queued with the old page and then refused. Remove asks first, inside the operation: while the question is open the fields
+# are off and the command that opened it is not (the keyboard focus returns to it); after Cancel everything is back.
+$laneFields = @('Lane0Name', 'Lane0Muted', 'Lane0Solo', 'Lane0Pulses', 'Lane0Cycle', 'Lane0Offset', 'Lane0Sound', 'Lane0Volume', 'Lane0Pan', 'Lane0Probability', 'Lane0Step0', 'DocumentSeed')
+Invoke-Control 'Lane1More'
+Invoke-Control 'Lane1Remove'
+Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
+foreach ($id in $laneFields) {
+    Wait-Condition { -not (Find-Control $id).Current.IsEnabled } "Studio: $id can still be edited while a lane is being removed."
+}
+if (-not (Find-Control 'Lane0More').Current.IsEnabled) { throw 'Studio: the lane menu is switched off while a lane is being removed, so the keyboard focus has nowhere to return to.' }
+(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
+foreach ($id in $laneFields) {
+    Wait-Condition { (Find-Control $id).Current.IsEnabled } "Studio: $id stayed switched off after the removal was cancelled."
+}
+Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: cancelling the removal removed the lane.'
 if ($sendKeys) {
     # A beat strip is one tab stop; the arrow keys move between its beats and Up and Down change a beat. Keys are sent only while
     # the application owns the keyboard.

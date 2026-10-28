@@ -21,10 +21,12 @@ public sealed partial class MainWindow
     /// Applies one change to a Studio field. It is queued behind the edits before it, so quick edits are applied in the order
     /// they were made, and the page is not rebuilt: the field already shows the value. If the project changed under this page
     /// (a lane was removed) the page is refreshed and the edit refused, as for any editor command. A locked project refuses it
-    /// too; that is reported, and the caller puts the field back.
+    /// too; that is reported, and the caller puts the field back. If the person left Studio and came back while the edit waited,
+    /// the new page was built from the project as it was before the edit, so it is built again once the edit is in.
     /// </summary>
     private async Task CommitStudioAsync(int revision, string coalesceKey, Action<PulseDocument> edit)
     {
+        var generation = _pageGeneration;
         var applied = false;
         try
         {
@@ -38,6 +40,11 @@ public sealed partial class MainWindow
         {
             if (!_isClosed) RebuildPreservingScroll();
             throw;
+        }
+        finally
+        {
+            // Also when the recovery write failed after the edit was published: the project holds the edit either way.
+            if (applied && generation != _pageGeneration && _view == "Studio" && !_isClosed) RebuildPreservingScroll();
         }
         if (!applied) throw new OperationCanceledException();
     }
@@ -93,7 +100,7 @@ public sealed partial class MainWindow
             AutomationProperties.SetName(control, unitKey is null ? Named(captionKey) : $"{Named(captionKey)} ({Text.Get(unitKey)})");
 
         // ---- header: name, mute, solo, more --------------------------------------------------------------------------
-        var name = TextInput("Name", id + "Name", lane.Name);
+        var name = EditorControl(TextInput("Name", id + "Name", lane.Name));
         // A name is as wide as a name needs, and gives way in a narrow card (the field host); not as wide as the card.
         name.MaxWidth = double.PositiveInfinity;
         name.Width = 280;
@@ -112,10 +119,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(name, Named("Name"));
         TrackStudioFocus(id + "Name", name);
 
-        var mute = LaneToggle("Mute", id + "Muted", Named("Mute"), "LaneMuteHelp", lane.Muted,
-            () => Read(item => item.Muted, false), on => Change("Muted", item => item.Muted = on));
-        var solo = LaneToggle("LaneSolo", id + "Solo", Named("LaneSolo"), "LaneSoloHelp", lane.Solo,
-            () => Read(item => item.Solo, false), on => Change("Solo", item => item.Solo = on));
+        var mute = EditorControl(LaneToggle("Mute", id + "Muted", Named("Mute"), "LaneMuteHelp", lane.Muted,
+            () => Read(item => item.Muted, false), on => Change("Muted", item => item.Muted = on)));
+        var solo = EditorControl(LaneToggle("LaneSolo", id + "Solo", Named("LaneSolo"), "LaneSoloHelp", lane.Solo,
+            () => Read(item => item.Solo, false), on => Change("Solo", item => item.Solo = on)));
         var more = new Button { Content = new FontIcon { Glyph = "\uE712", FontSize = 16 }, MinWidth = 44, Padding = new Thickness(0) };
         Identify(more, id + "More", Named("LaneMore"));
         ToolTipService.SetToolTip(more, Text.Get("LaneMore"));
@@ -172,11 +179,11 @@ public sealed partial class MainWindow
             AutomationPrefix = id + "Step", RovingFocus = true, HorizontalAlignment = HorizontalAlignment.Left,
             Describe = (step, level) => Text.Format("LaneBeatName", index + 1, step + 1, Text.Get("Level" + level))
         };
-        var stripScroll = new ScrollViewer
+        var stripScroll = EditorControl(new ScrollViewer
         {
             Content = strip, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
-        };
+        });
         Identify(stripScroll, id + "Strip", Named("PulseStrengths"));
         var scrollCue = Note("ScrollControlsHint");
         scrollCue.Visibility = Visibility.Collapsed;
@@ -215,17 +222,17 @@ public sealed partial class MainWindow
         strip.BeatNudged += async (_, args) => await ChangeBeat(args.Index, args.Delta, wrap: false);
         if (!exact) strip.Rebuild(lane.Pulses, NoGroups, LaneBeatCell, AccentPatterns.ExpandLane(lane.Pattern, lane.Pulses));
 
-        var pulses = NumberInput("LanePulses", id + "Pulses", lane.Pulses, 1, 256);
+        var pulses = EditorControl(NumberInput("LanePulses", id + "Pulses", lane.Pulses, 1, 256));
         CommitNumber(pulses, () => Read(item => (double)item.Pulses, pulses.Value), async value =>
         {
             var count = Integer(value);
             try { await Change("Pulses", item => LaneEdits.SetPulses(item, count)); }
             finally { RefreshStrip(); }
         });
-        var cycle = NumberInput("LaneCycle", id + "Cycle", lane.CycleQuarters, 1d / 1024, 4096, 0.125, 3, whole: false, trimmed: true);
+        var cycle = EditorControl(NumberInput("LaneCycle", id + "Cycle", lane.CycleQuarters, 1d / 1024, 4096, 0.125, 3, whole: false, trimmed: true));
         CommitNumber(cycle, () => Read(item => item.CycleQuarters, cycle.Value),
             value => Change("Cycle", item => item.CycleQuarters = value));
-        var offset = NumberInput("LaneOffset", id + "Offset", lane.OffsetQuarters, -4096, 4096, 0.125, 3, whole: false, trimmed: true);
+        var offset = EditorControl(NumberInput("LaneOffset", id + "Offset", lane.OffsetQuarters, -4096, 4096, 0.125, 3, whole: false, trimmed: true));
         CommitNumber(offset, () => Read(item => item.OffsetQuarters, offset.Value),
             value => Change("Offset", item => item.OffsetQuarters = value));
         var pulsesField = Field(pulses);
@@ -236,7 +243,7 @@ public sealed partial class MainWindow
         Qualify(offset, "LaneOffset", "UnitQuarterNotes");
 
         // ---- Sound and Variation ------------------------------------------------------------------------------------------
-        var sound = Dropdown("LaneSoundCaption", id + "Sound", lane.Sound, LaneSounds.Select(item => new Choice(item, Text.Get(item))).ToArray());
+        var sound = EditorControl(Dropdown("LaneSoundCaption", id + "Sound", lane.Sound, LaneSounds.Select(item => new Choice(item, Text.Get(item))).ToArray()));
         CommitChoice(sound, () => Read(item => item.Sound, lane.Sound), value => Change("Sound", item => item.Sound = value));
         var soundField = Field(sound);
         Qualify(sound, "LaneSoundCaption");

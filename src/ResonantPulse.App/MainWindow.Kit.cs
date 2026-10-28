@@ -554,61 +554,74 @@ public sealed partial class MainWindow
     /// box keeps the value the setting now has.
     /// A value that belongs to the project is applied in turn by the edit queue instead, so the box may show a newer value
     /// than the project holds for a moment. A refusal then puts the box back only if no newer value was committed after it: the
-    /// newer one is still on its way and decides what the box shows.
+    /// newer one is still on its way and decides what the box shows. An empty or invalid draft submits nothing and shows the
+    /// value that is on its way (see <see cref="SubmissionTracker{T}"/>), not the one the project still holds; so does a value
+    /// that is refused at once while an older one is still in the queue.
     /// </summary>
     private void CommitNumber(NumberBox box, Func<double> current, Func<double, Task> commit)
     {
         var reverting = false;
-        var latest = 0;
-        void Revert()
+        var submissions = new SubmissionTracker<double>();
+        void Show(double value)
         {
             reverting = true;
-            box.Value = current();
+            box.Value = value;
             reverting = false;
         }
         box.ValueChanged += async (sender, args) =>
         {
             if (reverting) return;
-            var mine = ++latest;
             if (!double.IsFinite(args.NewValue))
             {
-                Revert();
+                Show(submissions.OnItsWayOr(current()));
                 return;
             }
+            var ticket = submissions.Begin(args.NewValue);
             var applied = false;
             await GuardAsync(async () =>
             {
                 await commit(args.NewValue);
                 applied = true;
             });
-            if (!applied && mine == latest) Revert();
+            if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused) Show(submissions.OnItsWayOr(current()));
         };
     }
 
     /// <summary>
     /// The same contract for a text box: nothing is written while typing; Enter or leaving the box commits a changed draft, and
-    /// Esc puts back what the setting holds. A refused draft goes back to what the setting holds, with the reason shown, unless
-    /// a newer draft was committed after it. The same draft is never committed twice while the first is on its way.
+    /// Esc puts back what the setting holds (or, while a draft is on its way, that draft: it is what the setting is about to
+    /// hold). A refused draft goes back to what the setting holds, with the reason shown, unless a newer draft was committed
+    /// after it or the person has typed on since. The same draft is never committed twice while the first is on its way.
     /// </summary>
     private void CommitText(TextBox box, Func<string> current, Func<string, Task> commit)
     {
-        var latest = 0;
-        string? submitted = null;
+        var submissions = new SubmissionTracker<string>();
+        // The draft last applied as typed: what the setting holds, which may differ from current() when the commit tidies it.
+        string? settled = null;
+        string Held() => submissions.TryGetPending(out var onItsWay) ? onItsWay : settled ?? current();
         async Task CommitDraftAsync()
         {
             var draft = box.Text;
-            if (draft == (submitted ?? current())) return;
-            submitted = draft;
-            var mine = ++latest;
+            if (draft == Held()) return;
+            var ticket = submissions.Begin(draft);
             var applied = false;
             await GuardAsync(async () =>
             {
                 await commit(draft);
                 applied = true;
             });
-            if (applied || mine != latest) return;
-            submitted = null;
-            box.Text = current();
+            switch (submissions.Resolve(ticket, applied))
+            {
+                case SubmissionAnswer.Applied:
+                    settled = draft;
+                    break;
+                case SubmissionAnswer.Refused:
+                    settled = null;
+                    // Only the refused draft is put back: whatever was typed after it is the person's to commit. It goes back to
+                    // what the project holds, or to an older draft that is still in the queue (a blank name is refused at once).
+                    if (box.Text == draft) box.Text = Held();
+                    break;
+            }
         }
         box.LostFocus += async (_, _) => await CommitDraftAsync();
         box.KeyDown += async (_, args) =>
@@ -621,9 +634,7 @@ public sealed partial class MainWindow
             else if (args.Key == Windows.System.VirtualKey.Escape)
             {
                 args.Handled = true;
-                latest++;
-                submitted = null;
-                box.Text = current();
+                box.Text = Held();
             }
         };
     }
@@ -635,20 +646,20 @@ public sealed partial class MainWindow
     private void CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit)
     {
         var reverting = false;
-        var latest = 0;
+        var submissions = new SubmissionTracker<string>();
         combo.SelectionChanged += async (_, _) =>
         {
             if (reverting || combo.SelectedItem is not Choice choice) return;
-            var mine = ++latest;
+            var ticket = submissions.Begin(choice.Value);
             var applied = false;
             await GuardAsync(async () =>
             {
                 await commit(choice.Value);
                 applied = true;
             });
-            if (applied || mine != latest) return;
+            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
             reverting = true;
-            SelectChoice(combo, current());
+            SelectChoice(combo, submissions.OnItsWayOr(current()));
             reverting = false;
         };
     }
@@ -660,18 +671,19 @@ public sealed partial class MainWindow
     /// one gesture: the text follows the thumb, and the value is committed once, when the gesture ends (see
     /// <see cref="GestureCommit"/>), so a drag is one undo step and one write, not one per tick. A refused value puts the slider
     /// back to what the setting holds, unless a newer value was committed after it. The slider is as wide as its track and its
-    /// longest value text, and gives way in a narrow card.
+    /// longest value text, and gives way in a narrow card. It waits for the editor gate like the other fields of a lane
+    /// (see <see cref="EditorControl{T}"/>).
     /// </summary>
     private StackPanel SliderField(string captionKey, string id, string accessibleName, int value, int minimum, int maximum,
         Func<int, string> format, IEnumerable<string> samples, Func<int> current, Func<int, Task> commit)
     {
         var caption = new TextBlock { Text = Text.Get(captionKey), Style = ResonantStyle("FieldCaptionStyle"), Margin = new Thickness(0, 0, 0, 4) };
-        var slider = new Slider
+        var slider = EditorControl(new Slider
         {
             Minimum = minimum, Maximum = maximum, Value = value, StepFrequency = 1, SmallChange = 1, LargeChange = 10,
             IsThumbToolTipEnabled = false, MinWidth = 96, MinHeight = 44,
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center
-        };
+        });
         Identify(slider, id, accessibleName);
         AutomationProperties.SetLabeledBy(slider, caption);
         var readout = new TextBlock
@@ -693,20 +705,20 @@ public sealed partial class MainWindow
 
         var gesture = new GestureCommit();
         var reverting = false;
-        var latest = 0;
+        var submissions = new SubmissionTracker<int>();
         async Task CommitGestureAsync()
         {
-            var mine = ++latest;
             var wanted = (int)Math.Round(slider.Value);
+            var ticket = submissions.Begin(wanted);
             var applied = false;
             await GuardAsync(async () =>
             {
                 await commit(wanted);
                 applied = true;
             });
-            if (applied || mine != latest) return;
+            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
             reverting = true;
-            slider.Value = current();
+            slider.Value = submissions.OnItsWayOr(current());
             readout.Text = format((int)Math.Round(slider.Value));
             reverting = false;
         }
@@ -714,6 +726,9 @@ public sealed partial class MainWindow
         {
             readout.Text = format((int)Math.Round(args.NewValue));
             if (reverting) return;
+            // The thumb has moved on from any value submitted before: if that one is refused it must not put the slider back
+            // (the new value would be overwritten, and releasing the thumb would commit the value that was put back).
+            submissions.Changed();
             if (gesture.Changed()) await CommitGestureAsync();
         };
         // The slider's own parts handle pointer and key events, so these are heard even when they are marked handled.

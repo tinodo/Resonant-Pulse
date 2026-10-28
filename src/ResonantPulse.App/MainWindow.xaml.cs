@@ -261,8 +261,16 @@ public sealed partial class MainWindow : Window
         BuildPage();
     }
 
+    /// <summary>
+    /// Counts how often the page was built. An edit made on one page is applied later, in turn; if the page was built again in
+    /// the meantime (the person went to another page and came back), the new page was built from the project as it was before
+    /// the edit, and has to be built again once the edit is in.
+    /// </summary>
+    private int _pageGeneration;
+
     private void BuildPage()
     {
+        _pageGeneration++;
         // The notes box is about to be replaced. What was typed in it goes with the request that saves it, not with the box, so
         // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
         QueueStageNotesSave();
@@ -327,6 +335,15 @@ public sealed partial class MainWindow : Window
         try
         {
             var retainsRevision = _transport.State is TransportState.Paused or TransportState.Faulted;
+            // A new start plays the project as it is after every change asked for before it. Changes are applied in turn, so
+            // Start takes its place in the queue first; a change still being checked would otherwise be left out of what plays
+            // and only be heard after Stop and Start. A resume keeps the revision it paused on and does not wait.
+            if (!retainsRevision)
+            {
+                await WaitForPendingEditsAsync();
+                // The window may have begun to close while Start waited: nothing new starts then.
+                if (_closeFlushing || _isClosed) return;
+            }
             var startRevision = _documentRevision;
             await _transport.StartAsync(_document, _preferences.OutputId);
             if (!retainsRevision) _hasPendingEdits = startRevision != _documentRevision;
@@ -334,10 +351,20 @@ public sealed partial class MainWindow : Window
         finally { _isBusy = false; RefreshSnapshot(); }
     }
 
+    /// <summary>Returns once every edit asked for before this call has been applied (the edit lock is handed out in the order it was asked for).</summary>
+    private async Task WaitForPendingEditsAsync()
+    {
+        await _edits.WaitAsync();
+        _edits.Release();
+    }
+
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
         int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, string? coalesceKey = null,
         Action? onPublished = null)
     {
+        // When the person made the change, not when the queue reaches it: a slow validation or recovery write must not split quick
+        // changes into several Undo steps, and a queue that drains must not join changes that were made seconds apart.
+        var madeAt = DateTime.UtcNow;
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
         {
@@ -360,7 +387,7 @@ public sealed partial class MainWindow : Window
                 countInChanged = _transport.Snapshot().Revision is { } audible &&
                     audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
             }
-            RecordUndo(coalesceKey);
+            RecordUndo(coalesceKey, madeAt);
             _document = revised;
             _recoveryUnsaved = true;
             _documentRevision++;
@@ -409,11 +436,12 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Keeps the project as it is now so Undo can come back to it. An edit that continues a burst on one field (the same
     /// <paramref name="coalesceKey"/>, soon after the last) joins that burst's undo step instead of adding its own, so
-    /// nudging a value ten times is one step back, not ten. Called with the edit queue held.
+    /// nudging a value ten times is one step back, not ten. "Soon after" is measured between the moments the changes were
+    /// made (<paramref name="madeAt"/>), not the moments the queue applied them. Called with the edit queue held.
     /// </summary>
-    private void RecordUndo(string? coalesceKey = null)
+    private void RecordUndo(string? coalesceKey = null, DateTime? madeAt = null)
     {
-        var now = DateTime.UtcNow;
+        var now = madeAt ?? DateTime.UtcNow;
         var joinsBurst = _undo.Count > 0 && UndoCoalescing.ShouldMerge(_undoKey, coalesceKey, _undoKeyAt, now);
         _undoKey = coalesceKey;
         _undoKeyAt = now;

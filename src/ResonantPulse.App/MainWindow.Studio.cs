@@ -117,10 +117,10 @@ public sealed partial class MainWindow
             AutomationProperties.SetAutomationId(item, id);
             return item;
         }
-        void AddKind(string key, string id, int pulses, double quarters)
+        void AddKind(string key, string id, int pulses, int beats)
         {
             var item = Item(key, id);
-            item.Click += async (_, _) => await GuardAsync(() => RunEditorOperationAsync(revision, () => AddLaneAsync(pulses, quarters)));
+            item.Click += async (_, _) => await GuardAsync(() => RunEditorOperationAsync(revision, () => AddLaneAsync(pulses, beats)));
             menu.Items.Add(item);
         }
         AddKind("LanePlain", "AddLanePlain", 4, 4);
@@ -142,7 +142,11 @@ public sealed partial class MainWindow
         return button;
     }
 
-    private async Task AddLaneAsync(int pulses, double quarters)
+    /// <summary>
+    /// Adds a lane of <paramref name="pulses"/> clicks over <paramref name="beats"/> beats of the project's time signature (the
+    /// labels in the menu say "beats"), so the lane is what its label promises in 6/8 or 3/2 as much as in 4/4.
+    /// </summary>
+    private async Task AddLaneAsync(int pulses, int beats)
     {
         await CommitEditorAsync(doc =>
         {
@@ -150,7 +154,7 @@ public sealed partial class MainWindow
             doc.Lanes.Add(new RhythmLane
             {
                 Name = LaneEdits.NextName(doc.Lanes.Select(lane => lane.Name), Text.Get("Lane")),
-                Pulses = pulses, CycleQuarters = quarters,
+                Pulses = pulses, CycleQuarters = LaneEdits.CycleQuarters(beats, doc.Settings.BeatDenominator),
                 Pattern = Enumerable.Repeat(Accent.Normal, pulses).ToArray()
             });
         });
@@ -271,7 +275,7 @@ public sealed partial class MainWindow
     /// <summary>What decides the random pattern behind a lane's Chance, with what it does.</summary>
     private UIElement BuildAdvancedCard(int revision)
     {
-        var seed = new TextBox { Text = _document.Seed.ToString(CultureInfo.InvariantCulture), Width = 180, MaxLength = 11, HorizontalAlignment = HorizontalAlignment.Left };
+        var seed = EditorControl(new TextBox { Text = _document.Seed.ToString(CultureInfo.InvariantCulture), Width = 180, MaxLength = 11, HorizontalAlignment = HorizontalAlignment.Left });
         Identify(seed, "DocumentSeed", Text.Get("SeedLabel"));
         CommitText(seed, () => _document.Seed.ToString(CultureInfo.InvariantCulture), async text =>
         {
