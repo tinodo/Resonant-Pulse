@@ -288,11 +288,13 @@ Store publication.
 is a page-design round after an owner review of preview.9. Timer, Project, Help and
 Settings had fields as wide as the window, an "Apply edits" button in the middle of a
 form and settings nobody could explain, and Library, Stage, Train and Studio had had
-little thought. They, and the panels on Play, now follow one design
-(docs/design/pages-design.md): titled pages of cards, fields as wide as what they
-hold, plain-language text, empty states that say what to do next and no Apply button,
-because a change takes effect as it is made and one the project refuses goes back to
-the value it holds and says why. "Reduce motion" is a switch that makes the marker on
+little thought. They now follow one design (docs/design/pages-design.md), and the
+fields in the Play panels are the same: titled pages of cards, fields as wide as what
+they hold, plain-language text, empty states that say what to do next and no Apply
+button on the pages, because a change takes effect as it is made and one the project
+refuses goes back to the value it holds and says why. The Play panels (Timer, Project,
+Help, tempo and time signature) keep Cancel and Done: a draft waits until Done applies
+it, and Cancel discards it. "Reduce motion" is a switch that makes the marker on
 the circle jump from beat to beat instead of gliding and hides the scrolling tape of
 upcoming clicks; it is also on whenever Windows has animation effects off. The export
 length (the bars written to a WAV or MIDI file when the project has no program; a
