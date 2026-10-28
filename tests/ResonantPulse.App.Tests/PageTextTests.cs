@@ -35,7 +35,14 @@ public sealed class PageTextTests
         "UnitMs", "IncludeSilentHelp", "TempoChartAxis", "Target", "MainTarget", "IncludeSilentTargets", "Tolerance",
         "Program", "ProgramEmpty", "BeginTiming", "FinishTiming", "Hit", "TimingBudget", "TimingDriftUnavailable", "TimingNoMatches",
         "TimingAdditional", "TimingLab", "TimingLimits", "TimingArmed", "TimingReport", "TimingRequiresPlayback", "TimingPendingEdits",
-        "TimingTargetChanged", "TimingInvalidated"
+        "TimingTargetChanged", "TimingInvalidated",
+        "StudioPurpose", "StudioLocked", "StudioEmptyTitle", "StudioEmptyBody", "LanePlain", "LaneThreeInFour", "LaneThreeInThree",
+        "LaneEuclidean", "LaneField", "LaneBeatName", "LaneGroupRhythm", "LaneGroupVariation", "LanePulses", "LaneCycle", "LaneOffset",
+        "UnitQuarterNotes", "LaneRhythmHelp", "LaneExactNote", "CustomPositions", "LanePan", "LaneSoundCaption", "PanLeft", "PanRight", "PanCenter",
+        "LaneChance", "LaneChanceHelp", "LaneSoloHelp", "LaneMuteHelp", "LaneMore", "LaneCopySuffix", "LaneNameRequired",
+        "EuclideanHits", "EuclideanSteps", "EuclideanExplain", "EuclideanInvalid", "EuclideanWhole", "EuclideanPreviewName", "Create",
+        "Advanced",
+        "AdvancedHelp", "SeedLabel", "SeedInvalid"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>
@@ -46,7 +53,8 @@ public sealed class PageTextTests
     private static readonly HashSet<string> SameAsEnglishAllowed =
     [
         "VersionLine/de", "VersionLine/fr", "KeyCtrl/nl", "KeyCtrl/fr", "KeyCtrl/es",
-        "UnitMs/nl", "UnitMs/de", "UnitMs/fr", "UnitMs/es"
+        "UnitMs/nl", "UnitMs/de", "UnitMs/fr", "UnitMs/es",
+        "LaneGroupVariation/de", "LaneGroupVariation/fr"
     ];
 
     private static IReadOnlyList<int> Placeholders(string text) =>
@@ -147,6 +155,34 @@ public sealed class PageTextTests
             Assert.AreNotEqual("Preset_" + preset.Id, name, $"{language}: {preset.Id} has no name");
             Assert.AreNotEqual("PresetDesc_" + preset.Id, description, $"{language}: {preset.Id} has no description");
             Assert.IsTrue(description.Length is > 20 and < 200, $"{language}/{preset.Id}: {description.Length} characters");
+        }
+    }
+
+    [TestMethod]
+    public void TheStudioSentencesFillEveryPlaceholderInEveryLanguage()
+    {
+        foreach (var language in Languages)
+        {
+            var purpose = InLanguage(language, () => Text.Format("StudioPurpose", "My groove"));
+            StringAssert.Contains(purpose, "My groove", language);
+            var beat = InLanguage(language, () => Text.Format("LaneBeatName", 2, 3, Text.Get("LevelStrong")));
+            StringAssert.Contains(beat, "2", language);
+            StringAssert.Contains(beat, "3", language);
+            var field = InLanguage(language, () => Text.Format("LaneField", 4, Text.Get("Volume")));
+            StringAssert.Contains(field, "4", language);
+            var euclid = InLanguage(language, () => Text.Format("EuclideanExplain", 5, 8));
+            StringAssert.Contains(euclid, "5", language);
+            StringAssert.Contains(euclid, "8", language);
+            var left = InLanguage(language, () => Text.Format("PanLeft", 30));
+            var right = InLanguage(language, () => Text.Format("PanRight", 25));
+            StringAssert.Contains(left, "30", language);
+            StringAssert.Contains(right, "25", language);
+            // The locked note names the page and the switch as that language calls them, not as English does.
+            var locked = InLanguage(language, () => Text.Format("StudioLocked", Text.Get("Stage"), Text.Get("Lock")));
+            StringAssert.Contains(locked, InLanguage(language, () => Text.Get("Stage")), language);
+            StringAssert.Contains(locked, InLanguage(language, () => Text.Get("Lock")), language);
+            foreach (var line in new[] { purpose, beat, field, euclid, left, right, locked })
+                Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{language}: {line}");
         }
     }
 

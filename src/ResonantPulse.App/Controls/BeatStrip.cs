@@ -31,6 +31,15 @@ public sealed class BeatStrip : StackPanel
     /// <summary>Localized accessible name for a beat; supplied by the owner.</summary>
     public Func<int, Accent, string> Describe { get; set; } = (index, level) => $"{index + 1}: {level}";
 
+    /// <summary>The automation id of a beat is this prefix and its number, counted from 0.</summary>
+    public string AutomationPrefix { get; set; } = "MainAccent";
+
+    /// <summary>
+    /// Makes the whole strip one tab stop: Tab enters it once, and Left, Right, Home and End move between beats. Without it
+    /// a strip of 64 beats takes 64 presses of Tab to get past.
+    /// </summary>
+    public bool RovingFocus { get; set; }
+
     public event EventHandler<int>? BeatInvoked;
     public event EventHandler<(int Index, int Delta)>? BeatNudged;
 
@@ -45,6 +54,22 @@ public sealed class BeatStrip : StackPanel
         HorizontalAlignment = HorizontalAlignment.Center;
         Loaded += (_, _) => RefreshTheme();
         ActualThemeChanged += (_, _) => RefreshTheme();
+    }
+
+    private int _tabStop;
+
+    private void SetTabStop(int index)
+    {
+        _tabStop = index;
+        for (var cell = 0; cell < _cells.Count; cell++) _cells[cell].Button.IsTabStop = !RovingFocus || cell == index;
+    }
+
+    private void MoveFocus(int target)
+    {
+        if (_cells.Count == 0) return;
+        target = Math.Clamp(target, 0, _cells.Count - 1);
+        SetTabStop(target);
+        _cells[target].Button.Focus(FocusState.Keyboard);
     }
 
     /// <param name="groupStarts">Pulse indices where an additive group begins; they get a little extra space.</param>
@@ -91,18 +116,40 @@ public sealed class BeatStrip : StackPanel
             };
             var captured = index;
             button.Click += (_, _) => BeatInvoked?.Invoke(this, captured);
+            button.GotFocus += (_, _) =>
+            {
+                if (RovingFocus && _tabStop != captured) SetTabStop(captured);
+            };
             button.KeyDown += (_, args) =>
             {
-                var delta = args.Key == VirtualKey.Up ? 1 : args.Key == VirtualKey.Down ? -1 : 0;
-                if (delta == 0) return;
-                BeatNudged?.Invoke(this, (captured, delta));
+                switch (args.Key)
+                {
+                    case VirtualKey.Up or VirtualKey.Down:
+                        BeatNudged?.Invoke(this, (captured, args.Key == VirtualKey.Up ? 1 : -1));
+                        break;
+                    case VirtualKey.Left when RovingFocus:
+                        MoveFocus(captured - 1);
+                        break;
+                    case VirtualKey.Right when RovingFocus:
+                        MoveFocus(captured + 1);
+                        break;
+                    case VirtualKey.Home when RovingFocus:
+                        MoveFocus(0);
+                        break;
+                    case VirtualKey.End when RovingFocus:
+                        MoveFocus(_cells.Count - 1);
+                        break;
+                    default:
+                        return;
+                }
                 args.Handled = true;
             };
-            AutomationProperties.SetAutomationId(button, $"MainAccent{index}");
+            AutomationProperties.SetAutomationId(button, $"{AutomationPrefix}{index}");
             var cell = new Cell(button, layout, bar, number, glow);
             _cells.Add(cell);
             Children.Add(button);
         }
+        SetTabStop(Math.Min(_tabStop, Math.Max(0, count - 1)));
         SetLevels(levels);
     }
 

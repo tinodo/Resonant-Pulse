@@ -129,19 +129,35 @@ is specified in `metronome-design.md` and is not changed here.
   chance)*; *Start*, *Hit (F)*, *Finish*; the result as short lines.
 
 ### Studio
-- Header: project name; Undo and Redo as icon buttons with their shortcuts; *Add lane* as a menu (empty lane, 3 in 4,
-  3 over 4, Euclidean...). One sentence under the header: "Changes are saved as you make them. While the metronome plays
-  they are heard the next time you press Start."
-- **Lanes:** one card per lane: name, mute and solo, a *More* menu (rotate, invert, duplicate, remove). Three groups:
-  *Rhythm* (the *Beat emphasis* strip, tap to change as on Play, then pulses, cycle, offset), *Sound* (sound, volume,
-  pan) and *Variation* (chance). *Custom beat positions* is an expander for the per-event table, explained as exact
-  placement within the cycle.
+- Header: one sentence ("Editing “name”. Changes are saved as you make them and heard the next time you press Start.");
+  Undo and Redo as icon buttons (there are no keyboard shortcuts for them yet); *Add lane* as a menu: 4 clicks over 4
+  beats, 3 over 4 (polyrhythm), 3 over 3 (polymeter) and *Euclidean...*. While there are no lanes the one *Add lane*
+  button sits in the empty-state card instead of the header.
+- **Lanes:** one card per lane: name, mute and solo, a *More* menu (rotate, invert, duplicate, remove with a
+  confirmation). Three groups: *Rhythm* (the *Beat strength* strip, tap to change as on Play, then clicks per cycle,
+  cycle length, start offset), *Sound* (click sound, volume, pan) and *Variation* (chance). *Custom beat positions* is an
+  expander for the per-event table, explained as exact placement within the cycle.
+- **Edits apply as they are made.** Nothing rebuilds the page, so focus, caret and scroll stay; a slider commits when the
+  drag or the held key ends. Undo steps: one for each field per burst (the same field again within 2 seconds is the same
+  step), one for each add, remove, duplicate, rotate and invert. While the project is locked (Stage) every card is
+  disabled and the page says why, naming the page and the switch as the language does. Undo and Redo rebuild the page, so the
+  focus is put back on the command that was used (on the other one when it has nothing left to do), and a beat that was
+  tapped while the number of clicks was being lowered is ignored, not reported as an error.
+- **Rules the cards rely on:** fewer clicks cut the pattern to the new count (the project file refuses a pattern longer
+  than its clicks); *Rotate* moves a lane later, for a pattern and for exact positions alike; a copy goes last, so the
+  lanes before it keep their place and with them the random pattern behind *Chance*; *Solo* silences the main beat and
+  every lane that is not solo, and its help says so, and that a muted lane does not count as *Solo* (soloing a muted lane
+  changes nothing for the others); at most 8
+  lanes. The cycle and offset boxes keep room for three decimals (about 200 DIP) and show only the digits a value needs.
 - **Euclidean** opens from the *Add lane* menu as a panel: hits, steps, rotation, cycle, a one-line explanation ("spreads
-  5 hits as evenly as possible over 8 steps"), a live pattern preview (● ○ ● ● ○ ...), *Create* and *Cancel*.
+  5 hits as evenly as possible over 8 steps"), a live pattern preview (● ○ ● ● ○ ...; a screen reader hears it as part of
+  the preview's name), *Create* and *Cancel*. A blank or fractional box says to enter whole numbers; more hits than steps
+  says that.
 - **Program:** one card per step: name, move up and down, remove; tempo from and to, bars, repeats, ramp, meter; "play N
-  bars, then N silent" as one sentence-shaped row. *Add step*.
+  bars, then N silent" as one sentence-shaped row. *Add step*. (Until step 4 of the delivery below, the older editor for
+  each step sits inside one card.)
 - **Advanced:** the random seed, with what it does ("the same seed gives the same random pattern every time").
-- Empty state: what a lane is, with *Add lane* and *3 in 4*.
+- Empty state: what a lane is, with *Add lane*, which offers the 3 in 4 pattern among its kinds.
 
 ## 5. Copy rules
 
@@ -155,9 +171,9 @@ not been reviewed by a native musician; the release notes say so and the glossar
 
 - Every control has a stable logical AutomationId and a name that includes what it belongs to ("Lane 1, volume").
   A caption or unit outside a control is linked to it, so a screen reader never meets an unnamed edit box.
-- Each cell of a beat-emphasis strip is a 44 x 44 DIP button named "Lane 1, beat 3, strong; press to change"; Left and
-  Right move between cells, Up and Down change the strength, Space and Enter cycle it. A long strip scrolls inside its
-  card instead of making the page scroll sideways.
+- Each beat of a strength strip is a button named "Lane 1, beat 3, Strong"; the strip is one tab stop, Left, Right, Home
+  and End move between beats, Up and Down change the strength (they stop at the ends), Space and Enter step through the
+  strengths and wrap around. A long strip scrolls inside its card instead of making the page scroll sideways.
 - Focus, caret and scroll position survive any change that rebuilds part of a page.
 - High contrast uses the system colours; every state (selected, now playing, up next, muted) is also stated in text or by
   an icon, never by colour alone; focus is always visible.
@@ -171,7 +187,7 @@ not been reviewed by a native musician; the release notes say so and the glossar
 | Library | "Looking for projects..." | what it is, how to fill it | first 1000 shown; unreadable files named | buttons disabled with the reason |
 | Stage | none | no songs: what a setlist is, *Add current project* | a song that cannot start says why | locked: switch shown, setlist edits disabled and explained |
 | Train | none | no program: what it is, where to build one | a timing run that was invalidated says so | a run in progress: *Start* disabled, *Finish* enabled |
-| Studio | none | no lanes: *Add lane*, *3 in 4* | an edit that cannot be saved reverts and says why | Undo and Redo disabled when empty, with their labels |
+| Studio | none | no lanes: what a lane is, *Add lane* | an edit that cannot be saved reverts and says why | Undo and Redo disabled when empty, with their labels; locked: every card disabled and explained |
 
 Destructive actions (remove lane, step or song; replace the project) name the thing and the consequence, and say whether
 Undo brings it back.

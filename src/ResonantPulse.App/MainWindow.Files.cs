@@ -256,8 +256,7 @@ public sealed partial class MainWindow
             _transportIntent++;
             InvalidateTiming();
             _transport.Stop();
-            _undo.Push(_document);
-            _redo.Clear();
+            RecordUndo();
             _document = replacement;
             _recoveryUnsaved = true;
             _projectGeneration++;

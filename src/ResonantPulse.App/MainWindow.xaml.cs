@@ -293,6 +293,7 @@ public sealed partial class MainWindow : Window
         _libraryStatus = null;
         _libraryNoMatch = null;
         _libraryEmpty = null;
+        _editorOperationControls.Clear();
         PageHost.Content = _view switch
         {
             "Studio" => BuildStudio(),
@@ -334,7 +335,8 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
-        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, Action? onPublished = null)
+        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, string? coalesceKey = null,
+        Action? onPublished = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
@@ -358,14 +360,7 @@ public sealed partial class MainWindow : Window
                 countInChanged = _transport.Snapshot().Revision is { } audible &&
                     audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
             }
-            _undo.Push(_document);
-            if (_undo.Count > 64)
-            {
-                var recent = _undo.Take(64).Reverse().ToArray();
-                _undo.Clear();
-                foreach (var item in recent) _undo.Push(item);
-            }
-            _redo.Clear();
+            RecordUndo(coalesceKey);
             _document = revised;
             _recoveryUnsaved = true;
             _documentRevision++;
@@ -388,6 +383,8 @@ public sealed partial class MainWindow : Window
             if (!succeeded) SynchronizeGain();
             if (EditorRevisionPolicy.ShouldRebuild(succeeded, editorChange)) BuildPage();
             else RefreshSnapshot();
+            // Undo and Redo become available (or not) with every change.
+            RefreshEditorControlState();
         });
     }
 
@@ -404,6 +401,29 @@ public sealed partial class MainWindow : Window
         var revision = _documentRevision;
         await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
         if (revision == _documentRevision) _recoveryUnsaved = false;
+    }
+
+    private string? _undoKey;
+    private DateTime _undoKeyAt;
+
+    /// <summary>
+    /// Keeps the project as it is now so Undo can come back to it. An edit that continues a burst on one field (the same
+    /// <paramref name="coalesceKey"/>, soon after the last) joins that burst's undo step instead of adding its own, so
+    /// nudging a value ten times is one step back, not ten. Called with the edit queue held.
+    /// </summary>
+    private void RecordUndo(string? coalesceKey = null)
+    {
+        var now = DateTime.UtcNow;
+        var joinsBurst = _undo.Count > 0 && UndoCoalescing.ShouldMerge(_undoKey, coalesceKey, _undoKeyAt, now);
+        _undoKey = coalesceKey;
+        _undoKeyAt = now;
+        _redo.Clear();
+        if (joinsBurst) return;
+        _undo.Push(_document);
+        if (_undo.Count <= 64) return;
+        var recent = _undo.Take(64).Reverse().ToArray();
+        _undo.Clear();
+        foreach (var item in recent) _undo.Push(item);
     }
 
     private static Task ValidateAsync(PulseDocument document) =>
@@ -423,6 +443,8 @@ public sealed partial class MainWindow : Window
             var source = redo ? _redo : _undo;
             var target = redo ? _undo : _redo;
             if (source.Count == 0) return;
+            // The next edit starts a step of its own, even on the field that was just undone.
+            _undoKey = null;
             target.Push(_document);
             _document = source.Pop();
             // The setlist may be shorter now; the song that was up next may not exist any more.
@@ -434,7 +456,7 @@ public sealed partial class MainWindow : Window
             published();
             SynchronizeGain();
             await SaveRecoveryAsync();
-        }, _ => { if (!_isClosed) BuildPage(); });
+        }, _ => { if (!_isClosed) RebuildPreservingScroll(); });
     }
 
     private void SynchronizeGain()
