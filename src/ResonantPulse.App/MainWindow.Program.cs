@@ -85,7 +85,7 @@ public sealed partial class MainWindow
                 throw new OperationCanceledException();
             }
             await Change("Name", item => item.Name = text);
-        });
+        }, stale: () => revision != _editorContentRevision);
         AutomationProperties.SetName(name, Text.Format("StepNameCaption", index + 1));
         var nameField = Field(name);
         AutomationProperties.SetName(name, Named("Name"));
@@ -118,6 +118,7 @@ public sealed partial class MainWindow
         // refused, both boxes are brought in line with what the project holds, or with a newer value that is still on its way.
         var startSubmissions = new SubmissionTracker<double>();
         var endSubmissions = new SubmissionTracker<double>();
+        var rampSubmissions = new SubmissionTracker<string>();
         var rampField = Field(ramp);
         var steadyField = Field(steadyTempo, "UnitBpm");
         var startField = Field(startTempo, "UnitBpm");
@@ -142,7 +143,10 @@ public sealed partial class MainWindow
         void ShowTempoFields()
         {
             var current = Now();
-            var steady = ProgramEdits.IsSteady(current);
+            // Which boxes are on screen follows the newest choice in the drop-down that the project has not answered yet, not
+            // the one it holds now: of three quick changes the first two are answered while the last is still on its way, and
+            // the boxes must not come and go meanwhile (taking the focus from one the person has gone back to).
+            var steady = ProgramEdits.IsSteady(rampSubmissions.OnItsWayOr(current.Ramp));
             // A box that has a value on its way shows that value (the project does not hold it yet, and will), not the one the
             // project holds now; overwriting it would leave the box different from the project once that value is applied. A value
             // that was refused is not on its way any more, so both boxes show what the project holds. The steady box and the start
@@ -167,12 +171,9 @@ public sealed partial class MainWindow
             startSubmissions, () => syncing, ShowTempoFields);
         CommitNumber(endTempo, () => Now().EndTempo, value => Change("EndTempo", item => ProgramEdits.SetEndTempo(item, value)),
             endSubmissions, () => syncing, ShowTempoFields);
-        CommitChoice(ramp, () => Now().Ramp, async value =>
-        {
-            try { await Change("Ramp", item => ProgramEdits.SetRamp(item, value)); }
-            // Shows what the project holds, whether or not the change was applied.
-            finally { ShowTempoFields(); }
-        });
+        // Brings the boxes in line with the project after each answer to the choice, whether or not it was applied.
+        CommitChoice(ramp, () => Now().Ramp, value => Change("Ramp", item => ProgramEdits.SetRamp(item, value)),
+            rampSubmissions, ShowTempoFields);
         ShowTempoFields();
 
         // ---- Length ------------------------------------------------------------------------------------------------------
@@ -230,16 +231,19 @@ public sealed partial class MainWindow
         var gapRow = Wrapped(8, 8, sentence.ToArray());
         // The trackers of the two boxes are made below, once the commands they run are defined; the function after this reads them.
         SubmissionTracker<double> audibleCommit = null!, silentCommit = null!;
+        var restSubmissions = new SubmissionTracker<bool>();
         void ShowGapFields()
         {
             var current = Now();
-            var on = ProgramEdits.HasSilentBars(current);
-            // A box that has a value on its way shows that value, not the one the project holds now (see ShowTempoFields).
+            var projectOn = ProgramEdits.HasSilentBars(current);
+            // A box that has a value on its way shows that value, not the one the project holds now (see ShowTempoFields). The
+            // sentence follows the newest position of the switch that the project has not answered yet, for the same reason.
+            var on = restSubmissions.OnItsWayOr(projectOn);
             syncing = true;
             try
             {
-                audible.Value = audibleCommit.OnItsWayOr(on ? current.AudibleBars : ProgramEdits.DefaultAudibleBars);
-                silent.Value = silentCommit.OnItsWayOr(on ? current.SilentBars : ProgramEdits.DefaultSilentBars);
+                audible.Value = audibleCommit.OnItsWayOr(projectOn ? current.AudibleBars : ProgramEdits.DefaultAudibleBars);
+                silent.Value = silentCommit.OnItsWayOr(projectOn ? current.SilentBars : ProgramEdits.DefaultSilentBars);
             }
             finally { syncing = false; }
             gapRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
@@ -261,11 +265,8 @@ public sealed partial class MainWindow
             var count = Integer(value);
             return ChangeGap("Silent", item => item.SilentBars = count);
         }, silenced: () => syncing);
-        CommitSwitch(rest, () => ProgramEdits.HasSilentBars(Now()), async on =>
-        {
-            try { await Change("Rest", item => ProgramEdits.SetSilentBars(item, on)); }
-            finally { ShowGapFields(); }
-        });
+        CommitSwitch(rest, () => ProgramEdits.HasSilentBars(Now()), on => Change("Rest", item => ProgramEdits.SetSilentBars(item, on)),
+            restSubmissions, ShowGapFields);
         ShowGapFields();
 
         var body = new StackPanel { Spacing = 12 };

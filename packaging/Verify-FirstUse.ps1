@@ -592,6 +592,34 @@ function Wait-Condition([scriptblock]$condition, [string]$failure, [int]$seconds
     } while ([DateTime]::UtcNow -lt $limit)
     throw $failure
 }
+# An error notice stays open until it is closed, and it takes room from the page above it. The one that a refusal asked for by a
+# check leaves behind is read, compared with what was expected and closed, so that what is measured next is not squeezed by it; an
+# error that nobody asked for fails the run with its words, where it used to turn up as a control that was "not on screen".
+function Get-ErrorNoticeText {
+    $notice = Find-Optional 'StatusNotice'
+    if ($null -eq $notice) { return $null }
+    function Get-NoticePart([string]$id) {
+        $part = $notice.FindFirst([Windows.Automation.TreeScope]::Descendants,
+            [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id))
+        if ($null -eq $part) { '' } else { $part.Current.Name }
+    }
+    if ((Get-NoticePart 'StandardIcon') -notlike 'Error*') { return $null }
+    "$(Get-NoticePart 'Title'): $(Get-NoticePart 'Message')"
+}
+function Assert-NoErrorNotice([string]$where, [string]$detail = '') {
+    $text = Get-ErrorNoticeText
+    if ($null -ne $text) { throw "${where}: an error is on screen that nobody asked for: $text $detail" }
+}
+function Close-ErrorNotice([string]$expected, [string]$where) {
+    $text = Get-ErrorNoticeText
+    if ($null -eq $text) { return }
+    if ($text -notlike "*$expected*") { throw "${where}: an error is on screen that nobody asked for: $text" }
+    $close = (Find-Optional 'StatusNotice').FindFirst([Windows.Automation.TreeScope]::Descendants,
+        [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, 'CloseButton'))
+    if ($null -eq $close) { throw "${where}: the error notice has no close button." }
+    $close.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Absent 'StatusNotice'
+}
 function Select-Destination([string]$id) {
     $item = Find-Control $id
     $pattern = $null
@@ -1046,6 +1074,8 @@ Set-Text 'Lane1Event1Position' '4'
 Wait-Condition { (Get-Box 'Lane1Event1Position') -eq '0.75' } 'Studio: a position outside the cycle was kept in the box.'
 Start-Sleep -Milliseconds 700
 if ((Get-Box 'Lane1Event1Position') -ne '0.75') { throw "Studio: a position outside the cycle came back into the box ('$(Get-Box 'Lane1Event1Position')')." }
+# The refusal says why, and its notice stays until it is closed: it is the one error this run asks for.
+Close-ErrorNotice 'A position must be at least 0' 'Studio'
 Invoke-Control 'Lane1AddEvent'
 Wait-Condition { $null -ne (Find-Optional 'Lane1Event8') } 'Studio: Add position did not add a ninth row.'
 # A lane that plays a pattern is converted to positions with one command, and Undo brings the pattern back.
@@ -1118,6 +1148,7 @@ Invoke-Control 'AddProgramStep'
 Wait-Condition { $null -ne (Find-Optional 'Program1Card') } 'Studio: the second step never appeared.'
 Wait-Condition { -not (Find-Control 'Program0MoveUp').Current.IsEnabled -and (Find-Control 'Program1MoveUp').Current.IsEnabled } 'Studio: only a step that is not first can move up.'
 $secondName = Get-Box 'Program1Name'
+$focusBeforeMoveUp = [Windows.Automation.AutomationElement]::FocusedElement.Current.AutomationId
 Invoke-Control 'Program1MoveUp'
 Wait-Condition { (Get-Box 'Program0Name') -eq $secondName } 'Studio: Move up did not put the second step first.'
 Invoke-Control 'Program0More'
@@ -1147,6 +1178,7 @@ foreach ($stepIndex in 1, 0) {
     Wait-Condition { $null -eq (Find-Optional "Program${stepIndex}Card") } "Studio: removing step $($stepIndex + 1) did not take its card away."
 }
 Wait-Condition { $null -ne (Find-Optional 'AddProgramStep') -and $null -ne (Find-Optional 'ProgramCard') } 'Studio: the program card did not come back to its empty state.'
+Assert-NoErrorNotice 'Studio program' "(the focus was on '$focusBeforeMoveUp' when the second step was moved up)"
 if ($sendKeys) {
     # A beat strip is one tab stop; the arrow keys move between its beats and Up and Down change a beat. Keys are sent only while
     # the application owns the keyboard.
@@ -1196,6 +1228,7 @@ function Test-NewButtonsOnScreen([string]$where, [string[]]$before) {
         }
     }
 }
+Assert-NoErrorNotice 'Before the Dutch checks'
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'
 Select-Combo 'Language' 'Nederlands'
@@ -1215,7 +1248,9 @@ foreach ($panel in $panels) {
 function Test-OnScreen([string]$where, [string]$id) {
     $element = Find-Control $id
     if ($element.Current.IsOffscreen -or $element.Current.BoundingRectangle.IsEmpty) {
-        throw "${where}: '$id' ('$($element.Current.Name)') is not on screen."
+        # An error notice open under the page takes room from it, so it is named when it is the likely reason.
+        $notice = Get-ErrorNoticeText
+        throw "${where}: '$id' ('$($element.Current.Name)') is not on screen.$(if ($notice) { " An error notice is open: $notice" })"
     }
 }
 foreach ($page in @(

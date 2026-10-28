@@ -601,8 +601,12 @@ public sealed partial class MainWindow
     /// Esc puts back what the setting holds (or, while a draft is on its way, that draft: it is what the setting is about to
     /// hold). A refused draft goes back to what the setting holds, with the reason shown, unless a newer draft was committed
     /// after it or the person has typed on since. The same draft is never committed twice while the first is on its way.
+    /// <paramref name="stale"/> is true once the page the box was built for has been replaced because the project changed (a
+    /// step moved, a lane removed). Taking a box away while it has the focus makes it lose that focus, which commits it, and by
+    /// then what it holds was written for something that may not be at its place any more: it is not committed, and nothing is
+    /// said, because the person did nothing.
     /// </summary>
-    private SubmissionTracker<string> CommitText(TextBox box, Func<string> current, Func<string, Task> commit)
+    private SubmissionTracker<string> CommitText(TextBox box, Func<string> current, Func<string, Task> commit, Func<bool>? stale = null)
     {
         var submissions = new SubmissionTracker<string>();
         // The draft last applied as typed: what the setting holds, which may differ from current() when the commit tidies it.
@@ -610,6 +614,7 @@ public sealed partial class MainWindow
         string Held() => submissions.TryGetPending(out var onItsWay) ? onItsWay : settled ?? current();
         async Task CommitDraftAsync()
         {
+            if (stale?.Invoke() == true) return;
             var draft = box.Text;
             if (draft == Held()) return;
             var ticket = submissions.Begin(draft);
@@ -651,12 +656,15 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The same contract for a drop-down: a choice commits at once, and a refused one puts the drop-down back to what the
-    /// setting holds, unless a newer choice was made after it.
+    /// setting holds, unless a newer choice was made after it. <paramref name="shared"/> is the tracker to use when something
+    /// else needs to know what is on its way, and <paramref name="answered"/> runs once each answer has been recorded and a
+    /// refusal has put the drop-down back, so what follows the choice (which fields are on screen) is brought in line with it.
     /// </summary>
-    private SubmissionTracker<string> CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit)
+    private SubmissionTracker<string> CommitChoice(ComboBox combo, Func<string> current, Func<string, Task> commit,
+        SubmissionTracker<string>? shared = null, Action? answered = null)
     {
         var reverting = false;
-        var submissions = new SubmissionTracker<string>();
+        var submissions = shared ?? new SubmissionTracker<string>();
         combo.SelectionChanged += async (_, _) =>
         {
             if (reverting || combo.SelectedItem is not Choice choice) return;
@@ -667,10 +675,13 @@ public sealed partial class MainWindow
                 await commit(choice.Value);
                 applied = true;
             });
-            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
-            reverting = true;
-            SelectChoice(combo, submissions.OnItsWayOr(current()));
-            reverting = false;
+            if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused)
+            {
+                reverting = true;
+                SelectChoice(combo, submissions.OnItsWayOr(current()));
+                reverting = false;
+            }
+            answered?.Invoke();
         };
         return submissions;
     }
@@ -678,13 +689,15 @@ public sealed partial class MainWindow
     /// <summary>
     /// The same contract for a switch: a change commits at once, and a refused one puts the switch back to what the setting
     /// holds (or to the value of an older change that is still in the queue), unless a newer change was made after it. Whatever
-    /// else shows the setting is brought in line by <paramref name="commit"/>, once it has finished, whether or not the change
-    /// was applied.
+    /// else shows the setting is brought in line by <paramref name="answered"/>, which runs once each answer has been recorded
+    /// (and a refusal has put the switch back), whether or not the change was applied. <paramref name="shared"/> is the tracker
+    /// to use when that needs to know what is on its way.
     /// </summary>
-    private SubmissionTracker<bool> CommitSwitch(ToggleSwitch toggle, Func<bool> current, Func<bool, Task> commit)
+    private SubmissionTracker<bool> CommitSwitch(ToggleSwitch toggle, Func<bool> current, Func<bool, Task> commit,
+        SubmissionTracker<bool>? shared = null, Action? answered = null)
     {
         var reverting = false;
-        var submissions = new SubmissionTracker<bool>();
+        var submissions = shared ?? new SubmissionTracker<bool>();
         toggle.Toggled += async (_, _) =>
         {
             if (reverting) return;
@@ -696,10 +709,13 @@ public sealed partial class MainWindow
                 await commit(wanted);
                 applied = true;
             });
-            if (submissions.Resolve(ticket, applied) != SubmissionAnswer.Refused) return;
-            reverting = true;
-            toggle.IsOn = submissions.OnItsWayOr(current());
-            reverting = false;
+            if (submissions.Resolve(ticket, applied) == SubmissionAnswer.Refused)
+            {
+                reverting = true;
+                toggle.IsOn = submissions.OnItsWayOr(current());
+                reverting = false;
+            }
+            answered?.Invoke();
         };
         return submissions;
     }

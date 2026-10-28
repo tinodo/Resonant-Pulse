@@ -112,7 +112,7 @@ public sealed partial class MainWindow
                 throw new OperationCanceledException();
             }
             await Change("Name", item => item.Name = text);
-        });
+        }, stale: () => revision != _editorContentRevision);
         var nameField = Field(name);
         AutomationProperties.SetName(name, Named("Name"));
         TrackStudioFocus(id + "Name", name);

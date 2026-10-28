@@ -49,6 +49,17 @@ public sealed class ProgramRulesTests
     }
 
     [TestMethod]
+    public void OnlyTheConstantCurveIsSteadyWhetherItIsAskedOfAStepOrOfAChoiceThatIsStillOnItsWay()
+    {
+        // The boxes of a step follow the newest choice that has not been answered yet, which is a curve and not yet a step.
+        foreach (var ramp in ProgramEdits.Ramps)
+        {
+            Assert.AreEqual(ramp == "Constant", ProgramEdits.IsSteady(ramp), ramp);
+            Assert.AreEqual(ProgramEdits.IsSteady(ramp), ProgramEdits.IsSteady(new ProgramStep { Ramp = ramp }), ramp);
+        }
+    }
+
+    [TestMethod]
     public void EveryTempoBehaviourLeavesAValidStep()
     {
         foreach (var ramp in ProgramEdits.Ramps)

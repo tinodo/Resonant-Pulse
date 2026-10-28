@@ -27,7 +27,9 @@ internal static class ProgramEdits
     };
 
     /// <summary>The tempo behaviour of a step: it stays the same, or moves from one tempo to another.</summary>
-    internal static bool IsSteady(ProgramStep step) => step.Ramp == "Constant";
+    internal static bool IsSteady(ProgramStep step) => IsSteady(step.Ramp);
+
+    internal static bool IsSteady(string ramp) => ramp == "Constant";
 
     /// <summary>
     /// Chooses how the tempo behaves. A steady step has one tempo, which the project insists on (start and end are equal), so
