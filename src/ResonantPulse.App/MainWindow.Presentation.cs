@@ -55,6 +55,9 @@ public sealed partial class MainWindow
         // running program (or a running open-ended revision) is not misreported after a Studio edit changes the document.
         var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoRequested,
             _document.Settings.Tempo, position?.Tempo, settings.Tempo);
+        // While Tap to start listens, the dial shows the tempo the taps have so far (to the tenth, as a plain tap rounds it), so the
+        // person sees what they are about to start at. It is not the project's tempo until the last tap has saved it.
+        if (_tapIn.ShownTempo is { } tapped) tempo = tapped;
         _instrument?.Present(shownSettings, tempo, phase, plan, frame, blind, _preferences.IsReducedMotion);
         if (_tempoEdit is { } tempoEdit)
         {
@@ -137,7 +140,9 @@ public sealed partial class MainWindow
             TransportStatus.Text += "\n" + Text.Format("PracticeRemaining", duration.ToString("g", Text.Culture));
         }
         StartButton.IsEnabled = !_isBusy && !_closeFlushing && (snapshot.State == TransportState.Playing || HasSelectedOutput);
-        StopButton.IsEnabled = snapshot.State != TransportState.Stopped || IsStartPending;
+        // Stop is how a Tap to start is cancelled while the metronome is still stopped, and how a start that is on its way is.
+        StopButton.IsEnabled = snapshot.State != TransportState.Stopped || IsStartPending || IsTapStartOn;
+        RefreshTapControls();
         var startKey = snapshot.State == TransportState.Playing ? "Pause" : "Start";
         if (_lastStartLabel != Text.Get(startKey))
         {

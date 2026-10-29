@@ -86,6 +86,44 @@ public sealed class LocalWorkspaceTests
     }
 
     [TestMethod]
+    public async Task PreferencesSavedByEarlierPreviewsLoadWithTheDefaultNumberOfTaps()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "preferences.json"), """{"Language":"nl","LastView":"Settings","ExportBars":8}""");
+            var preferences = await new LocalWorkspace(root).LoadPreferencesAsync();
+            Assert.AreEqual("nl", preferences.Language);
+            Assert.AreEqual(8, preferences.ExportBars);
+            Assert.AreEqual(TapStartRules.DefaultTaps, preferences.TapInCount);
+            Assert.AreEqual(4, new Preferences().TapInCount);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public async Task TheNumberOfTapsSurvivesARestartAndAFileWithAWildValueIsBroughtIntoRangeWhenUsed()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        var workspace = new LocalWorkspace(root);
+        try
+        {
+            await workspace.SavePreferencesAsync(new Preferences { TapInCount = 7 });
+            Assert.AreEqual(7, (await new LocalWorkspace(root).LoadPreferencesAsync()).TapInCount);
+            // A settings file is untrusted input: whatever it holds, the number of taps in use is between 2 and 16.
+            foreach (var (stored, used) in new[] { (0, 2), (1, 2), (500, 16), (-9, 2), (16, 16) })
+            {
+                await File.WriteAllTextAsync(Path.Combine(root, "preferences.json"), $$"""{"TapInCount":{{stored}}}""");
+                var loaded = await new LocalWorkspace(root).LoadPreferencesAsync();
+                Assert.AreEqual(stored, loaded.TapInCount, "the file is read as it is");
+                Assert.AreEqual(used, TapStartRules.ClampTaps(loaded.TapInCount), $"{stored}");
+            }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public async Task MixedValidAndCorruptLibraryRetainsGoodProjectsAndReportsExactFailedPaths()
     {
         var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));

@@ -46,6 +46,8 @@ public sealed partial class MainWindow
     {
         _closeInProgress = true;
         _closeFlushing = true;
+        // Nothing new may start while the last save is made, so a Tap to start that is waiting for its taps or for its start ends.
+        CancelTapIn();
         var saved = false;
         var timedOut = false;
         try

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -153,39 +152,10 @@ public sealed partial class MainWindow
         }
         hero.SizeChanged += (_, _) => SizeInstrument();
 
-        // Tempo: slower, tap, faster. Always live.
+        // Tempo: slower, tap, faster. Always live. "Tap to start" sits beside them (BuildTempoRow).
         var slower = Stepper("\uE738", "TempoDown", "TempoSlower", -1);
         var faster = Stepper("\uE710", "TempoUp", "TempoFaster", 1);
-        var tapCaption = new TextBlock
-        {
-            Text = Text.Get("TapCaption"), Style = ResonantStyle("CaptionStyle"), TextWrapping = TextWrapping.NoWrap,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        var tapTitle = new TextBlock
-        {
-            Text = Text.Get("TapShort"), FontSize = 16, FontWeight = FontWeights.SemiBold,
-            Style = ResonantStyle("BodyStyle"), HorizontalAlignment = HorizontalAlignment.Center
-        };
-        var tapStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        tapStack.Children.Add(tapTitle);
-        tapStack.Children.Add(tapCaption);
-        var tap = new Button { Style = ResonantStyle("TapButtonStyle"), Content = tapStack };
-        Identify(tap, "TapTempo", Text.Get("Tap"));
-        ToolTipService.SetToolTip(tap, Text.Get("TapHelp"));
-        AutomationProperties.SetHelpText(tap, Text.Get("TapHelp"));
-        var tapIdle = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4.5) };
-        tapIdle.Tick += (_, _) => { tapIdle.Stop(); tapCaption.Text = Text.Get("TapCaption"); };
-        tap.Click += (_, _) =>
-        {
-            var estimate = _tap.Tap((double)Stopwatch.GetTimestamp() / Stopwatch.Frequency);
-            tapCaption.Text = _tap.CurrentBpm is { } bpm
-                ? Text.Format("TapProgress", _tap.AcceptedIntervals + 1, bpm.ToString("0.#", Text.Culture))
-                : Text.Get("TapAgain");
-            tapIdle.Stop();
-            tapIdle.Start();
-            if (TempoEdits.TryApplyTap(_tempoRequested ?? _document.Settings.Tempo, estimate, out var proposed))
-                RequestTempo(proposed);
-        };
+        var tap = BuildTapButton(followsProgram);
         var tempoCluster = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 14, HorizontalAlignment = HorizontalAlignment.Center
@@ -194,17 +164,19 @@ public sealed partial class MainWindow
         tempoCluster.Children.Add(tap);
         tempoCluster.Children.Add(faster);
         Identify(tempoCluster, "PlayQuickControls", Text.Get("Tempo"));
+        var tempoRow = BuildTempoRow(tempoCluster, BuildTapStart());
         var unitNotice = !followsProgram && MeterPresets.UnitNeedsFix(settings) ? BuildUnitNotice(settings) : null;
-        var tempoArea = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        // Stretched, so that the switch beside the tempo controls can use the room each side of them while they stay centred.
+        var tempoArea = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Stretch };
         if (unitNotice is not null) tempoArea.Children.Add(unitNotice);
-        tempoArea.Children.Add(tempoCluster);
+        tempoArea.Children.Add(tempoRow);
         if (followsProgram)
         {
-            slower.IsEnabled = faster.IsEnabled = tap.IsEnabled = false;
+            slower.IsEnabled = faster.IsEnabled = false;
             var programNote = new TextBlock
             {
                 Text = Text.Get("ProgramControlsNote"), Style = ResonantStyle("CaptionStyle"), TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center, MaxWidth = 420
+                TextAlignment = TextAlignment.Center, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Center
             };
             Identify(programNote, "ProgramControlsNote", programNote.Text);
             tempoArea.Children.Add(programNote);
@@ -334,7 +306,7 @@ public sealed partial class MainWindow
             var noticeRow = unitNotice.DesiredSize.Height + tempoArea.Spacing;
             // The strip's own row is not counted here: whether it needs one depends on the room left once the notice is
             // shown, and NoticeFits works that out from the strip's measured widths.
-            var otherRows = tempoCluster.ActualHeight + context.ActualHeight + 3 * page.RowSpacing;
+            var otherRows = tempoRow.ActualHeight + context.ActualHeight + 3 * page.RowSpacing;
             unitNotice.Visibility = PlayLayout.NoticeFits(page.ActualWidth, page.ActualHeight, otherRows, noticeRow,
                 railLabelledWidth, railIconsWidth, Math.Max(PlayLayout.StripHeight, rail.ActualHeight))
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -346,7 +318,7 @@ public sealed partial class MainWindow
             SizeInstrument();
         };
         context.SizeChanged += (_, _) => PlaceNotice();
-        tempoCluster.SizeChanged += (_, _) => PlaceNotice();
+        tempoRow.SizeChanged += (_, _) => PlaceNotice();
         rail.SizeChanged += (_, _) => PlaceNotice();
         page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -407,6 +379,8 @@ public sealed partial class MainWindow
         if (_document.Program.Count > 0 || _closeFlushing) return;
         var requested = Math.Clamp(Math.Round(bpm, 1), 1, 1000);
         if (!TempoEdits.IsChange(_tempoRequested ?? _document.Settings.Tempo, requested)) return;
+        // A tempo chosen by hand ends a Tap to start: the tempo its taps would save is not the one that was just asked for.
+        CancelTapIn();
         _tempoRequested = requested;
         AnnounceTempo(requested);
         RefreshSnapshot();

@@ -8,7 +8,7 @@ evidence separately.
 | Family | Implemented source | Not yet delivered or established |
 |---|---|---|
 | Core time and rendering | Rational scheduling, explicit note unit, meters/groups, subdivisions/swing, accents, layered cycles, seeded probability, gaps, two ramp domains and synthesized PCM | Configurable lane phase-transition policies, sustained tones, physical-device timing/soak results |
-| Play and transport | Native pulse instrument with an exact-tempo editor, live -/TAP/+, sheet-music time-signature picker with a custom builder, beat-strength strip with a bar for every click (the clicks that split a beat included, each with its own strength; a bar whose unit does not divide it, or of more than 128 clicks, shows its beats alone), shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; live sound, beat-strength, tempo, meter, tempo-unit, subdivision, swing, group and gap-bar edits spliced at the next pulse | Acoustic/hardware confirmation of live splices (automated checks have not played audible sound; a silent real-device run has passed); structural edits during a finite program (they need Stop + Start); calibrated audible position; tap-in and free-running/no-bar mode. Full visual/usability acceptance remains outstanding |
+| Play and transport | Native pulse instrument with an exact-tempo editor, live -/TAP/+, Tap to start (a switch at the end of the tempo controls: 2 to 16 steady taps, counted in the Tempo panel, set the tempo in the project's note unit and then start the metronome; a project with a program is scaled in proportion), sheet-music time-signature picker with a custom builder, beat-strength strip with a bar for every click (the clicks that split a beat included, each with its own strength; a bar whose unit does not divide it, or of more than 128 clicks, shows its beats alone), shared AudioGraph transport, pause/stop/mute, keyboard timing observations; first-use Windows default output, visible endpoint picker and compact Play screen; live seconds/written-beats/complete-bars auto-stop with saved-limit acknowledgment; live sound, beat-strength, tempo, meter, tempo-unit, subdivision, swing, group and gap-bar edits spliced at the next pulse | Acoustic/hardware confirmation of live splices (automated checks have not played audible sound; a silent real-device run has passed); structural edits during a finite program (they need Stop + Start); calibrated audible position; free-running/no-bar mode. Tap to start is not phase-aligned and not acoustically calibrated, nobody has listened to it, and unplugging a real output while it listens has not been tried (see below). Full visual/usability acceptance remains outstanding |
 | Studio | Lane cards (name, Mute, Solo, rotate/invert/copy/remove, the strength of each beat as a strip, clicks per cycle, cycle length, start offset, sound, volume, pan, chance), an Add lane menu with original built-ins and a Euclidean generator with a preview, practice-program steps as cards (tempo curve, bars, repeats, own time signature, silent bars, a grouped-beats project handled with Clear grouping), custom beat positions kept as exact fractions with strength, volume, chance and tie, edits applied in the order made, Undo/Redo | Pickups, nested tuplets, metric modulation, comprehensive groove/microtiming, multiselect/clipboard and notation authoring. A change made in Studio while the metronome plays is saved at once but heard only after Stop and Start |
 | Train | Practice program status, progress, planned-tempo chart and readable step rows; finite bar-authored programs, ramps and gaps (authored in Studio); a timing check whose Start, Hit and Finish are on only when they make sense | Nested/time-authored programs, live hold/repeat/skip, adaptive coaching, goals/journals/history, recorded takes |
 | Stage | Now playing (the tempo once, large) beside a Setlist; the selected song as Up next, said in words, and selecting never interrupts playback; Next + count-in on the first screen; Lock editing and Always on top switches; notes saved when focus leaves the box | Seamless transitions: Next stops/flushes/restarts. No separate conductor/compact window, pedal/global/media control |
@@ -24,7 +24,7 @@ not a signed Store release.
 
 Play makes the large, centered metronome and its BPM readout the primary
 surface; its square geometry scales to the available area. The readout opens an
-exact tempo editor; -, TAP and + sit beneath it, with the sheet-music
+exact tempo editor; -, TAP and + sit beneath it, with Tap to start at their end and the sheet-music
 time-signature picker, the beat-strength strip and the sound selector below.
 Timer (the practice timer and auto-stop), Project and Help are page tools, not
 app settings: they act on the session being played, so they live on Play, in one
@@ -46,6 +46,31 @@ and keeps the BPM number, so the click rate is unchanged. The notice is one row,
 about 50 DIP high, with the fix beside the title; it wraps the fix below the title
 only when the window is too narrow for both.
 
+Tap to start listens for taps instead of waiting for Start. It is explicit (a switch beside TAP, or nothing),
+one-shot (never saved: the application always opens stopped, silent and not listening) and available only while
+the metronome is stopped and an output is selected. It sits beside -, TAP and + with its words when there is room
+on both sides of them (the controls stay centred under the dial), as an icon alone when there is only room for that,
+as an icon at the end of the controls when the window is narrower still, and on a row of its own only in the narrowest
+windows, which costs the dial some height; the dial keeps its size at 800x600 and 1000x720. The number of taps (2 to 16,
+4 until changed) is an app preference kept in the Tempo panel: Cancel discards what was typed, Done keeps it, and it
+counts the next time the switch goes on. While it listens, TAP and the T key count the taps ("3 of 4 taps"), the dial
+shows the tempo they make so far, and Stop, Esc or the switch cancel. The tempo is the estimate to the nearest 0.1 BPM
+in the project's own note unit, so the unit is never changed; the last tap saves it as one edit of the project (one
+step of Undo) and only then runs the normal Start, so the project's count-in still plays. A tap that is not steady
+(a bounce, a tap far from the beat of the earlier ones, a tap that is not later than the one before) ends the run and
+the count begins again ("Tap again"); a pause of more than four seconds begins a new count; so taps that are not steady
+never start playback. A project with a program is scaled in proportion: the first step starts at the tapped tempo and
+every step's start and end tempo is multiplied by the same exact ratio (meters, ramps, repeats, count-in and the
+setlist are untouched); TAP works only while the switch is on, because there is no tempo of its own to tap, and the
+number of taps cannot be changed then (the tempo readout is not a button). A tempo outside 1 to 1000 BPM, a project that
+is locked, or a tempo that could not be saved starts nothing. Stop, a start or pause by hand, a tempo chosen by hand,
+leaving Play or changing the language, a change or loss of the chosen output, sleep and closing the window all cancel
+it, and nothing arms it again. While it listens a Windows device watcher reports the chosen output being removed or
+updated, so the intent ends then and not after the last tap; the watcher exists only while the intent does, and if
+Windows cannot watch the outputs the switch stays off and says so (Start still works). It is not phase-aligned (a tap
+is timed when the window handles it, not when the key went down; the start follows the last tap by the time saving and
+preparing the audio take, plus the count-in) and it is not acoustically calibrated.
+
 Live edits prepare immutable replacement revisions off the audio callback.
 Sound and beat-strength changes switch at the next audio quantum on the same
 musical clock (also during a finite program) and preserve prior attack tails.
@@ -56,7 +81,7 @@ at beat 1 without replaying the count-in. Earlier clicks keep ringing under the
 new revision; the wall-clock practice timer keeps its absolute stop frame, while
 beat and bar limits are counted from the restart. Only the newest unapplied
 request survives, so rapid taps coalesce. A finite program keeps its own clock:
-Play replaces its tempo and meter controls with an explanation, and structural
+Play replaces its tempo and meter controls with an explanation (TAP then works only for Tap to start, above), and structural
 changes made elsewhere need Stop + Start. Explicit pulse edits take precedence
 over automatic grouping emphasis only for edited slots; per-slot
 `ManualAccentIndices`, the strengths of split clicks (`SubdivisionAccents`) and the explicit All Normal override are saved in

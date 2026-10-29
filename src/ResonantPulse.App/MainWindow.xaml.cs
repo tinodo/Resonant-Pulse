@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Windowing;
@@ -196,6 +197,8 @@ public sealed partial class MainWindow : Window
         {
             _isClosed = true;
             _refresh.Stop();
+            try { StopOutputWatch(); }
+            catch (Exception exception) { Diagnostics.Write("Output watch shutdown", exception); }
             RemovePowerHook(hwnd);
             _transport.Dispose();
             Diagnostics.Write($"Native window closed: {DescribeClose()}");
@@ -272,6 +275,10 @@ public sealed partial class MainWindow : Window
 
     private void BuildPage()
     {
+        // The controls of Tap to start go with the page: a rebuilt page (another page, a language, a changed project) never keeps
+        // an intent whose switch and counter it no longer shows.
+        CancelTapIn();
+        ReleaseTapControls();
         _pageGeneration++;
         // The notes box is about to be replaced. What was typed in it goes with the request that saves it, not with the box, so
         // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
@@ -319,6 +326,8 @@ public sealed partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
+        // Starting or pausing by hand ends a Tap to start that was waiting for its taps (or for its start): the person has chosen.
+        CancelTapIn();
         // While the window closes nothing new may start or resume (Stop and Mute stay available), whichever button or key asked.
         if (_isBusy || !_isReady || _closeFlushing) return;
         InvalidateTiming();
@@ -395,6 +404,9 @@ public sealed partial class MainWindow : Window
     {
         _transportIntent++;
         _startWait?.Cancel();
+        // Tap to start is intent to start too: whatever overtakes the transport's intent (Stop, a change of output, sleep, a replaced
+        // project) ends it, so none of those can forget it.
+        CancelTapIn();
     }
 
     /// <summary>
@@ -561,10 +573,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowNotice(string key)
+    private void ShowNotice(string key) => ShowNoticeText(Text.Get(key));
+
+    private void ShowNoticeText(string text)
     {
         Notice.Severity = InfoBarSeverity.Informational;
-        Notice.Title = Text.Get(key);
+        Notice.Title = text;
         Notice.Message = "";
         Notice.IsOpen = true;
         // Informational notices (restored session, saved) fade away; errors stay until dismissed.
@@ -605,7 +619,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(Navigation, Text.Get("Destinations"));
     }
 
-    private static void LabelButton(Button button, string key, string? glyph = null)
+    private static void LabelButton(ButtonBase button, string key, string? glyph = null)
     {
         FrameworkElement content = new TextBlock
         {
@@ -675,6 +689,13 @@ public sealed partial class MainWindow : Window
     private void OnKeyDown(object sender, KeyRoutedEventArgs args)
     {
         if (_isDialogOpen || !_isReady) return;
+        // Esc ends Tap to start, unless a panel is open: Esc closes that first, as it always does.
+        if (args.Key == VirtualKey.Escape && IsTapStartOn && !HasOpenPanel())
+        {
+            CancelTapIn();
+            args.Handled = true;
+            return;
+        }
         var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (ctrl && args.Key == VirtualKey.M)
@@ -695,7 +716,13 @@ public sealed partial class MainWindow : Window
         var focused = FocusManager.GetFocusedElement(Root.XamlRoot);
         if (focused is TextBox or PasswordBox or NumberBox or ComboBox or Slider) return;
         // NumberBox focuses its inner TextBox; do not intercept normal typing.
-        if (args.Key == VirtualKey.F && _isTimingArmed)
+        if (!ctrl && args.Key == VirtualKey.T && _view == "Play" && _tapOnce is not null && !HasOpenPanel())
+        {
+            // The key repeats while it is held down; a held key is one tap, not a run of them.
+            if (!args.KeyStatus.WasKeyDown) _tapOnce();
+            args.Handled = true;
+        }
+        else if (args.Key == VirtualKey.F && _isTimingArmed)
         {
             if (!args.KeyStatus.WasKeyDown) RecordAttack();
             args.Handled = true;

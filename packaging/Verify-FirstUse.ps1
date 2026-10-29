@@ -267,6 +267,44 @@ function Test-PlayTools {
     }
     return @{ labelled = $labelled; buttonHeight = $rects[0].Height }
 }
+# "Tap to start" sits with the tempo controls and takes nothing from the dial (docs/design/pages-design.md, Play): beside them with
+# its words, beside them as an icon, appended to them as an icon (the two together are then what is centred), or, only when none of
+# those fits, on a row of its own under them. It never overlaps a control, it is level with the controls it sits beside, and under
+# the dial either the tempo controls or the group of them and the switch are centred. Measured only once both have stopped moving.
+function Test-TapStartRow([string]$where) {
+    Wait-Settled 'TapStart'
+    Wait-Settled 'PlayQuickControls'
+    $dial = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    $cluster = (Find-Control 'PlayQuickControls').Current.BoundingRectangle
+    $toggle = (Find-Control 'TapStart').Current.BoundingRectangle
+    $page = (Get-CurrentWindow).Current.BoundingRectangle
+    if ($toggle.IsEmpty -or $cluster.IsEmpty) { throw "${where}: Tap to start or the tempo controls have no rectangle ($toggle, $cluster)." }
+    Test-Visible $toggle $page "${where}: Tap to start"
+    $one = 1 * $scale
+    if ($toggle.Left -lt $cluster.Right - $one -and $toggle.Right -gt $cluster.Left + $one -and
+        $toggle.Top -lt $cluster.Bottom - $one -and $toggle.Bottom -gt $cluster.Top + $one) {
+        throw "${where}: Tap to start overlaps the tempo controls ($toggle over $cluster)."
+    }
+    $dialCentre = $dial.X + $dial.Width / 2
+    $clusterCentre = $cluster.X + $cluster.Width / 2
+    $groupCentre = ([Math]::Min($cluster.Left, $toggle.Left) + [Math]::Max($cluster.Right, $toggle.Right)) / 2
+    $beside = $toggle.Left -ge $cluster.Right - $one
+    $tolerance = 3 * $scale
+    if ([Math]::Abs($clusterCentre - $dialCentre) -gt $tolerance -and -not ($beside -and [Math]::Abs($groupCentre - $dialCentre) -le $tolerance)) {
+        throw "${where}: neither the tempo controls nor the tempo controls with Tap to start are centred under the dial (dial $dial, controls $cluster, switch $toggle)."
+    }
+    if ($beside) {
+        Test-OneLine "${where}: Tap to start and the tempo controls" $toggle $cluster
+    } else {
+        if ($toggle.Top -lt $cluster.Bottom - $one) { throw "${where}: Tap to start is neither beside nor under the tempo controls ($toggle, $cluster)." }
+        if ([Math]::Abs(($toggle.X + $toggle.Width / 2) - $clusterCentre) -gt $tolerance) {
+            throw "${where}: Tap to start is not centred under the tempo controls ($toggle, $cluster)."
+        }
+    }
+    $form = if (-not $beside) { 'own-row' } elseif ($toggle.Width -gt 60 * $scale) { 'beside-with-words' }
+        elseif ($toggle.Left - $cluster.Right -lt 20 * $scale) { 'appended-icon' } else { 'beside-icon' }
+    return @{ form = $form; switchWidth = [Math]::Round($toggle.Width / $scale, 1); dialWidth = [Math]::Round($dial.Width / $scale, 1) }
+}
 # Every beat of a quick-pick meter is fully inside the beat strip's own viewport, so the strip needs no scroll bar (a bar is
 # drawn over the beat numbers) and shows no "more beats" cue. 12/8, with its three group gaps, is the widest quick pick;
 # sizing the cells without the gaps once made it overflow by about 20 DIP, so its last beat was cut off and a scroll bar
@@ -404,7 +442,7 @@ if (-not $openedOn.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::
     throw 'The application did not open on Play, although the page saved last was Settings.'
 }
 $bounds = $window.Current.BoundingRectangle
-$primary = @('PhaseInstrument', 'TempoEdit', 'TempoDown', 'TapTempo', 'TempoUp', 'QuickMeter', 'MainSound', 'MainAccent0',
+$primary = @('PhaseInstrument', 'TempoEdit', 'TempoDown', 'TapTempo', 'TempoUp', 'TapStart', 'QuickMeter', 'MainSound', 'MainAccent0',
     'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'TransportStop', 'EmergencyMute')
 $controls = @()
 foreach ($id in $primary) {
@@ -423,6 +461,10 @@ $startRect = (Find-Control 'TransportStartPause').Current.BoundingRectangle
 if ($startRect.Width -gt $bounds.Width * 0.35) { throw 'Start still stretches across the window.' }
 $instrumentEvidence = Test-InstrumentHierarchy
 $toolsEvidence = Test-PlayTools
+# Tap to start is never remembered: the application always opens stopped, silent and not listening for taps.
+$tapStartSwitch = (Find-Control 'TapStart').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+if ($tapStartSwitch.Current.ToggleState -ne [Windows.Automation.ToggleState]::Off) { throw 'Tap to start is on when the application opens.' }
+$tapStartEvidence = @{ firstUse = Test-TapStartRow 'First-use window' }
 $resizeEvidence = @()
 foreach ($size in @(@(800, 600), @(1000, 720))) {
     Resize-To $size[0] $size[1]
@@ -439,9 +481,13 @@ foreach ($size in @(@(800, 600), @(1000, 720))) {
     }
     $composition = Test-InstrumentHierarchy
     $tools = Test-PlayTools
+    # At the sizes people use, the switch has its words and the dial keeps all of its room (Test-InstrumentHierarchy holds it to 220).
+    $tapStartRow = Test-TapStartRow "Play at $($size[0])x$($size[1])"
+    if ($tapStartRow.form -ne 'beside-with-words') { throw "Tap to start should sit beside the tempo controls with its words at $($size[0])x$($size[1]): $($tapStartRow.form)" }
+    $tapStartEvidence["$($size[0])x$($size[1])"] = $tapStartRow
     $numeralOffset = Test-NumeralCentering $screenshot
     $resizeEvidence += @{width=$size[0];height=$size[1];settingsVisible=$true;primaryControlsVisible=$true;instrument=$composition;
-        tools=$tools;numeralOffsetPixels=$numeralOffset}
+        tools=$tools;numeralOffsetPixels=$numeralOffset;tapStart=$tapStartRow}
 }
 # Live-looking tempo: the readout answers immediately, Cancel discards, Done applies.
 Resize-To 800 600
@@ -467,6 +513,32 @@ Set-Number 'Tempo' 120
 Invoke-Control 'TempoOptionsDone'
 Wait-Until { (Get-Dial) -like '120*BPM*' } 'The original tempo did not restore.'
 Wait-Absent 'TempoOptionsDone'
+# The number of taps that start the metronome is a setting of the application, kept in the Tempo panel beside the tempo it is for:
+# Cancel discards what was typed, Done keeps it, and the field shows it again whenever the panel is opened.
+function Get-TapCount { (Find-Control 'TapInCount').GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.Value }
+function Open-TapCount {
+    Open-Panel @('TempoEdit') 'TapInCount'
+    Wait-Settled 'TapInCount'
+}
+Open-TapCount
+if ((Get-TapCount) -ne 4) { throw "The number of taps to start does not begin at 4: $(Get-TapCount)" }
+Set-Number 'TapInCount' 7
+Invoke-Control 'TempoOptionsCancel'
+Wait-Absent 'TempoOptionsCancel'
+Open-TapCount
+if ((Get-TapCount) -ne 4) { throw "Cancel kept a draft number of taps to start: $(Get-TapCount)" }
+Set-Number 'TapInCount' 7
+Invoke-Control 'TempoOptionsDone'
+Wait-Absent 'TempoOptionsDone'
+Open-TapCount
+Wait-Until { (Get-TapCount) -eq 7 } 'Done did not keep the number of taps to start.'
+Set-Number 'TapInCount' 4
+Invoke-Control 'TempoOptionsDone'
+Wait-Absent 'TempoOptionsDone'
+Open-TapCount
+Wait-Until { (Get-TapCount) -eq 4 } 'The number of taps to start did not return to 4.'
+Invoke-Control 'TempoOptionsCancel'
+Wait-Absent 'TempoOptionsCancel'
 # Beat strength: a tap changes only that beat, and the name says what it is now.
 $before = (Find-Control 'MainAccent1').Current.Name
 Invoke-Control 'MainAccent1'
@@ -533,11 +605,18 @@ foreach ($size in @(@(400, 720), @(320, 900))) {
     Start-Sleep -Milliseconds 500
     $currentBounds = (Get-CurrentWindow).Current.BoundingRectangle
     $null = Save-PlayScreenshot "play-$($size[0])x$($size[1]).png"
-    foreach ($id in 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions', 'TempoDown', 'TapTempo', 'TempoUp', 'QuickMeter') {
+    foreach ($id in 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions', 'TempoDown', 'TapTempo', 'TempoUp', 'TapStart', 'QuickMeter') {
         $element = Find-Control $id
         if ($element.Current.IsOffscreen -or -not $currentBounds.Contains($element.Current.BoundingRectangle)) {
             throw "Command is inaccessible at $($size[0])x$($size[1]): $id"
         }
+    }
+    $tapStartRow = Test-TapStartRow "Play at $($size[0])x$($size[1])"
+    $tapStartEvidence["$($size[0])x$($size[1])"] = $tapStartRow
+    # The switch gives way before the dial does: in a narrow window it shrinks to its icon and sits at the end of the tempo controls
+    # rather than take a row of its own (a row costs the dial about 50 DIP of height, and the dial is what the page is for).
+    if ($size[0] -eq 400 -and ($tapStartRow.form -eq 'own-row' -or $tapStartRow.dialWidth -lt 120)) {
+        throw "At 400x720 Tap to start took room from the dial: $($tapStartRow.form), dial $($tapStartRow.dialWidth) DIP across."
     }
     $soundControl = Find-Control 'MainSound'
     if ($soundControl.Current.IsOffscreen -or -not $currentBounds.Contains($soundControl.Current.BoundingRectangle) -or
@@ -641,7 +720,7 @@ $panels = @(
     @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
       limits=@{MeterBeats=200; MeterDenominator=330; MeterGroups=300; Subdivision=200; Swing=200; CountInBars=200; AudibleBars=200; SilentBars=200}},
     @{open=@('TempoEdit');                  field='TempoUnit';         close='TempoOptionsCancel'; focus='TempoOptionsCancel'
-      limits=@{Tempo=260; TempoUnit=330}},
+      limits=@{Tempo=260; TempoUnit=330; TapInCount=200}},
     @{open=@('PracticeTimer');              field='PracticeSeconds';   close='PracticeTimerOptionsCancel'; focus='PracticeTimerOptionsCancel'
       limits=@{PracticeSeconds=200; PracticeBeats=200; PracticeBars=200}},
     @{open=@('ProjectOptions');             field='DocumentName';      close='ProjectOptionsPanelCancel'; focus='ProjectOptionsPanelCancel'
@@ -909,20 +988,179 @@ Invoke-Control 'AudioOptions'
 $picker = Find-Control 'AudioOutputPicker'
 $selection = $picker.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
 Invoke-Control 'AudioOptionsClose'
+# Tap to start puts its state where a person (and a screen reader) can read it: the switch is a toggle, and TAP carries
+# "idle", "armed:<taps counted>:<taps asked for>:<1 if the last tap was uneven>" or "preparing" as its status.
+function Get-TapStatus { (Find-Control 'TapTempo').Current.ItemStatus }
+function Get-TapStartState { (Find-Control 'TapStart').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState }
+function Wait-TapStartState([bool]$on, [string]$failure) {
+    $wanted = if ($on) { [Windows.Automation.ToggleState]::On } else { [Windows.Automation.ToggleState]::Off }
+    Wait-Condition { (Get-TapStartState) -eq $wanted } "$failure (the switch is $(Get-TapStartState); TAP reports '$(Get-TapStatus)')" 10
+}
+function Switch-TapStart([bool]$on, [string]$failure) {
+    $pattern = (Find-Control 'TapStart').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+    $wanted = if ($on) { [Windows.Automation.ToggleState]::On } else { [Windows.Automation.ToggleState]::Off }
+    if ($pattern.Current.ToggleState -ne $wanted) { $pattern.Toggle() }
+    Wait-TapStartState $on $failure
+}
+function Wait-TapStatus([string]$expected, [string]$what, [int]$seconds = 10) {
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    do {
+        if ((Get-TapStatus) -like $expected) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "$what (TAP reports '$(Get-TapStatus)', expected '$expected'; the switch is $(Get-TapStartState); $((Find-Control 'TransportStatus').Current.Name))"
+}
+function Get-DialNumber { [double]::Parse(((Get-Dial) -split ' ')[0], [Globalization.CultureInfo]::InvariantCulture) }
+function Set-TapCount([int]$count) {
+    Open-Panel @('TempoEdit') 'TapInCount'
+    Wait-Settled 'TapInCount'
+    Set-Number 'TapInCount' $count
+    Invoke-Control 'TempoOptionsDone'
+    Wait-Absent 'TempoOptionsDone'
+}
+# The wiring of Tap to start with the real transport, on a machine that has an output (the local gate; a hosted runner has none). The
+# estimator and the session are held by unit tests with exact timings; here taps are made through UI Automation, whose timing is
+# not exact, so nothing below depends on how evenly they are spaced except the one check that reads the interval from the dial first.
+function Test-TapStartWithOutput {
+    $script:tapStartDone = [System.Collections.Generic.List[string]]::new()
+    if (-not (Find-Control 'TapStart').Current.IsEnabled) { throw 'Tap to start is off although an output is selected and nothing plays.' }
+    if ((Get-TapStartState) -ne [Windows.Automation.ToggleState]::Off -or (Get-TapStatus) -ne 'idle') {
+        throw "Tap to start is not idle at the start of the checks: $(Get-TapStatus)"
+    }
+    if ((Find-Control 'TransportStop').Current.IsEnabled) { throw 'Stop is available while nothing plays and nothing listens.' }
+    # Switching it on listens, counts nothing yet and makes Stop available (it cancels); switching it off ends it.
+    Switch-TapStart $true 'Tap to start did not switch on.'
+    Wait-TapStatus 'armed:0:4:0' 'Tap to start did not listen for four taps.'
+    if (-not (Find-Control 'TransportStop').Current.IsEnabled) { throw 'Stop is not available while Tap to start listens.' }
+    if (-not (Find-Control 'TapTempo').Current.IsEnabled) { throw 'TAP is off while Tap to start listens.' }
+    Switch-TapStart $false 'Tap to start did not switch off.'
+    Wait-TapStatus 'idle' 'Switching Tap to start off left TAP counting.'
+    $script:tapStartDone.Add('switch-on-and-off')
+    # Stop cancels it.
+    Switch-TapStart $true 'Tap to start did not switch on again.'
+    Wait-TapStatus 'armed:0:4:0' 'Tap to start did not listen again.'
+    Invoke-Control 'TransportStop'
+    Wait-TapStartState $false 'Stop did not cancel Tap to start.'
+    Wait-TapStatus 'idle' 'Stop left TAP counting.'
+    $script:tapStartDone.Add('stop-cancels')
+    # So does starting by hand, and while the metronome plays the switch is off (a tap-in cannot start what already plays).
+    Switch-TapStart $true 'Tap to start did not switch on for the manual start.'
+    Wait-TapStatus 'armed:0:4:0' 'Tap to start did not listen before the manual start.'
+    Invoke-Control 'TransportStartPause'
+    $null = Wait-Transport 'Playing'
+    Wait-TapStartState $false 'Starting by hand did not end Tap to start.'
+    Wait-TapStatus 'idle' 'Starting by hand left TAP counting.'
+    if ((Find-Control 'TapStart').Current.IsEnabled) { throw 'Tap to start can be switched on while the metronome plays.' }
+    Invoke-Control 'TransportStop'
+    $null = Wait-Transport 'Stopped'
+    $script:tapStartDone.Add('manual-start-cancels-and-the-switch-is-off-while-playing')
+    # Leaving the page ends it: the page that is built again has no intent.
+    Switch-TapStart $true 'Tap to start did not switch on before leaving Play.'
+    Select-Destination 'DestinationStudio'
+    Wait-Settled 'AddLane'
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Wait-TapStartState $false 'Leaving Play did not end Tap to start.'
+    Wait-TapStatus 'idle' 'Leaving Play left TAP counting.'
+    $script:tapStartDone.Add('leaving-the-page-cancels')
+    # A tempo chosen by hand ends it too: the tempo its taps would save is not the one just asked for.
+    Switch-TapStart $true 'Tap to start did not switch on before a tempo was chosen.'
+    Invoke-Control 'TempoUp'
+    Wait-TapStartState $false 'Choosing a tempo by hand did not end Tap to start.'
+    Wait-Until { (Get-Dial) -like '121*BPM*' } 'Tempo + did not change the tempo after it ended Tap to start.'
+    Invoke-Control 'TempoDown'
+    Wait-Until { (Get-Dial) -like '120*BPM*' } 'The tempo did not return to 120.'
+    $script:tapStartDone.Add('tempo-by-hand-cancels')
+    # An uneven tap starts the count again and the dial goes back to the project's tempo (the estimate it showed is not what a start
+    # would use). The taps are made through one button that is found once, and nothing is read in between: finding a control and
+    # pressing a button each take as long as UI Automation takes on this desktop (a press took 2.0 seconds on the private desktop of
+    # the local gate), and the taps are as late as the presses are. So the pauses follow what was measured: the second tap comes
+    # as soon as a beat of 0.3 seconds allows, and the third after about 2.2 times that beat, which is too far from it to be
+    # steady and still short of the idle time (4 seconds, or three beats if that is longer) after which counting would simply
+    # begin again. A run whose timing cannot tell the two apart is reported as not run, not as passed.
+    Switch-TapStart $true 'Tap to start did not switch on for the uneven tap.'
+    Wait-TapStatus 'armed:0:4:0' 'Tap to start did not listen for the uneven tap.'
+    $tapButton = (Find-Control 'TapTempo').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $tapButton.Invoke(); $firstTap = $clock.Elapsed.TotalSeconds
+    $pause = [Math]::Max(0, 0.3 - $firstTap)
+    Start-Sleep -Milliseconds ([int]($pause * 1000))
+    $tapButton.Invoke(); $secondTap = $clock.Elapsed.TotalSeconds
+    $beat = $secondTap - $firstTap
+    $pressTime = [Math]::Max(0, $beat - $pause)
+    Start-Sleep -Milliseconds ([int]([Math]::Max(0, 2.2 * $beat - $pressTime) * 1000))
+    $tapButton.Invoke(); $thirdTap = $clock.Elapsed.TotalSeconds
+    $late = $thirdTap - $secondTap
+    if ($beat -ge 0.08 -and $late -gt 1.3 * $beat + 0.25 -and $late -lt [Math]::Max(4, 3 * $beat) - 0.4) {
+        Wait-TapStatus 'armed:0:4:1' "An uneven tap did not start the count again (the taps were $([Math]::Round($beat, 2)) and $([Math]::Round($late, 2)) seconds apart)."
+        Wait-Until { (Get-Dial) -like '120*BPM*' } 'The dial kept an estimate after an uneven tap.'
+        $script:tapStartDone.Add("uneven-tap-restarts-the-count-taps-$([Math]::Round($beat, 2))-and-$([Math]::Round($late, 2))-seconds-apart")
+    } else {
+        $script:tapStartDone.Add("uneven-tap-not-run-the-taps-were-$([Math]::Round($beat, 2))-and-$([Math]::Round($late, 2))-seconds-apart")
+    }
+    Invoke-Control 'TransportStop'
+    Wait-TapStartState $false 'Stop did not cancel the count after an uneven tap.'
+    # The start: two taps are the fewest that make a tempo, and the first interval is always taken, so this does not depend on how
+    # evenly the taps are spaced, only on their being less than four seconds apart (hence the one button found beforehand). The
+    # tempo that starts is the tempo the project keeps.
+    Set-TapCount 2
+    try {
+        Switch-TapStart $true 'Tap to start did not switch on for the start.'
+        Wait-TapStatus 'armed:0:2:0' 'The number of taps that was chosen is not the one asked for.'
+        $tapButton = (Find-Control 'TapTempo').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
+        $tapButton.Invoke()
+        Start-Sleep -Milliseconds 300
+        $tapButton.Invoke()
+        $null = Wait-Transport 'Playing'
+        Wait-TapStartState $false 'Tap to start stayed on after it started the metronome.'
+        Wait-TapStatus 'idle' 'TAP kept counting after the start.'
+        $playingStatus = (Find-Control 'TransportStatus').Current.ItemStatus
+        if ($playingStatus -match ';tempo=([0-9.]+);') { $played = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture) }
+        else { throw "The playing revision reports no tempo: $playingStatus" }
+        if ($played -lt 15 -or $played -gt 1000) { throw "Tap to start played an impossible tempo: $played" }
+        if ([Math]::Abs((Get-DialNumber) - $played) -gt 0.05) { throw "The dial shows $(Get-Dial), but the audio plays at $played." }
+        Invoke-Control 'TransportStop'
+        $null = Wait-Transport 'Stopped'
+        Wait-Until { [Math]::Abs((Get-DialNumber) - $played) -le 0.05 } "The tempo that started ($played) is not the tempo the project kept ($(Get-Dial))."
+        $script:tapStartDone.Add("two-taps-start-the-metronome-at-the-tapped-tempo-$played")
+    } finally {
+        if ((Get-TapStartState) -eq [Windows.Automation.ToggleState]::On) { Switch-TapStart $false 'Tap to start could not be switched off.' }
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
+            Invoke-Control 'TransportStop'
+            $null = Wait-Transport 'Stopped'
+        }
+        Open-Panel @('TempoEdit') 'Tempo'
+        Wait-Settled 'Tempo'
+        Set-Number 'Tempo' 120
+        Invoke-Control 'TempoOptionsDone'
+        Wait-Absent 'TempoOptionsDone'
+        Wait-Until { (Get-Dial) -like '120*BPM*' } 'The tempo did not return to 120 after the tap-in checks.'
+        Set-TapCount 4
+    }
+    Assert-NoErrorNotice 'Tap to start'
+}
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
 $liveSound = 'not-run-no-output'
 $liveTempoAndMeter = 'not-run-no-output'
 $liveSplitClicks = 'not-run-no-output'
+$tapStartSwitching = 'not-run-no-output'
 if (-not $playAudio) {
     $playback = 'not-run-audio-disabled'
     $practiceStops = 'not-run-audio-disabled'
     $liveSound = 'not-run-audio-disabled'
     $liveTempoAndMeter = 'not-run-audio-disabled'
     $liveSplitClicks = 'not-run-audio-disabled'
+    $tapStartSwitching = 'not-run-audio-disabled'
 } elseif ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
+    # Tap to start starts the metronome, so it needs an output to start on: without one the switch is off and says why.
+    $tapStartSwitch = Find-Control 'TapStart'
+    if ($tapStartSwitch.Current.IsEnabled) { throw 'Tap to start can be switched on without a selected output.' }
+    if ([string]::IsNullOrWhiteSpace($tapStartSwitch.Current.HelpText)) { throw 'Tap to start is off without a selected output and does not say why.' }
+    if (-not (Find-Control 'TapTempo').Current.IsEnabled) { throw 'TAP does not work without an output: setting the tempo by tapping needs no sound.' }
+    $tapStartSwitching = 'off-without-an-output-and-says-why'
 } else {
     if (-not $start.Current.IsEnabled) { throw 'Start is disabled despite a selected output.' }
     try {
@@ -1067,6 +1305,8 @@ if (-not $playAudio) {
         $null = Wait-Transport 'Stopped'
         Set-PracticeLimits 0 0 0
     }
+    Test-TapStartWithOutput
+    $tapStartSwitching = $script:tapStartDone -join ', '
 }
 # Studio: lanes are added from one menu; every field of a lane applies as it is changed (no Apply button on a lane) and the page is
 # not rebuilt, so the focus, the caret and the scroll position stay; each change is one step of Undo. This runs after the playback
@@ -1338,6 +1578,15 @@ Select-Combo 'Language' 'Nederlands'
 Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -ne 'Play' } 'The interface did not switch to Dutch.'
 Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
+# Tap to start in Dutch: its words are longer, and still it sits beside the tempo controls with them at the sizes people use.
+$tapStartEvidence['dutch'] = Test-TapStartRow 'Dutch Play'
+Resize-To 800 600
+Start-Sleep -Milliseconds 500
+$tapStartDutch = Test-TapStartRow 'Dutch Play at 800x600'
+if ($tapStartDutch.form -ne 'beside-with-words') { throw "In Dutch Tap to start should have its words beside the tempo controls at 800x600: $($tapStartDutch.form)" }
+$tapStartEvidence['dutch800x600'] = $tapStartDutch
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 foreach ($panel in $panels) {
     if ($panel.close -notlike '*Cancel') { continue }
     $before = @(Get-AllButtons | ForEach-Object { $_.Current.AutomationId } | Where-Object { $_ })
@@ -1421,6 +1670,7 @@ Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
+  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

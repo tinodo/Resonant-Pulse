@@ -219,7 +219,10 @@ outliers/missed taps, and reacquires after three consistent changed intervals.
 Nonmonotonic taps are rejected without shifting the timestamp reference.
 `IdleResetSeconds` defaults to 4; raise it explicitly for very slow initial
 tapping. Long idle starts a new estimate. Check `LastTapAccepted` for tap-in
-start behavior; rejected input must not trigger playback.
+start behavior; rejected input must not trigger playback. A tap-in that starts
+playback sets `RejectEarlyOutliers`, which applies the outlier gate after the
+first interval instead of after three, so a single odd interval is distrusted at
+once and a tap that is not steady never starts anything.
 
 Timing alignment maximizes chronological matches, then minimizes absolute
 offset with deterministic tie handling. Sorted copies retain original indices.

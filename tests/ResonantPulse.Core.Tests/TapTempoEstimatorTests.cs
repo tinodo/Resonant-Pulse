@@ -141,4 +141,52 @@ public sealed class TapTempoEstimatorTests
             }
         }
     }
+
+    [TestMethod]
+    public void RejectEarlyOutliers_AppliesTheOutlierGateAfterTheFirstInterval()
+    {
+        // 0.5 s then 1.0 s. The regular estimator needs three intervals before it distrusts one, so it takes the second
+        // interval and its median moves; an armed tap-in distrusts it at once, because one wrong tap must never start playback.
+        var regular = new TapTempoEstimator();
+        var strict = new TapTempoEstimator { RejectEarlyOutliers = true };
+        foreach (var time in new[] { 0d, 0.5, 1.5 }) { regular.Tap(time); strict.Tap(time); }
+        Assert.IsTrue(regular.LastTapAccepted);
+        Assert.AreEqual(2, regular.AcceptedIntervals);
+        Assert.AreEqual(80d, regular.CurrentBpm!.Value, 1e-10);
+        Assert.IsFalse(strict.LastTapAccepted);
+        Assert.AreEqual(1, strict.AcceptedIntervals);
+        Assert.AreEqual(1, strict.RejectedTaps);
+        Assert.AreEqual(120d, strict.CurrentBpm!.Value, 1e-10);
+    }
+
+    [TestMethod]
+    public void RejectEarlyOutliers_IsOffByDefaultAndChangesNothingForSteadyTaps()
+    {
+        Assert.IsFalse(new TapTempoEstimator().RejectEarlyOutliers);
+        var regular = new TapTempoEstimator();
+        var strict = new TapTempoEstimator { RejectEarlyOutliers = true };
+        for (var tap = 0; tap < 8; tap++)
+        {
+            regular.Tap(tap * 0.625);
+            strict.Tap(tap * 0.625);
+            Assert.IsTrue(strict.LastTapAccepted, $"tap {tap}");
+            Assert.AreEqual(regular.CurrentBpm, strict.CurrentBpm, $"tap {tap}");
+        }
+        Assert.AreEqual(96d, strict.CurrentBpm!.Value, 1e-10);
+        Assert.AreEqual(0, strict.RejectedTaps);
+    }
+
+    [TestMethod]
+    public void RejectEarlyOutliers_StillFollowsThreeConsistentChangesOfTempo()
+    {
+        // The strict gate must not make an intentional tempo change impossible: three consistent new intervals replace the old ones.
+        var tap = new TapTempoEstimator { RejectEarlyOutliers = true };
+        tap.Tap(0); tap.Tap(0.5);
+        Assert.AreEqual(120d, tap.CurrentBpm!.Value, 1e-10);
+        tap.Tap(1.25); Assert.IsFalse(tap.LastTapAccepted);
+        tap.Tap(2); Assert.IsFalse(tap.LastTapAccepted);
+        Assert.AreEqual(80d, tap.Tap(2.75)!.Value, 1e-10);
+        Assert.IsTrue(tap.LastTapAccepted);
+        Assert.AreEqual(3, tap.AcceptedIntervals);
+    }
 }

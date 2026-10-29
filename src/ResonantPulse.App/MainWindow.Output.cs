@@ -22,6 +22,8 @@ public sealed partial class MainWindow
             (_preferences.OutputId != selected.Id || _preferences.OutputName != selected.Name);
         _outputDevices = devices;
         _isOutputMissing = !string.IsNullOrWhiteSpace(_preferences.OutputId) && selected is null;
+        // A refresh that finds the chosen output gone ends a Tap to start that was waiting for it.
+        if (selected is null) CancelTapIn("TapStartOutputChanged");
         if (selected is not null)
         {
             _preferences.OutputId = selected.Id;
