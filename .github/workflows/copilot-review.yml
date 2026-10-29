@@ -29,7 +29,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Native rules request reviews, including bot PRs, without storing an owner token.
+          # Native rules request reviews without storing an owner token. They cover pull requests created by people with Copilot
+          # access, not those that Dependabot opens (docs/RELEASING.md says how to request those by hand).
           # No checkout or PR code execution; only read-only review metadata.
           rules=$(gh api "repos/$GH_REPO/rules/branches/$BASE_REF" -H 'X-GitHub-Api-Version: 2026-03-10')
           jq -e 'any(.[]; .type == "copilot_code_review" and .parameters.review_on_push == true)' \
