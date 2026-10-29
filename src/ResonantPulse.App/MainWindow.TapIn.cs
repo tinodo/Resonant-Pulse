@@ -114,8 +114,13 @@ public sealed partial class MainWindow
     /// The row under the dial: slower, TAP and faster stay centred, and the switch sits to their right with its words when there
     /// is room beside them, as an icon alone when there is only room for that, and on a row of its own below them otherwise
     /// (<see cref="PlayLayout.ChooseTapStart"/>). Centring is what keeps the dial the one thing the eye lands on.
+    /// <paramref name="room"/> is the element whose width is the room the row has: it must not depend on what the row holds. The
+    /// row itself cannot say: a row that is wider than its slot is arranged at its own desired width and clipped, so after the icon
+    /// had been appended (the group is then exactly as wide as the appended form needs) the row reported that width, appended
+    /// looked as if it fitted, and the switch stayed pushed out of the window with 2 DIP of it showing. Whether the layout rounding
+    /// of the display lets that happen depends on the display's scale, which is why it showed at 100 % and not at 150 %.
     /// </summary>
-    private Grid BuildTempoRow(StackPanel cluster, ToggleButton toggle)
+    private Grid BuildTempoRow(StackPanel cluster, ToggleButton toggle, FrameworkElement room)
     {
         var row = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -173,21 +178,22 @@ public sealed partial class MainWindow
         }
         void Place()
         {
-            if (row.ActualWidth <= 0 || cluster.ActualWidth <= 0) return;
+            var width = room.ActualWidth;
+            if (width <= 0 || cluster.ActualWidth <= 0) return;
             // Both widths are measured once per page and again when the Windows text size changes (the labels resize, the page does not).
             if (labelledWidth <= 0)
             {
                 labelledWidth = MeasureSwitch(true);
                 compactWidth = MeasureSwitch(false);
             }
-            Apply(PlayLayout.ChooseTapStart(row.ActualWidth, cluster.ActualWidth, labelledWidth, compactWidth));
+            Apply(PlayLayout.ChooseTapStart(width, cluster.ActualWidth, labelledWidth, compactWidth));
         }
         void FollowTextSize() => row.DispatcherQueue?.TryEnqueue(() =>
         {
             labelledWidth = compactWidth = 0;
             Place();
         });
-        row.SizeChanged += (_, _) => Place();
+        room.SizeChanged += (_, _) => Place();
         cluster.SizeChanged += (_, _) => Place();
         // A change of Windows text size resizes the words but not the page, so no page event announces it: a switch whose own
         // width no longer matches what was measured for its form is measured and placed again, as the page tools are.
