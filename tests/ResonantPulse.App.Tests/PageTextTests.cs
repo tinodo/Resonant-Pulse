@@ -277,6 +277,11 @@ public sealed class PageTextTests
             StringAssert.Contains(countHelp, "16", language);
             var range = Get(language, "TapStartRange");
             StringAssert.Contains(range, "1000", language);
+            // A refused start ends Tap to start (the switch goes off), so the way on that the sentence gives is to switch it on
+            // again, by the name the switch has in that language; "tap again" would be a tap that nothing counts. The notice is
+            // compact: at 400 DIP wide 140 characters are four lines, and a longer one clips the page behind it.
+            StringAssert.Contains(range, Get(language, "TapStart"), language);
+            Assert.IsTrue(range.Length <= 140, $"{language}/TapStartRange: {range.Length} characters");
             // What the help says to press is named as that language names it: the keyboard key and the Stop command.
             StringAssert.Contains(Get(language, "TapStartActive"), Get(language, "Stop"), language);
             StringAssert.Contains(Get(language, "TapStartStopFirst"), Get(language, "Stop"), language);

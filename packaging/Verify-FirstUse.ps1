@@ -1139,7 +1139,10 @@ function Test-TapStartWithOutput {
         Set-Number 'TapInCount' 3
         $tapButton = (Find-Control 'TapTempo').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
         $tapButton.Invoke()
-        Start-Sleep -Milliseconds 300
+        # At least 0.7 seconds between the taps is at most 85 BPM, however quickly the host answers (a press took 2.0 seconds on the
+        # private desktop of the local gate and takes a few hundredths on a desktop that answers at once): the tapped tempo is then
+        # never near the 120 that the panel showed when it opened, so a tempo put back from the panel can be told from it.
+        Start-Sleep -Milliseconds 700
         $tapButton.Invoke()
         $null = Wait-Transport 'Playing'
         Wait-TapStartState $false 'Tap to start stayed on after it started the metronome behind the Tempo panel.'

@@ -65,7 +65,8 @@ the taps were; so taps that are not steady never start playback. A project with 
 every step's start and end tempo is multiplied by the same exact ratio (meters, ramps, repeats, count-in and the
 setlist are untouched); TAP works only while the switch is on, because there is no tempo of its own to tap, and the
 number of taps cannot be changed then (the tempo readout is not a button). A tempo outside 1 to 1000 BPM, a project that
-is locked, or a tempo that could not be saved starts nothing. Stop, a start or pause by hand, a tempo chosen by hand,
+is locked, or a tempo that could not be saved starts nothing and ends Tap to start (the notice for a tempo outside the
+limits says to switch it on again and tap a different tempo). Stop, a start or pause by hand, a tempo chosen by hand,
 leaving Play or changing the language, a change or loss of the chosen output, sleep and closing the window all cancel
 it, and nothing arms it again. While it listens a Windows device watcher reports the chosen output being removed or
 updated, so the intent ends then and not after the last tap; the watcher exists only while the intent does, and if

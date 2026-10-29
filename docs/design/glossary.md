@@ -85,3 +85,9 @@ Also questions, not findings; none has been checked with a native speaker.
 - French: **Démarrer en tapant** for the switch, counted in **frappes**.
 - Spanish: **Marcar para iniciar** for the switch (*marcar* is also the verb of
   *Marcar tempo*), counted in **toques**.
+- The sentence after a refused start (*Switch Tap to start on again and tap a
+  different tempo*, key `TapStartRange`) names the switch with its label, unquoted,
+  as the help for the number of taps does: *Zet Start met tikken weer aan*,
+  *Schalten Sie Durch Tippen starten wieder ein*, *Réactivez Démarrer en tapant*,
+  *Active de nuevo Marcar para iniciar*. Whether a label inside a sentence reads
+  better in quotation marks is a question for a native speaker.
