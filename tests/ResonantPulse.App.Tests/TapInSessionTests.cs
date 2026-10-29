@@ -228,6 +228,42 @@ public sealed class TapInSessionTests
     }
 
     [TestMethod]
+    public void APauseOfMoreThanFourSecondsBeginsANewCountHoweverSlowTheTapsWere()
+    {
+        // The estimator starts again only after the longer of four seconds and three times the beat, which for slow taps is
+        // more than four seconds. Tap to start promises four, so that someone who stopped tapping does not find the metronome
+        // started by a tap made much later: these taps are 3.5, 3.5 and 4.25 seconds apart.
+        var session = new TapInSession();
+        session.Arm(4, "output");
+        Assert.IsFalse(session.Tap(0));
+        Assert.IsFalse(session.Tap(3.5));
+        Assert.IsFalse(session.Tap(7));
+        Assert.IsFalse(session.Tap(11.25), "4.25 seconds after the last tap is the first tap of a new count");
+        Assert.IsTrue(session.IsArmed);
+        Assert.IsFalse(session.IsPending);
+        Assert.AreEqual(1, session.ValidTaps);
+        Assert.IsFalse(session.LastTapRejected, "a pause is not an uneven tap");
+        Assert.IsNull(session.Tempo, "one tap is not a tempo");
+    }
+
+    [TestMethod]
+    public void TapsExactlyFourSecondsApartAreOneCountAndAGapJustOverFourIsNot()
+    {
+        var steady = new TapInSession();
+        steady.Arm(4, "output");
+        steady.Tap(0); steady.Tap(4); steady.Tap(8);
+        Assert.IsTrue(steady.Tap(12));
+        Assert.AreEqual(15d, steady.Tempo);
+
+        var late = new TapInSession();
+        late.Arm(2, "output");
+        late.Tap(0);
+        Assert.IsFalse(late.Tap(4.01), "a gap of more than four seconds starts the count again");
+        Assert.AreEqual(1, late.ValidTaps);
+        Assert.IsTrue(late.Tap(4.51), "and the taps after it count from there");
+    }
+
+    [TestMethod]
     public void ArmingAgainStartsFromScratchWithTheNewRequiredCount()
     {
         var session = new TapInSession();

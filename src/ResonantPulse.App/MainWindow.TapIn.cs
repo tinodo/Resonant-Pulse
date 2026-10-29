@@ -289,6 +289,8 @@ public sealed partial class MainWindow
             // Not SupersedeTransportIntent, which calls this: the start that is on its way is waiting on this very intent.
             _transportIntent++;
             _transport.Stop();
+            // The start may still be waiting for an earlier edit: it lets go of its wait, and so of the busy state, at once.
+            _tapStartWait?.Cancel();
         }
         if (noticeKey is not null && !_isClosed) ShowNotice(noticeKey);
         RefreshSnapshot();
@@ -304,15 +306,13 @@ public sealed partial class MainWindow
             return;
         }
         var completed = _tapIn.Tap(now);
-        var phase = TapStartRules.PhaseOf(_tapIn);
-        var counted = TapStartRules.Caption(phase, _tapIn.ValidTaps, _tapIn.RequiredTaps) is { } shown
-            ? Text.Format(shown.Key, shown.Args) : "";
-        if (_tapIn.Tempo is { } estimate)
-            counted += (counted.Length > 0 ? ", " : "") + Text.Format("TempoAnnouncement", PulseInstrument.FormatTempo(estimate));
-        AnnounceTap(counted);
+        AnnounceTap(TapStartRules.Announcement(_tapIn));
         RefreshSnapshot();
         if (completed) _ = GuardAsync(StartFromTapInAsync);
     }
+
+    /// <summary>Cancels what the start after the last tap waits for (earlier tempo changes, the edit queue), while it waits.</summary>
+    private CancellationTokenSource? _tapStartWait;
 
     /// <summary>
     /// The last tap has been taken: the tempo is saved as one edit of the project (and a program is scaled to it), and only then
@@ -329,7 +329,9 @@ public sealed partial class MainWindow
         var hasProgram = _document.Program.Count > 0;
         var applied = false;
         bool Wanted() => _tapIn.IsCurrent(generation) && intent == _transportIntent && !_closeFlushing && !_isClosed;
-        // Start and a second tap-in wait while this runs; Stop and Esc end it.
+        // Start and a second tap-in wait while this runs; Stop and Esc end it, and end what it waits for with it.
+        using var wait = new CancellationTokenSource();
+        _tapStartWait = wait;
         _isBusy = true;
         RefreshSnapshot();
         try
@@ -337,14 +339,15 @@ public sealed partial class MainWindow
             // The tempo is committed by a pump that submits one step at a time and keeps the newest request outside the edit queue
             // until the step being committed is done: a tempo that was nudged just before the taps could still be on its way and
             // land after the tapped one. A start by hand waits for it first, and so does this one, so the tapped tempo is the last.
-            await _tempoPump;
+            await _tempoPump.WaitAsync(wait.Token);
             if (!Wanted()) return;
             await CommitAsync(document =>
             {
                 if (!Wanted()) throw new OperationCanceledException();
                 TempoEdits.ApplyTapIn(document, tempo);
                 applied = true;
-            }, editorChange: hasProgram ? EditorChangeKind.Document : EditorChangeKind.GlobalTempoOnly, stillWanted: Wanted);
+            }, editorChange: hasProgram ? EditorChangeKind.Document : EditorChangeKind.GlobalTempoOnly,
+                stillWanted: Wanted, cancel: wait.Token);
             // A locked project reports its notice without applying anything, and the start was overtaken if the intent moved on.
             if (!applied || !Wanted()) return;
             if (_transport.State is not (TransportState.Stopped or TransportState.Completed) || !HasSelectedOutput ||
@@ -368,6 +371,7 @@ public sealed partial class MainWindow
                 _tapIn.Finish(generation);
                 StopOutputWatch();
             }
+            if (ReferenceEquals(_tapStartWait, wait)) _tapStartWait = null;
             _isBusy = false;
             RefreshSnapshot();
         }

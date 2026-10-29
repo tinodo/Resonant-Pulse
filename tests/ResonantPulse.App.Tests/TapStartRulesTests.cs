@@ -108,6 +108,48 @@ public sealed class TapStartRulesTests
     }
 
     [TestMethod]
+    public void WhatIsSpokenAfterATapNamesTheCountAndOnlyATempoThatTheRunHas()
+    {
+        var previousLanguage = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in Languages)
+            {
+                Text.Select(language);
+                var session = new TapInSession();
+                session.Arm(4, "output");
+                session.Tap(0);
+                var first = TapStartRules.Announcement(session);
+                StringAssert.Contains(first, "1", language);
+                Assert.IsFalse(first.Contains("BPM"), $"{language}: one tap makes no tempo: {first}");
+                session.Tap(0.5);
+                var second = TapStartRules.Announcement(session);
+                StringAssert.Contains(second, "120", language);
+                StringAssert.Contains(second, "BPM", language);
+                // An uneven tap ends the run, so the estimate that is left over is not a tempo the person is about to start at: it is
+                // not spoken after "Tap again", nor after the first tap of the new run (the dial does not show it either).
+                session.Tap(3.5);
+                var uneven = TapStartRules.Announcement(session);
+                Assert.IsFalse(uneven.Contains("120") || uneven.Contains("BPM"), $"{language}: {uneven}");
+                Assert.AreEqual(Text.Get("TapStartRejected"), uneven, language);
+                session.Tap(4);
+                var restarted = TapStartRules.Announcement(session);
+                Assert.IsFalse(restarted.Contains("120") || restarted.Contains("BPM"), $"{language}: {restarted}");
+                session.Tap(4.5);
+                StringAssert.Contains(TapStartRules.Announcement(session), "BPM", language);
+            }
+        }
+        finally
+        {
+            Text.Select(previousLanguage);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void TheHelpOfTheSwitchSaysWhyItIsOffAndWhatToDoWhileItIsOn()
     {
         Assert.AreEqual("TapStartHelp", TapStartRules.HelpKey(TapStartPhase.Off, TapStartBlock.None, followsProgram: false));

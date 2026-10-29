@@ -58,8 +58,8 @@ shows the tempo they make so far, and Stop, Esc or the switch cancel. The tempo 
 in the project's own note unit, so the unit is never changed; the last tap saves it as one edit of the project (one
 step of Undo) and only then runs the normal Start, so the project's count-in still plays. A tap that is not steady
 (a bounce, a tap far from the beat of the earlier ones, a tap that is not later than the one before) ends the run and
-the count begins again ("Tap again"); a pause of more than four seconds begins a new count; so taps that are not steady
-never start playback. A project with a program is scaled in proportion: the first step starts at the tapped tempo and
+the count begins again ("Tap again"); a pause of more than four seconds between two taps begins a new count, however slow
+the taps were; so taps that are not steady never start playback. A project with a program is scaled in proportion: the first step starts at the tapped tempo and
 every step's start and end tempo is multiplied by the same exact ratio (meters, ramps, repeats, count-in and the
 setlist are untouched); TAP works only while the switch is on, because there is no tempo of its own to tap, and the
 number of taps cannot be changed then (the tempo readout is not a button). A tempo outside 1 to 1000 BPM, a project that

@@ -6,11 +6,16 @@ namespace ResonantPulse.App;
 /// </summary>
 internal static class DocumentPublication
 {
-    public static async Task RunAsync(SemaphoreSlim edits, Func<Action, Task> transaction, Action<bool> render)
+    /// <param name="cancel">
+    /// Ends the wait for the edit lock without taking it, for something that waits there and is no longer wanted. Once the lock
+    /// is held the transaction runs to its end: what it publishes is decided inside it.
+    /// </param>
+    public static async Task RunAsync(SemaphoreSlim edits, Func<Action, Task> transaction, Action<bool> render,
+        CancellationToken cancel = default)
     {
         var isPublished = false;
         Exception? failure = null;
-        await edits.WaitAsync();
+        await edits.WaitAsync(cancel);
         try { await transaction(() => isPublished = true); }
         catch (Exception exception) { failure = exception; throw; }
         finally

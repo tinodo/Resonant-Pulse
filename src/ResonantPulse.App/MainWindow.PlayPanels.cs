@@ -217,6 +217,10 @@ public sealed partial class MainWindow
                 var unitChanged = unitValue != _document.Settings.BeatUnitQuarters;
                 var tempoChanged = bpm != (_tempoRequested ?? _document.Settings.Tempo);
                 var applied = false;
+                // A tempo or unit chosen here by hand ends a Tap to start, and it does so before the commit: a commit that fails
+                // after it has published the change (the recovery file cannot be written) must not leave an intent that is still
+                // listening and would later overwrite what was chosen. A new number of taps only counts for the next one.
+                if (tempoChanged || unitChanged) CancelTapIn();
                 await CommitAsync(doc =>
                 {
                     doc.Settings.Tempo = bpm;
@@ -226,8 +230,6 @@ public sealed partial class MainWindow
                     applied = true;
                 }, editorChange: unitChanged ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
                 if (!applied) return false;
-                // A tempo or unit chosen here by hand ends a Tap to start; a new number of taps only counts for the next one.
-                if (tempoChanged || unitChanged) CancelTapIn();
                 // The project holds the new unit now, so the page is built for it whether or not the number of taps can be
                 // remembered: a refused write of the preferences must not leave the page of the old unit behind.
                 if (unitChanged) BuildPage();

@@ -421,7 +421,7 @@ public sealed partial class MainWindow : Window
 
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
         int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, string? coalesceKey = null,
-        Action? onPublished = null, Func<bool>? stillWanted = null)
+        Action? onPublished = null, Func<bool>? stillWanted = null, CancellationToken cancel = default)
     {
         // When the person made the change, not when the queue reaches it: a slow validation or recovery write must not split quick
         // changes into several Undo steps, and a queue that drains must not join changes that were made seconds apart.
@@ -480,7 +480,7 @@ public sealed partial class MainWindow : Window
             else RefreshSnapshot();
             // Undo and Redo become available (or not) with every change.
             RefreshEditorControlState();
-        });
+        }, cancel);
     }
 
     /// <summary>True from the moment the project changes until the recovery file has been written with that change.</summary>

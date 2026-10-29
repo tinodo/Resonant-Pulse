@@ -1,3 +1,5 @@
+using ResonantPulse.App.Localization;
+
 namespace ResonantPulse.App;
 
 /// <summary>Why "Tap to start" cannot be switched on right now.</summary>
@@ -34,6 +36,12 @@ internal static class TapStartRules
     internal const int MaximumTaps = 16;
     /// <summary>One bar of 4/4.</summary>
     internal const int DefaultTaps = 4;
+
+    /// <summary>
+    /// A pause longer than this between two taps begins a new count, whatever the beat was. (The estimator's own rule is the longer
+    /// of this and three beats, which lets slow taps wait more than four seconds; Tap to start does not.)
+    /// </summary>
+    internal const double IdleSeconds = 4;
 
     /// <summary>The number of taps to use. A settings file is untrusted input, so whatever it holds, the result is in range.</summary>
     internal static int ClampTaps(int taps) => Math.Clamp(taps, MinimumTaps, MaximumTaps);
@@ -74,6 +82,20 @@ internal static class TapStartRules
         TapStartPhase.Starting => ("TapStartStarting", Array.Empty<object>()),
         _ => null
     };
+
+    /// <summary>
+    /// What a screen reader is told after a tap: the count (or "Tap again") and, when the run has a tempo, that tempo. It is the
+    /// tempo the dial shows (<see cref="TapInSession.ShownTempo"/>), not whatever the estimator still holds from a run that an
+    /// uneven tap has ended.
+    /// </summary>
+    internal static string Announcement(TapInSession session)
+    {
+        var phase = PhaseOf(session);
+        var counted = Caption(phase, session.ValidTaps, session.RequiredTaps) is { } shown ? Text.Format(shown.Key, shown.Args) : "";
+        if (session.ShownTempo is { } tempo)
+            counted += (counted.Length > 0 ? ", " : "") + Text.Format("TempoAnnouncement", TempoFormat.Format(tempo, Text.Culture));
+        return counted;
+    }
 
     /// <summary>The tooltip of the switch: what it does when it can be used, why it cannot, or what to do while it is on.</summary>
     internal static string HelpKey(TapStartPhase phase, TapStartBlock block, bool followsProgram) =>

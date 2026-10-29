@@ -78,8 +78,9 @@ Tap to start (App) is an explicit, one-shot intent: never persisted or restored,
 and not part of the project. The number of taps, 2 to 16, is an app preference
 (`Preferences.TapInCount`, 4 by default; a stored value outside the range is
 clamped where it is used). Consecutive accepted taps count towards it: a rejected
-tap (bounce, outlier, non-increasing time) breaks the run and an idle gap starts a
-new one. The tempo is the estimate to the nearest 0.1 BPM in the project's selected
+tap (bounce, outlier, non-increasing time) breaks the run and a gap of more than four
+seconds between two taps (a fixed limit, not the estimator's three beats, which lets
+slow taps wait longer) starts a new one. The tempo is the estimate to the nearest 0.1 BPM in the project's selected
 note unit, which is never changed. It is saved as one edit of the project and only
 then does the normal start run (the project's count-in applies). For a program,
 every section's start and end tempo is multiplied by `tapped / firstSection.StartTempo`
@@ -88,8 +89,12 @@ rewritten. A tempo outside 1 to 1000 BPM, a failed validation or recovery save a
 a locked project never start playback. A tempo change that is still being committed
 is settled first, so the tapped tempo is the last word, and an intent that is
 cancelled while its own change is being checked drops that change before it is
-published (no Undo step, nothing saved). Stop, a start or pause by hand, a tempo
-chosen by hand, a rebuilt or left page, a change of output, a power transition and
+published (no Undo step, nothing saved). What the start waits for (that tempo change,
+the edit queue) is cancelled with the intent, so Stop gives Start and the switch back
+at once. Stop, a start or pause by hand, a tempo
+chosen by hand (the intent ends before that change is committed, so a commit that
+fails after publishing cannot leave it listening), a rebuilt or left page, a change of
+output, a power transition and
 closing invalidate the intent before it publishes or plays. While it is armed a
 WinRT `DeviceWatcher` for audio render endpoints cancels it when the selected
 endpoint is removed or updated, without waiting for a refresh; reconnecting never

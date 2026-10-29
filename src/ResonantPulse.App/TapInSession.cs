@@ -11,6 +11,7 @@ internal sealed class TapInSession
 {
     private readonly TapTempoEstimator _estimate = new() { RejectEarlyOutliers = true };
     private string _outputId = "";
+    private double? _lastTap;
 
     /// <summary>Changes whenever the intent ends or is armed again, so a start that is still on its way can tell it was overtaken.</summary>
     public long Generation { get; private set; }
@@ -66,7 +67,12 @@ internal sealed class TapInSession
     public bool Tap(double timestampSeconds)
     {
         if (!IsArmed) throw new InvalidOperationException("Tap-in is not armed.");
+        // The estimator begins again after the longer of four seconds and three times the beat, which for slow taps is more
+        // than the four seconds that Tap to start promises: a pause that long means the person stopped, whatever the beat was,
+        // and a tap made after it must not be counted as one more of the run.
+        if (_lastTap is { } last && timestampSeconds - last > TapStartRules.IdleSeconds) _estimate.Reset();
         _estimate.Tap(timestampSeconds);
+        _lastTap = _lastTap is { } previous ? Math.Max(previous, timestampSeconds) : timestampSeconds;
         LastTapRejected = !_estimate.LastTapAccepted;
         if (LastTapRejected) ValidTaps = 0;
         else if (_estimate.CurrentBpm is null) ValidTaps = 1;
@@ -92,6 +98,7 @@ internal sealed class TapInSession
         IsArmed = IsPending = LastTapRejected = false;
         ValidTaps = 0;
         _outputId = "";
+        _lastTap = null;
         _estimate.Reset();
     }
 }
