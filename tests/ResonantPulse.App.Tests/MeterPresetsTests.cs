@@ -80,6 +80,86 @@ public sealed class MeterPresetsTests
     }
 
     [TestMethod]
+    public void ApplyAlsoEndsTheStrengthsOfTheClicksThatSplitABeatAndLeavesTheSplitToTheCaller()
+    {
+        var settings = new PulseSettings { Subdivision = 2, SubdivisionAccents = [Accent.Strong, Accent.Silent] };
+        MeterPresets.Apply(settings, 3, 4);
+        Assert.IsNull(settings.SubdivisionAccents);
+        Assert.AreEqual(2, settings.Subdivision);
+    }
+
+    [TestMethod]
+    public void PickingATimeSignatureAfterACompoundRhythmKeepsTheClicksWhereTheyWere()
+    {
+        var document = new PulseDocument
+        {
+            Settings = new()
+            {
+                Tempo = 80, BeatsPerBar = 6, BeatDenominator = 8, BeatUnitQuarters = 1.5, Subdivision = 3, CountInBars = 0,
+                Accents = [Accent.Strong, Accent.Normal], Groups = [3, 3], SubdivisionAccents = [Accent.Normal]
+            }
+        };
+        var before = ScheduleCompiler.Compile(document, Rate, 2, false).Onsets.Select(onset => onset.Frame).ToArray();
+        Assert.AreEqual(12, before.Length);
+
+        MeterPresets.ApplyOneClickPerBeat(document.Settings, 6, 8, [3, 3]);
+
+        var settings = document.Settings;
+        Assert.AreEqual(1, settings.Subdivision);
+        Assert.AreEqual(0.5, settings.Swing);
+        Assert.AreEqual(240d, settings.Tempo, "the old split raises the tempo, so the clicks keep coming at the same rate");
+        Assert.IsNull(settings.SubdivisionAccents);
+        Assert.AreEqual(6, MeterPresets.PulsesPerBar(settings));
+        DocumentValidator.Validate(document);
+        CollectionAssert.AreEqual(before, ScheduleCompiler.Compile(document, Rate, 2, false).Onsets.Select(onset => onset.Frame).ToArray());
+    }
+
+    [TestMethod]
+    public void ASplitIsKeptWhenTheClickUnitStaysAndEndedWhenItChanges()
+    {
+        var kept = new PulseSettings { Tempo = 100, Subdivision = 2, Swing = 2d / 3, SubdivisionAccents = [Accent.Strong] };
+        MeterPresets.ApplyOneClickPerBeat(kept, 3, 4);
+        Assert.AreEqual(2, kept.Subdivision);
+        Assert.AreEqual(2d / 3, kept.Swing);
+        Assert.AreEqual(100d, kept.Tempo);
+        Assert.IsNull(kept.SubdivisionAccents, "the strengths belonged to the old bar");
+
+        // The split clicks of 4/4 in two were an eighth note apart, which is 6/8's beat: the same clicks keep coming.
+        var sameClicks = new PulseSettings { Tempo = 77.3, Subdivision = 2, Swing = 2d / 3 };
+        MeterPresets.ApplyOneClickPerBeat(sameClicks, 6, 8);
+        Assert.AreEqual(154.6, sameClicks.Tempo);
+        Assert.AreEqual(1, sameClicks.Subdivision);
+        Assert.AreEqual(0.5, sameClicks.Swing, "straight again: a swing needs a pair to swing");
+
+        var capped = new PulseSettings { Tempo = 600, Subdivision = 2 };
+        MeterPresets.ApplyOneClickPerBeat(capped, 6, 8);
+        Assert.AreEqual(1000d, capped.Tempo);
+
+        // Triplets are not 6/8's beat, so the BPM number is kept, as choosing a meter always kept it.
+        var different = new PulseSettings { Tempo = 100, Subdivision = 3 };
+        MeterPresets.ApplyOneClickPerBeat(different, 6, 8);
+        Assert.AreEqual(100d, different.Tempo);
+        Assert.AreEqual(1, different.Subdivision);
+
+        var unsplit = new PulseSettings { Tempo = 77.3 };
+        MeterPresets.ApplyOneClickPerBeat(unsplit, 6, 8);
+        Assert.AreEqual(77.3, unsplit.Tempo, "nothing was split, so the tempo is the click rate already");
+    }
+
+    [TestMethod]
+    public void ACompoundRhythmChosenAsFourFourKeepsItsBpmNumberRatherThanTheClickRate()
+    {
+        var settings = new PulseSettings
+        {
+            Tempo = 80, BeatsPerBar = 6, BeatDenominator = 8, BeatUnitQuarters = 1.5, Subdivision = 3, Groups = [3, 3]
+        };
+        MeterPresets.ApplyOneClickPerBeat(settings, 4, 4);
+        Assert.AreEqual(80d, settings.Tempo, "4/4 at 240 BPM would be the same click rate and nothing anybody asked for");
+        Assert.AreEqual(1, settings.Subdivision);
+        Assert.AreEqual(1d, settings.BeatUnitQuarters);
+    }
+
+    [TestMethod]
     public void IsAppliedOnlyWhenChoosingThePresetWouldChangeNothing()
     {
         var four = MeterPresets.All.Single(p => p is { Beats: 4, Denominator: 4 });

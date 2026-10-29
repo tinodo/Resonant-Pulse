@@ -37,4 +37,11 @@ internal static class AccentPatterns
 
     internal static Accent[] ExpandLane(Accent[] source, int count) =>
         Enumerable.Range(0, count).Select(index => LaneAt(source, index)).ToArray();
+
+    /// <summary>A split click's strength: the project's, repeating like the beats' (Core's rule), or Soft when it sets none.</summary>
+    internal static Accent SplitAt(Accent[]? source, int slot) =>
+        source is { Length: > 0 } ? source[slot % source.Length] : Accent.Soft;
+
+    internal static Accent[] ExpandSplit(Accent[]? source, int count) =>
+        Enumerable.Range(0, count).Select(slot => SplitAt(source, slot)).ToArray();
 }

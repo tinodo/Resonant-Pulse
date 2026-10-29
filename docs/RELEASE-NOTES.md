@@ -2,70 +2,38 @@
 
 Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
 
-## What's new in preview.10
+## What's new in preview.11
 
-A page-design round, driven by an owner review of preview.9. Timer, Project,
-Help and Settings had fields as wide as the window, an "Apply edits" button in
-the middle of a form and settings nobody could explain, and Library, Stage,
-Train and Studio had had little thought. Settings, Library, Stage, Train and
-Studio, and the panels on Play, now follow one design.
+Three things from using preview.10.
 
-- **One design for pages and panels.** A titled page of cards; fields as wide
-  as what they hold (a tempo box fits three digits, a drop-down its longest
-  option); plain-language text; an empty state that says what to do next; and no
-  Apply button, because a change takes effect as you make it. The Play panels
-  keep **Cancel** and **Done**, where Done applies. A field gives way instead of
-  being clipped in a narrow window or at a larger Windows text size, and a
-  change the project refuses goes back to the value it holds and says why.
-- **Settings.** Language and Theme are sized to their options. **Reduce motion**
-  is a switch that says what it does: the marker on the circle jumps from beat
-  to beat instead of gliding, and the scrolling tape of upcoming clicks is
-  hidden. It is also on whenever Windows has animation effects turned off. An
-  About card shows the version.
-- **Export length** moved to Library, next to the export buttons. It is the
-  number of bars written to a WAV or MIDI file when the project has no program
-  (a program decides its own length). It takes whole numbers and applies at
-  once.
-- **Timer, Project, Help and the tempo and time-signature panels** use the same
-  fields: three aligned boxes with their units for the timer, a capped name box,
-  three short Help sections with the shortcuts as keycaps.
-- **Library** has *My projects* (search, each project's name and date, Open
-  only once one is chosen), *Export* (a sentence for each format) and
-  *Ready-made rhythms* (a name, one plain sentence, its meter and tempo).
-- **Stage** shows *Now playing* (the tempo once, large) beside the *Setlist*.
-  The selected song is *Up next*, said in words, and selecting never interrupts
-  playback. **Next + count-in** is on the first screen, **Lock editing** and
-  **Always on top** are switches, and notes save when focus leaves the box.
-- **Train** has the practice program (status, progress, the planned tempo as a
-  chart, the steps as readable rows) and a timing check whose Start, Hit and
-  Finish are on only when they make sense.
-- **Studio.** Each lane is a card: its name, **Mute**, **Solo** and **More**
-  (rotate, invert, copy, remove after a question), then its rhythm (the
-  strength of each beat as a strip you tap, clicks per cycle, cycle length,
-  start offset), sound and chance. **Add lane** is one menu: 4 over 4, 3 over 4
-  (polyrhythm), 3 over 3 (polymeter) and Euclidean, with a preview of the
-  pattern. The practice program is one card per step: its tempo curve (steady
-  or a ramp) decides which tempo boxes show, beside bars, repeats, the step's
-  own time signature and optional silent bars, and a program the project would
-  refuse is explained in words. When the project groups its beats (7/8 as
-  2+2+3) every step keeps the project's time signature; **Clear grouping** on
-  the step takes the grouping off, keeping the program, so each step can have
-  its own again (Undo brings it back). *Custom beat positions* are rows that open to
-  place a click exactly (a whole number, a fraction such as 1/3 or a decimal,
-  kept exact) with its strength, volume, chance and tie; a pattern lane
-  converts to positions in one step, and Undo brings the pattern back. Every
-  field applies as it is changed. What you change in Studio while the
-  metronome plays is saved at once and heard after Stop and Start.
-- **Edits are applied in the order you make them,** even when you make them
-  quickly. A Start waits for the edits asked for before it, and Stop cancels a
-  Start that is still waiting.
-- **Fixed on the way.** A row of commands could push its last button out of
-  sight in Dutch, because layout rounding disagreed between measuring and
-  arranging; rows are now arranged as they were measured.
-- **Languages.** All of the new text is in English, Dutch, German, French and
-  Spanish. The new and rewritten text in the last four has not been reviewed by
-  a native-speaking musician; docs/design/glossary.md lists the musical terms to
-  check first.
+- **Every click has a strength bar.** A beat can be split into smaller clicks (the
+  ready-made *Compound 6/8*, "6/8 felt in two", counts the dotted quarter and splits
+  each of its two beats in three), and the strength bar only had a bar for the two
+  beats: the dial, the clicks and the status line said six, the bar said two, and the
+  four small clicks could not be changed. The strip now has a bar for every click of
+  the bar, so *Compound 6/8* shows six, numbered 1 to 6 as the dial and the status
+  line count them. The clicks that split a beat are smaller and set a little apart
+  with the beat they belong to. A tap sets their strength as it does a beat's
+  (Soft, Medium, Strong or Silent), also while playing, and it is saved with the
+  project. They are Soft until you change them, as they always were, so nothing
+  sounds different until you do. *All normal* makes them Medium too and *Default
+  accents* makes them Soft again.
+  The screen reader names them "Beat 1, click 2 of 3, Soft", and **Subdivision** in
+  Time signature ▸ Custom now says "clicks between beats" instead of "soft clicks".
+- **Choosing a time signature no longer keeps an old split.** After a rhythm that
+  split its beats, choosing 6/8 from the picker kept the old three-way split inside
+  every eighth note. It now gives one click per written beat, as the picker says.
+  When the new beat is exactly what the split clicks were, the same clicks keep
+  coming at the same speed: the tempo rises by the old split (80 dotted quarters,
+  each split in three, becomes 240 eighth notes). Otherwise the BPM number is kept,
+  as it always was. A split is kept when the click unit stays the same, as from
+  4/4 to 3/4.
+- **The app opens on Play.** It reopened on the page you had left, which could be
+  Settings.
+
+A project in which you changed the strength of a split click cannot be opened by
+preview.10 or earlier, which refuse a file with a setting they do not know. Projects
+you did not change that way open everywhere.
 
 Known issue: when Windows activates the packaged app, keyboard focus starts on
 Settings (initial focus is not managed yet), so its focus ring can show at
@@ -77,7 +45,8 @@ inside the cyan/magenta dial. Click the number to type an exact tempo; the -,
 The time signature is a sheet-music picker (2/4, 3/4, 4/4, 6/8 and more) with
 **Custom...** for the full builder, and every written beat is an audible click,
 so 8/8 gives eight. Beat strengths are a row of bars (tall, medium, short or a
-rest) that you click to change. Timer, Project and Help are page tools in one
+rest) that you click to change, one for every click of the bar, including the
+clicks that split a beat. Timer, Project and Help are page tools in one
 quiet strip under Settings; every panel has Cancel and Done side by side, the
 same size, and Done applies. The
 window uses a modern custom title bar, and restoring your last session is silent.

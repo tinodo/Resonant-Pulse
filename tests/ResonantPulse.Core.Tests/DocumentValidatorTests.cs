@@ -52,6 +52,20 @@ public sealed class DocumentValidatorTests
     }
 
     [TestMethod]
+    public void Validate_SubdivisionAccents_AcceptsNullAndEveryDefinedAccentUpToTheLimit()
+    {
+        var d = Fixture();
+        foreach (var accents in new Accent[]?[] { null, [], Enum.GetValues<Accent>(), Enumerable.Repeat(Accent.Soft, 1024).ToArray() })
+        {
+            d.Settings.SubdivisionAccents = accents;
+            DocumentValidator.Validate(d);
+        }
+        Invalid(x => x.Settings.SubdivisionAccents = Enumerable.Repeat(Accent.Soft, 1025).ToArray());
+        Invalid(x => x.Settings.SubdivisionAccents = [(Accent)4]);
+        Invalid(x => x.Settings.SubdivisionAccents = [Accent.Strong, (Accent)(-1)]);
+    }
+
+    [TestMethod]
     [DataRow(0, true)]
     [DataRow(1, true)]
     [DataRow(86400, true)]

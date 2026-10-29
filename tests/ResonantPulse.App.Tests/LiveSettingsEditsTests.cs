@@ -105,6 +105,30 @@ public sealed class LiveSettingsEditsTests
     }
 
     [TestMethod]
+    public void SplitClickStrengthsFollowLiveLikeBeatStrengthsEvenDuringAProgramAndAreCopied()
+    {
+        var baseline = Document(edit: s => s.Subdivision = 3).Settings;
+        Assert.AreEqual(LiveChange.Sound, LiveSettingsEdits.Classify(baseline, baseline with { SubdivisionAccents = [Accent.Strong] }));
+        Assert.AreEqual(LiveChange.None, LiveSettingsEdits.Classify(baseline, baseline with { SubdivisionAccents = [] }),
+            "null and empty are the same setting: every split click is Soft");
+
+        var program = Document(edit: s => s.Subdivision = 3);
+        program.Program = [new ProgramStep { Bars = 2, StartTempo = 100, EndTempo = 100 }];
+        var decision = LiveSettingsEdits.Decide(Revision(program, 8000), null,
+            Requested(Document(edit: s => { s.Subdivision = 3; s.SubdivisionAccents = [Accent.Normal, Accent.Silent]; })));
+        Assert.AreEqual(LiveEditOutcome.SoundApplied, decision.Outcome, "a strength never needs a restart");
+        Assert.IsTrue(decision.Publish);
+        CollectionAssert.AreEqual(new[] { Accent.Normal, Accent.Silent }, decision.Merged.Settings.SubdivisionAccents);
+
+        var requested = new PulseSettings { SubdivisionAccents = [Accent.Strong] };
+        var merged = LiveSettingsEdits.Apply(new PulseDocument(), requested);
+        requested.SubdivisionAccents[0] = Accent.Silent;
+        CollectionAssert.AreEqual(new[] { Accent.Strong }, merged.Settings.SubdivisionAccents, "the arrays are copied");
+        var soundOnly = LiveSoundEdits.Apply(new PulseDocument(), new PulseSettings { SubdivisionAccents = [Accent.Soft] });
+        CollectionAssert.AreEqual(new[] { Accent.Soft }, soundOnly.Settings.SubdivisionAccents);
+    }
+
+    [TestMethod]
     public void NullAndEmptyManualAccentListsAreTheSameAudibleSetting()
     {
         var plain = Document().Settings;

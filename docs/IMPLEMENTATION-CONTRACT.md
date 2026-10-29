@@ -18,6 +18,8 @@ can be added without changing these application-facing types.
   `int PracticeBars = 0` (complete authored bars, up to 100000);
   zero disables each live limit, count-in is excluded, the earliest limit/program end wins, and exports retain their authored duration;
   `Accent[] Accents` default strong/normal/normal/normal,
+  `Accent[]? SubdivisionAccents` (omitted from the file while null: the strength of each click that splits a beat, in bar order,
+  `Subdivision - 1` per pulse, repeating like `Accents`; null or empty leaves every split click Soft, up to 1024 entries),
   `int AudibleBars = 0`, `int SilentBars = 0`, `bool BlindGaps = true`,
   `float MasterGain = 0.5f`, `string Sound = "Wood"`.
 - `RhythmLane`: `string Name`, `int Pulses = 4`,

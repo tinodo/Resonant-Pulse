@@ -35,7 +35,8 @@ Play centers the large cyan/magenta metronome and its BPM readout. Click the
 number to type an exact tempo; use -, **TAP** and + under the dial (hold - or +
 to repeat, Ctrl for steps of ten); choose a sheet-music time signature (2/4,
 3/4, 4/4, 6/8 and more, with **Custom...** for the full builder); click a beat
-bar to change its strength; pick the sound (Mute silences it whatever it is).
+bar to change its strength (there is a bar for every click of the bar, including
+the clicks that split a beat); pick the sound (Mute silences it whatever it is).
 **Timer**, **Project** and **Help** sit in one quiet strip under Settings and
 open compact panels in which **Done** applies and **Cancel** discards; Cancel
 and Done are always the same size. If a saved project counts beats in a unit that

@@ -260,6 +260,71 @@ public sealed class ScheduleCompilerTests
     }
 
     [TestMethod]
+    public void Compile_SplitClicksAreSoftAndQuieterThanABeatUnlessTheProjectSetsThem()
+    {
+        var d = Check.Document(); d.Settings.Subdivision = 3;
+        var plan = Check.Plan(d, rate: 48000);
+        var splits = plan.Onsets.Where(o => o.LaneIndex == -2).ToArray();
+        Assert.AreEqual(8, splits.Length);
+        Assert.IsTrue(splits.All(o => o.Accent == Accent.Soft && o.Gain == 0.65f));
+        d.Settings.SubdivisionAccents = [];
+        Assert.AreEqual(8, Check.Plan(d, rate: 48000).Onsets.Count(o => o.LaneIndex == -2 && o.Accent == Accent.Soft));
+    }
+
+    [TestMethod]
+    public void Compile_SubdivisionAccents_SetEachSplitClickAndASilentOneIsNotScheduled()
+    {
+        var d = Check.Document();
+        d.Settings.Subdivision = 2;
+        d.Settings.SubdivisionAccents = [Accent.Strong, Accent.Normal, Accent.Silent, Accent.Soft];
+        var plan = Check.Plan(d, rate: 48000);
+        var splits = plan.Onsets.Where(o => o.LaneIndex == -2).ToArray();
+        Check.Sequence(new long[] { 12000, 36000, 84000 }, splits.Select(o => o.Frame));
+        Check.Sequence(new[] { Accent.Strong, Accent.Normal, Accent.Soft }, splits.Select(o => o.Accent));
+        // A split click of any strength above Soft is as loud as a beat of that strength; a Soft one stays the quiet ghost it was.
+        Check.Sequence(new[] { 1f, 1f, 0.65f }, splits.Select(o => o.Gain));
+        Check.Sequence(new long[] { 0, 24000, 48000, 72000 }, plan.Onsets.Where(o => o.LaneIndex == -1).Select(o => o.Frame));
+        Assert.AreEqual(7, plan.Targets.Count, "four beats and the three split clicks that sound");
+    }
+
+    [TestMethod]
+    public void Compile_SubdivisionAccents_RepeatEveryBarAndCycleWhenShorterThanTheBar()
+    {
+        var d = Check.Document();
+        d.Settings.BeatsPerBar = 3; d.Settings.Subdivision = 2;
+        d.Settings.SubdivisionAccents = [Accent.Strong, Accent.Silent, Accent.Normal];
+        var plan = Check.Plan(d, bars: 2, rate: 48000);
+        var splits = plan.Onsets.Where(o => o.LaneIndex == -2).ToArray();
+        Check.Sequence(new long[] { 12000, 60000, 84000, 132000 }, splits.Select(o => o.Frame));
+        Check.Sequence(new[] { Accent.Strong, Accent.Normal, Accent.Strong, Accent.Normal }, splits.Select(o => o.Accent));
+
+        d.Settings.SubdivisionAccents = [Accent.Normal];
+        Assert.IsTrue(Check.Plan(d, bars: 2, rate: 48000).Onsets.Where(o => o.LaneIndex == -2).All(o => o.Accent == Accent.Normal));
+    }
+
+    [TestMethod]
+    public void Compile_SubdivisionAccents_FollowTheBeatsOfACompoundBarAndNeverTheCountIn()
+    {
+        // 6/8 felt in two: the dotted quarter is the beat and each beat splits in three, so a bar is six clicks.
+        var d = new PulseDocument
+        {
+            Settings = new()
+            {
+                Tempo = 80, BeatsPerBar = 6, BeatDenominator = 8, BeatUnitQuarters = 1.5, Subdivision = 3, CountInBars = 1,
+                Accents = [Accent.Strong, Accent.Normal], Groups = [3, 3],
+                SubdivisionAccents = [Accent.Soft, Accent.Normal, Accent.Strong, Accent.Silent]
+            }
+        };
+        var plan = ScheduleCompiler.Compile(d, 48000, 1, true);
+        var bar = plan.Onsets.Where(o => o.Frame >= plan.CountInFrames).OrderBy(o => o.Frame).ToArray();
+        Check.Sequence(new[] { -1, -2, -2, -1, -2 }, bar.Select(o => o.LaneIndex));
+        Check.Sequence(new[] { Accent.Strong, Accent.Soft, Accent.Normal, Accent.Strong, Accent.Strong },
+            bar.Select(o => o.Accent));
+        var countIn = plan.Onsets.Where(o => o.Frame < plan.CountInFrames).ToArray();
+        Assert.IsTrue(countIn.All(o => o.LaneIndex == -1), "the count-in has no split clicks");
+    }
+
+    [TestMethod]
     public void Compile_RepeatedRamp_RestartsTempoButNotAbsoluteCoordinates()
     {
         var d = Check.Document();

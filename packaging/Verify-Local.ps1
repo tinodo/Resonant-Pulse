@@ -78,7 +78,7 @@ $data = Join-Path $OutputPath 'data'
 if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
 $null = New-Item -ItemType Directory -Force -Path $data
 # The verifier looks for English texts; the machine's display language must not change what it finds.
-[IO.File]::WriteAllText((Join-Path $data 'preferences.json'), '{"Language":"en"}', [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $data 'preferences.json'), '{"Language":"en","LastView":"Settings"}', [Text.UTF8Encoding]::new($false))
 if ($SilentAudio) {
     # An inaudible master gain keeps the real audio engine running without a sound.
     [IO.File]::WriteAllText((Join-Path $data 'recovery.pulse'),

@@ -322,6 +322,7 @@ public static class Text
         Add("UnitMismatchMessage", "A bar of {1}/{2} is not a whole number of “{0}” clicks, so the clicks drift against the circle.", "Een maat van {1}/{2} bestaat niet uit een geheel aantal “{0}”-tikken, dus de tikken lopen uit de pas met de cirkel.", "Ein {1}/{2}-Takt besteht nicht aus einer ganzen Zahl von „{0}“-Klicks, darum laufen die Klicks dem Kreis davon.", "Une mesure à {1}/{2} ne contient pas un nombre entier de clics à la « {0} », donc les clics dérivent par rapport au cercle.", "Un compás de {1}/{2} no contiene un número entero de clics de «{0}», así que los clics se desfasan respecto al círculo.");
         Add("UnitMismatchFix", "Click every “{0}”", "Tik per “{0}”", "Klick pro „{0}“", "Cliquer à la « {0} »", "Clic por «{0}»");
         Add("BeatName", "Beat {0}, {1}", "Tel {0}, {1}", "Zählzeit {0}, {1}", "Temps {0}, {1}", "Pulso {0}, {1}");
+        Add("SplitClickName", "Beat {0}, click {1} of {2}, {3}", "Tel {0}, tik {1} van {2}, {3}", "Zählzeit {0}, Klick {1} von {2}, {3}", "Temps {0}, clic {1} sur {2}, {3}", "Pulso {0}, clic {1} de {2}, {3}");
         Add("LevelStrong", "Strong", "Sterk", "Stark", "Fort", "Fuerte");
         Add("LevelNormal", "Medium", "Gemiddeld", "Mittel", "Moyen", "Medio");
         Add("LevelSoft", "Soft", "Zacht", "Leise", "Doux", "Suave");
@@ -331,7 +332,7 @@ public static class Text
         Add("BeatsTop", "Beats per bar (top number)", "Tellen per maat (bovenste getal)", "Zählzeiten pro Takt (obere Zahl)", "Temps par mesure (chiffre du haut)", "Tiempos por compás (número superior)");
         Add("BeatNote", "Beat note (bottom number)", "Telwaarde (onderste getal)", "Notenwert (untere Zahl)", "Valeur du temps (chiffre du bas)", "Figura del pulso (número inferior)");
         Add("GroupingLabel", "Grouping, e.g. 3+3 or 2+2+3 (empty = none)", "Groepering, bv. 3+3 of 2+2+3 (leeg = geen)", "Gruppierung, z. B. 3+3 oder 2+2+3 (leer = keine)", "Groupement, ex. 3+3 ou 2+2+3 (vide = aucun)", "Agrupación, p. ej. 3+3 o 2+2+3 (vacío = ninguna)");
-        Add("SubdivisionLabel", "Subdivision: soft clicks between beats (1 = none)", "Onderverdeling: zachte tikken tussen de tellen (1 = geen)", "Unterteilung: leise Klicks zwischen den Zählzeiten (1 = keine)", "Subdivision : clics doux entre les temps (1 = aucune)", "Subdivisión: clics suaves entre pulsos (1 = ninguna)");
+        Add("SubdivisionLabel", "Subdivision: clicks between beats (1 = none)", "Onderverdeling: tikken tussen de tellen (1 = geen)", "Unterteilung: Klicks zwischen den Zählzeiten (1 = keine)", "Subdivision : clics entre les temps (1 = aucune)", "Subdivisión: clics entre pulsos (1 = ninguna)");
         Add("SectionFeel", "Feel", "Gevoel", "Gefühl", "Feeling", "Sensación");
         Add("SectionTraining", "Practice aids", "Oefenhulp", "Übungshilfen", "Aides à l’entraînement", "Ayudas de práctica");
         Add("DefaultAccents", "Default accents", "Standaardaccenten", "Standardakzente", "Accents par défaut", "Acentos predeterminados");
