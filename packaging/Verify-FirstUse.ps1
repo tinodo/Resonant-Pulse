@@ -589,8 +589,12 @@ function Wait-ToggleState($pattern, $state, [string]$failure) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw $failure
 }
-# Waits for something on a page other than Play, where the dial that Wait-Until reports in its message does not exist.
-function Wait-Condition([scriptblock]$condition, [string]$failure, [int]$seconds = 8) {
+# Waits for something on a page other than Play, where the dial that Wait-Until reports in its message does not exist. It gives a
+# page 30 seconds: Studio rebuilds its page on the UI thread, and a Convert or an Undo there took from 1.4 seconds to more than 8 on
+# the private desktop of the local gate (the 8-second wait ran out on 4 of 16 steps on preview.10 and on 2 of 16 on preview.11), with
+# the lane's fields off and every UI Automation call blocked meanwhile. The wait only ends sooner when the page is ready, so a page
+# that does get ready costs nothing, and one that never does still fails, with the same words.
+function Wait-Condition([scriptblock]$condition, [string]$failure, [int]$seconds = 30) {
     $limit = [DateTime]::UtcNow.AddSeconds($seconds)
     do {
         if (& $condition) { return }
