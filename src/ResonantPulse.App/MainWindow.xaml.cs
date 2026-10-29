@@ -421,7 +421,7 @@ public sealed partial class MainWindow : Window
 
     private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
         int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, string? coalesceKey = null,
-        Action? onPublished = null)
+        Action? onPublished = null, Func<bool>? stillWanted = null)
     {
         // When the person made the change, not when the queue reaches it: a slow validation or recovery write must not split quick
         // changes into several Undo steps, and a queue that drains must not join changes that were made seconds apart.
@@ -451,6 +451,10 @@ public sealed partial class MainWindow : Window
                 countInChanged = _transport.Snapshot().Revision is { } audible &&
                     audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
             }
+            // A change that was asked for by something that has been cancelled since (a Tap to start that Stop ended while its
+            // tempo was being checked) leaves nothing behind: no Undo step, no new project, no save. Nothing is awaited between
+            // this check and the publication below, so the answer cannot change in between.
+            if (stillWanted is not null && !stillWanted()) throw new OperationCanceledException();
             RecordUndo(coalesceKey, madeAt);
             _document = revised;
             _recoveryUnsaved = true;

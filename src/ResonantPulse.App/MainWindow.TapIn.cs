@@ -334,12 +334,17 @@ public sealed partial class MainWindow
         RefreshSnapshot();
         try
         {
+            // The tempo is committed by a pump that submits one step at a time and keeps the newest request outside the edit queue
+            // until the step being committed is done: a tempo that was nudged just before the taps could still be on its way and
+            // land after the tapped one. A start by hand waits for it first, and so does this one, so the tapped tempo is the last.
+            await _tempoPump;
+            if (!Wanted()) return;
             await CommitAsync(document =>
             {
                 if (!Wanted()) throw new OperationCanceledException();
                 TempoEdits.ApplyTapIn(document, tempo);
                 applied = true;
-            }, editorChange: hasProgram ? EditorChangeKind.Document : EditorChangeKind.GlobalTempoOnly);
+            }, editorChange: hasProgram ? EditorChangeKind.Document : EditorChangeKind.GlobalTempoOnly, stillWanted: Wanted);
             // A locked project reports its notice without applying anything, and the start was overtaken if the intent moved on.
             if (!applied || !Wanted()) return;
             if (_transport.State is not (TransportState.Stopped or TransportState.Completed) || !HasSelectedOutput ||

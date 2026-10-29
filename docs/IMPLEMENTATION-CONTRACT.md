@@ -85,7 +85,10 @@ then does the normal start run (the project's count-in applies). For a program,
 every section's start and end tempo is multiplied by `tapped / firstSection.StartTempo`
 as an exact fraction; no meter, ramp domain, repeat, count-in or setlist entry is
 rewritten. A tempo outside 1 to 1000 BPM, a failed validation or recovery save and
-a locked project never start playback. Stop, a start or pause by hand, a tempo
+a locked project never start playback. A tempo change that is still being committed
+is settled first, so the tapped tempo is the last word, and an intent that is
+cancelled while its own change is being checked drops that change before it is
+published (no Undo step, nothing saved). Stop, a start or pause by hand, a tempo
 chosen by hand, a rebuilt or left page, a change of output, a power transition and
 closing invalidate the intent before it publishes or plays. While it is armed a
 WinRT `DeviceWatcher` for audio render endpoints cancels it when the selected

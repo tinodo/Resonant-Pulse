@@ -228,6 +228,9 @@ public sealed partial class MainWindow
                 if (!applied) return false;
                 // A tempo or unit chosen here by hand ends a Tap to start; a new number of taps only counts for the next one.
                 if (tempoChanged || unitChanged) CancelTapIn();
+                // The project holds the new unit now, so the page is built for it whether or not the number of taps can be
+                // remembered: a refused write of the preferences must not leave the page of the old unit behind.
+                if (unitChanged) BuildPage();
                 if (newTaps != TapStartRules.ClampTaps(_preferences.TapInCount))
                 {
                     _preferences.TapInCount = newTaps;
@@ -235,7 +238,6 @@ public sealed partial class MainWindow
                     // if that fails the error is shown and the value stays.
                     await _workspace.SavePreferencesAsync(_preferences);
                 }
-                if (unitChanged) BuildPage();
                 return true;
             });
     }
