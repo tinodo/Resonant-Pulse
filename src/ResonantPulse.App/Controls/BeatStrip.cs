@@ -31,6 +31,16 @@ public sealed class BeatStrip : StackPanel
     /// <summary>Localized accessible name for a beat; supplied by the owner.</summary>
     public Func<int, Accent, string> Describe { get; set; } = (index, level) => $"{index + 1}: {level}";
 
+    /// <summary>The number shown under a cell; supplied by the owner when it is not simply the cell's place in the strip.</summary>
+    public Func<int, string> Label { get; set; } = index => (index + 1).ToString(System.Globalization.CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// True for a click that splits a beat: its bar is narrower and its number smaller than a beat's, so the strip reads as beats
+    /// with clicks between them. The number keeps the full text colour: fading it would drop it below the contrast the theme's
+    /// text needs, in Light and in the Contrast themes.
+    /// </summary>
+    public Func<int, bool> IsSplit { get; set; } = _ => false;
+
     /// <summary>The automation id of a beat is this prefix and its number, counted from 0.</summary>
     public string AutomationPrefix { get; set; } = "MainAccent";
 
@@ -72,7 +82,7 @@ public sealed class BeatStrip : StackPanel
         _cells[target].Button.Focus(FocusState.Keyboard);
     }
 
-    /// <param name="groupStarts">Pulse indices where an additive group begins; they get a little extra space.</param>
+    /// <param name="groupStarts">Cell indices that get a little extra space before them: where an additive group, or a split beat, begins.</param>
     public void Rebuild(int count, IReadOnlySet<int> groupStarts, double cellWidth, IReadOnlyList<Accent> levels)
     {
         Children.Clear();
@@ -81,14 +91,15 @@ public sealed class BeatStrip : StackPanel
         GroupGapCount = 0;
         for (var index = 0; index < count; index++)
         {
+            var split = IsSplit(index);
             var bar = new Rectangle
             {
-                Width = 14, RadiusX = 3, RadiusY = 3,
+                Width = split ? 10 : 14, RadiusX = 3, RadiusY = 3,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom
             };
             var number = new TextBlock
             {
-                Text = (index + 1).ToString(System.Globalization.CultureInfo.CurrentCulture), FontSize = 12,
+                Text = Label(index), FontSize = split ? 11 : 12,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
             };
             var glow = new Border

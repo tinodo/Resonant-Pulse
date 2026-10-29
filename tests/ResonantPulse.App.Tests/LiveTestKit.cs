@@ -86,7 +86,8 @@ internal static class LiveTestKit
     {
         Accents = document.Settings.Accents.ToArray(),
         Groups = document.Settings.Groups.ToArray(),
-        ManualAccentIndices = document.Settings.ManualAccentIndices?.ToArray()
+        ManualAccentIndices = document.Settings.ManualAccentIndices?.ToArray(),
+        SubdivisionAccents = document.Settings.SubdivisionAccents?.ToArray()
     };
 
     /// <summary>Primary-pulse attack frames of a plan in its own timeline, restricted to [from, before).</summary>

@@ -17,6 +17,7 @@ namespace ResonantPulse.App;
 public sealed partial class MainWindow
 {
     private BeatStrip? _beatStrip;
+    private ClickGrid? _clickGrid;
     private Button? _tempoEdit;
     private string _tempoEditName = "";
     private double? _tempoRequested;
@@ -242,12 +243,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(sound, Text.Get("LiveSoundHint"));
         ToolTipService.SetToolTip(sound, Text.Get("LiveSoundHint"));
 
-        var pulses = PrimaryAccentCount(settings);
-        var strip = new BeatStrip { Describe = DescribeBeat };
+        var clicks = ClickGrid.Of(settings);
+        var strip = new BeatStrip
+        {
+            Describe = (cell, level) => DescribeClick(clicks, cell, level), Label = clicks.Label, IsSplit = clicks.IsSplit
+        };
         _beatStrip = strip;
-        strip.Rebuild(pulses, GroupStartPulses(settings, pulses), 44, AccentPatterns.ExpandEffectiveMain(settings, pulses));
-        strip.BeatInvoked += async (_, index) => await GuardAsync(() => ChangeAccentAsync(index, 1, wrap: true));
-        strip.BeatNudged += async (_, args) => await GuardAsync(() => ChangeAccentAsync(args.Index, args.Delta, wrap: false));
+        _clickGrid = clicks;
+        strip.Rebuild(clicks.Count, clicks.SpaceBefore(), 44, clicks.Levels(settings));
+        strip.BeatInvoked += async (_, index) => await GuardAsync(() => ChangeAccentAsync(clicks, index, 1, wrap: true));
+        strip.BeatNudged += async (_, args) => await GuardAsync(() => ChangeAccentAsync(clicks, args.Index, args.Delta, wrap: false));
         var stripScroll = new ScrollViewer
         {
             Content = strip, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -263,9 +268,9 @@ public sealed partial class MainWindow
         stripScroll.SizeChanged += (_, args) =>
         {
             var available = Math.Max(0, args.NewSize.Width - 8);
-            strip.SetCellWidth(PlayLayout.StripCellWidth(available, pulses, strip.GroupGapCount));
+            strip.SetCellWidth(PlayLayout.StripCellWidth(available, clicks.Count, strip.GroupGapCount));
             // Judged from the data, not from the scrollbar the cue itself could create.
-            var scrolls = PlayLayout.StripNeedsScroll(available, pulses, strip.GroupGapCount);
+            var scrolls = PlayLayout.StripNeedsScroll(available, clicks.Count, strip.GroupGapCount);
             cue.Visibility = scrolls ? Visibility.Visible : Visibility.Collapsed;
             // The scroll bar is drawn over the bottom of the strip. While it scrolls, the strip leaves room for the bar,
             // so it never covers the beat numbers.
@@ -427,8 +432,17 @@ public sealed partial class MainWindow
         });
     }
 
-    private string DescribeBeat(int index, Accent level) =>
-        Text.Format("BeatName", index + 1, Text.Get("Level" + level));
+    /// <summary>
+    /// The accessible name of a cell: a beat is "Beat 4, Strong"; a click that splits a beat names the beat it belongs to
+    /// and its place in it, "Beat 1, click 2 of 3, Soft".
+    /// </summary>
+    private static string DescribeClick(ClickGrid clicks, int cell, Accent level)
+    {
+        var strength = Text.Get("Level" + level);
+        return clicks.IsSplit(cell)
+            ? Text.Format("SplitClickName", clicks.Label(clicks.BeatOf(cell) * clicks.Split), clicks.PartOf(cell) + 1, clicks.Split, strength)
+            : Text.Format("BeatName", clicks.Label(cell), strength);
+    }
 
     /// <summary>
     /// Tells assistive technology the new tempo without moving focus. Only the most recent announcement is spoken,
@@ -442,19 +456,15 @@ public sealed partial class MainWindow
             Text.Format("TempoAnnouncement", PulseInstrument.FormatTempo(bpm)), "TempoChanged");
     }
 
-    private async Task ChangeAccentAsync(int index, int delta, bool wrap)
+    /// <param name="shown">The strip the tap was made on. A tap that reaches the document after the bar was cut differently (a
+    /// subdivision change was still being applied) is dropped before anything is recorded: no Undo step, no save, no message.</param>
+    private async Task ChangeAccentAsync(ClickGrid shown, int cell, int delta, bool wrap)
     {
         try
         {
             await CommitAsync(doc =>
             {
-                var count = Math.Max(doc.Settings.Accents.Length, PrimaryAccentCount(doc.Settings));
-                var chosen = AccentPatterns.ExpandEffectiveMain(doc.Settings, count)[index];
-                var pattern = AccentPatterns.ExpandMain(doc.Settings.Accents, count);
-                var next = (int)chosen + delta;
-                pattern[index] = (Accent)(wrap ? (next % 4 + 4) % 4 : Math.Clamp(next, 0, 3));
-                doc.Settings.Accents = pattern;
-                doc.Settings.ManualAccentIndices = (doc.Settings.ManualAccentIndices ?? []).Append(index).Distinct().Order().ToArray();
+                if (!AccentPatterns.ChangeStrength(doc.Settings, shown, cell, delta, wrap)) throw new OperationCanceledException();
             }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
         }
         finally { RefreshBeatStrength(); }
@@ -463,8 +473,7 @@ public sealed partial class MainWindow
     private void RefreshBeatStrength()
     {
         if (_beatStrip is not { } strip) return;
-        strip.SetLevels(AccentPatterns.ExpandEffectiveMain(_document.Settings,
-            Math.Max(strip.Count, PrimaryAccentCount(_document.Settings))));
+        strip.SetLevels(ClickGrid.Of(_document.Settings).Levels(_document.Settings));
     }
 
     /// <summary>Commands that act on the whole strip. They sit outside the rhythm form, so each applies at once.</summary>
@@ -508,32 +517,19 @@ public sealed partial class MainWindow
                 {
                     doc.Settings.Accents = Enumerable.Repeat(Accent.Normal, PrimaryAccentCount(doc.Settings)).ToArray();
                     doc.Settings.AccentOverridesGroups = true;
+                    // One entry repeats over every split click, however many a bar has.
+                    doc.Settings.SubdivisionAccents = doc.Settings.Subdivision > 1 ? new[] { Accent.Normal } : null;
                 }
                 else
                 {
                     doc.Settings.Accents = MeterPresets.DefaultAccents(PrimaryAccentCount(doc.Settings));
                     doc.Settings.AccentOverridesGroups = false;
                     doc.Settings.ManualAccentIndices = null;
+                    doc.Settings.SubdivisionAccents = null;
                 }
             }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
         }
         finally { RefreshBeatStrength(); }
-    }
-
-    /// <summary>Pulse indices at which an additive group starts (for spacing the beat strip).</summary>
-    private static HashSet<int> GroupStartPulses(PulseSettings settings, int count)
-    {
-        var starts = new HashSet<int>();
-        var unit = Rational.FromDouble(settings.BeatUnitQuarters);
-        var boundary = 0;
-        foreach (var group in settings.Groups)
-        {
-            var position = new Rational(4 * boundary, settings.BeatDenominator) / unit;
-            if (position.Denominator.IsOne && position.Numerator >= 0 && position.Numerator < count)
-                starts.Add((int)position.Numerator);
-            boundary += group;
-        }
-        return starts;
     }
 
     private static int PrimaryAccentCount(PulseSettings settings) => MeterPresets.PulsesPerBar(settings);
@@ -674,7 +670,7 @@ public sealed partial class MainWindow
         var applied = false;
         await CommitAsync(doc =>
         {
-            MeterPresets.Apply(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
+            MeterPresets.ApplyOneClickPerBeat(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
             applied = true;
         }, editorChange: EditorChangeKind.PlayStructure);
         if (applied) BuildPage();

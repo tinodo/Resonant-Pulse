@@ -27,6 +27,10 @@ if ($ExistingProcessId) {
     # disposable, and the check above is why this is safe to do.
     $dataFolder = Join-Path $env:LOCALAPPDATA 'ResonantPulse'
     if (Test-Path -LiteralPath $dataFolder) { Remove-Item -LiteralPath $dataFolder -Recurse -Force }
+    # Earlier builds reopened the page that was open when they were last closed, so someone who last left Settings found the
+    # app opening there. The saved page is ignored now: it is saved here as Settings and the verifier requires Play.
+    $null = New-Item -ItemType Directory -Force -Path $dataFolder
+    [IO.File]::WriteAllText((Join-Path $dataFolder 'preferences.json'), '{"LastView":"Settings"}', [Text.UTF8Encoding]::new($false))
     $process = Start-Process -FilePath $executable -PassThru -RedirectStandardOutput (Join-Path $artifactDirectory 'application-stdout.log') -RedirectStandardError (Join-Path $artifactDirectory 'application-stderr.log')
 }
 try {

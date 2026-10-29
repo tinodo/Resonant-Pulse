@@ -26,7 +26,8 @@ internal static class MeterPresets
 
     /// <summary>
     /// Applies a written meter so that every written beat is one click: the BPM unit follows the
-    /// denominator, the accent pattern restarts (strong downbeat) and group starts are accented.
+    /// denominator, the accent pattern restarts (strong downbeat) and group starts are accented. The strengths of the
+    /// clicks that split a beat restart too, as they belonged to the bar that is gone.
     /// </summary>
     internal static void Apply(PulseSettings settings, int beats, int denominator, int[]? groups = null)
     {
@@ -37,6 +38,27 @@ internal static class MeterPresets
         settings.Accents = DefaultAccents(beats);
         settings.AccentOverridesGroups = false;
         settings.ManualAccentIndices = null;
+        settings.SubdivisionAccents = null;
+    }
+
+    /// <summary>
+    /// What choosing a time signature from the picker (or the repair of a mismatched unit) does: <see cref="Apply"/>, and an end to a
+    /// split that no longer fits. A subdivision is counted against the click unit, so when the unit changes the old split means
+    /// nothing against the new one and the beats are no longer split. When the new unit is exactly what the split clicks were
+    /// (6/8 felt in two, counted in dotted quarters and split in three, becoming 6/8 counted in eighths) the tempo is raised by
+    /// the old split so that the same clicks keep coming at the same speed; otherwise the BPM number is kept, as it always was.
+    /// A split with the same unit (4/4 to 3/4) is kept.
+    /// </summary>
+    internal static void ApplyOneClickPerBeat(PulseSettings settings, int beats, int denominator, int[]? groups = null)
+    {
+        var unitBefore = settings.BeatUnitQuarters;
+        var split = settings.Subdivision;
+        Apply(settings, beats, denominator, groups);
+        if (settings.BeatUnitQuarters == unitBefore || split <= 1) return;
+        if (Math.Abs(unitBefore / split - settings.BeatUnitQuarters) < 1e-9)
+            settings.Tempo = Math.Clamp(Math.Round(settings.Tempo * split, 1), 1, 1000);
+        settings.Subdivision = 1;
+        settings.Swing = 0.5;
     }
 
     internal static Accent[] DefaultAccents(int pulses) =>

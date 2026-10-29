@@ -106,9 +106,7 @@ public sealed partial class MainWindow : Window
             if (!_isReady) return;
             _view = args.IsSettingsSelected ? "Settings" :
                 (args.SelectedItemContainer?.Tag as string ?? "Play");
-            _preferences.LastView = _view;
             BuildPage();
-            _ = GuardAsync(() => _workspace.SavePreferencesAsync(_preferences));
         };
         StartButton.Click += async (_, _) => await GuardAsync(TogglePlaybackAsync);
         StopButton.Click += (_, _) =>
@@ -230,7 +228,9 @@ public sealed partial class MainWindow : Window
         ApplyTheme();
         _isReady = true;
         RebuildNavigation();
-        SelectView(_preferences.LastView);
+        // A metronome opens on the metronome. The page left last is not restored: opening on Settings, or on a page that
+        // takes a moment to build, is never what someone starting to play wants.
+        SelectView("Play");
         LocalizeTransport();
         _refresh.Start();
         Diagnostics.Write("Workspace initialized; no playback or capture started");
@@ -278,6 +278,7 @@ public sealed partial class MainWindow : Window
         QueueStageNotesSave();
         _instrument = null;
         _beatStrip = null;
+        _clickGrid = null;
         _tempoEdit = null;
         _position = null;
         _stageTempo = null;

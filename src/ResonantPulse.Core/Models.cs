@@ -28,6 +28,12 @@ public sealed record PulseSettings
     public bool AccentOverridesGroups { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int[]? ManualAccentIndices { get; set; }
+    /// <summary>
+    /// Strength of the clicks that split each beat (Subdivision − 1 for every primary pulse), in bar order: the first pulse's
+    /// split clicks, then the second's, and so on. The pattern repeats like Accents. Null or empty leaves every split click Soft.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Accent[]? SubdivisionAccents { get; set; }
     public int AudibleBars { get; set; }
     public int SilentBars { get; set; }
     public bool BlindGaps { get; set; } = true;

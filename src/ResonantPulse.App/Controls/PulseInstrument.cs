@@ -177,7 +177,7 @@ public sealed class PulseInstrument : Grid
             if (onset.Frame >= end) break;
             var mark = _onsets[index];
             mark.Visibility = Visibility.Visible;
-            mark.Height = onset.Accent == Accent.Strong ? 28 : onset.LaneIndex == -2 ? 8 : 18;
+            mark.Height = onset.Accent == Accent.Strong ? 28 : onset.LaneIndex == -2 ? (onset.Accent == Accent.Normal ? 14 : 8) : 18;
             mark.Width = onset.LaneIndex >= 0 ? 8 : onset.LaneIndex == -2 ? 4 : 6;
             mark.Fill = Brush(onset.Accent == Accent.Strong ? "AccentBrush" : onset.LaneIndex >= 0 ? "LaneBrush" : "PulseBrush");
             Canvas.SetLeft(mark, 100 + (double)(onset.Frame - localFrame) / plan.SampleRate * 126);

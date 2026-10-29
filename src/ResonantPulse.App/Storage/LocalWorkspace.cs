@@ -10,6 +10,7 @@ public sealed class Preferences
     public string OutputId { get; set; } = "";
     public string OutputName { get; set; } = "";
     public bool IsReducedMotion { get; set; }
+    /// <summary>No longer used: the app always opens on Play. Kept so that preferences saved by earlier previews still load.</summary>
     public string LastView { get; set; } = "Play";
     public int ExportBars { get; set; } = 16;
 }

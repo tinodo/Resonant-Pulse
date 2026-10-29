@@ -95,6 +95,22 @@ public sealed class DocumentStoreTests
     }
 
     [TestMethod]
+    public async Task SaveLoad_SubdivisionAccents_RoundTripAndAreOnlyWrittenWhenSet()
+    {
+        using var temp = new TempDirectory();
+        var d = new PulseDocument { Settings = new() { Subdivision = 3, SubdivisionAccents = [Accent.Normal, Accent.Silent] } };
+        await DocumentStore.SaveAsync(temp.File(), d);
+        var loaded = await DocumentStore.LoadAsync(temp.File());
+        Check.Sequence(new[] { Accent.Normal, Accent.Silent }, loaded.Settings.SubdivisionAccents!);
+
+        // A project that never set one is written exactly as before, so an older build can still open it.
+        await DocumentStore.SaveAsync(temp.File("plain.json"), new PulseDocument());
+        Assert.IsFalse((await File.ReadAllTextAsync(temp.File("plain.json"))).Contains("SubdivisionAccents", StringComparison.Ordinal));
+        Assert.IsNull((await DocumentStore.LoadAsync(temp.File("plain.json"))).Settings.SubdivisionAccents);
+        temp.NoTemps();
+    }
+
+    [TestMethod]
     [DataRow("")]
     [DataRow("{")]
     [DataRow("null")]

@@ -14,8 +14,8 @@ internal readonly record struct LiveDecision(LiveEditOutcome Outcome, PulseDocum
 
 /// <summary>
 /// Merges and classifies live edits. Live-eligible settings: Tempo, BeatsPerBar, BeatDenominator, BeatUnitQuarters,
-/// Subdivision, Swing, Groups, Accents, AccentOverridesGroups, ManualAccentIndices, Sound, AudibleBars, SilentBars and
-/// BlindGaps. Everything else (count-in, practice limits, master gain, name, lanes, program, setlist, seed) stays as in
+/// Subdivision, Swing, Groups, Accents, AccentOverridesGroups, ManualAccentIndices, SubdivisionAccents, Sound, AudibleBars,
+/// SilentBars and BlindGaps. Everything else (count-in, practice limits, master gain, name, lanes, program, setlist, seed) stays as in
 /// the active revision. A request carries the COMPLETE live settings, so the newest request fully replaces older ones.
 /// Finite programs only follow the sound-class subset (<see cref="LiveSoundEdits"/>), see <see cref="Decide"/>.
 /// </summary>
@@ -39,8 +39,8 @@ internal static class LiveSettingsEdits
     }
 
     /// <summary>
-    /// Sound: only Sound/Accents/AccentOverridesGroups/ManualAccentIndices/BlindGaps differ (none of them reaches the
-    /// compiled plan), so the musical clock is untouched.
+    /// Sound: only Sound/Accents/AccentOverridesGroups/ManualAccentIndices/SubdivisionAccents/BlindGaps differ (none of them
+    /// moves the musical clock), so the clock is untouched.
     /// Structural: any other live-eligible setting differs. A null and an empty manual-index list are equivalent.
     /// </summary>
     internal static LiveChange Classify(PulseSettings active, PulseSettings other)
@@ -53,7 +53,8 @@ internal static class LiveSettingsEdits
             return LiveChange.Structural;
         return active.Sound != other.Sound || active.AccentOverridesGroups != other.AccentOverridesGroups ||
             active.BlindGaps != other.BlindGaps ||
-            !Same(active.Accents, other.Accents) || !Same(active.ManualAccentIndices, other.ManualAccentIndices)
+            !Same(active.Accents, other.Accents) || !Same(active.ManualAccentIndices, other.ManualAccentIndices) ||
+            !Same(active.SubdivisionAccents, other.SubdivisionAccents)
             ? LiveChange.Sound : LiveChange.None;
     }
 

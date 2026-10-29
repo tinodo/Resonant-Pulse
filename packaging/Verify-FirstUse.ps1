@@ -397,6 +397,12 @@ do {
     Start-Sleep -Milliseconds 200
 } while ([DateTime]::UtcNow -lt $deadline)
 if ($status.Current.Name -notlike 'Stopped*') { throw 'First-use initialization did not reach Stopped.' }
+# The application opens on Play whichever page was open when it was last closed. The launcher saved Settings as that page; earlier
+# builds brought the application back on it, which is not where someone who starts a metronome wants to be.
+$openedOn = Find-Control 'DestinationPlay'
+if (-not $openedOn.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected -or $null -eq (Find-Optional 'PhaseInstrument')) {
+    throw 'The application did not open on Play, although the page saved last was Settings.'
+}
 $bounds = $window.Current.BoundingRectangle
 $primary = @('PhaseInstrument', 'TempoEdit', 'TempoDown', 'TapTempo', 'TempoUp', 'QuickMeter', 'MainSound', 'MainAccent0',
     'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'TransportStop', 'EmergencyMute')
@@ -730,6 +736,61 @@ foreach ($size in @(@(320, 900), @(400, 720))) {
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
+# Every click of the bar has a strength bar. 6/8 felt in two (the "Compound 6/8" ready-made rhythm: counted in dotted quarters,
+# each beat split in three) has two beats and six clicks, so six bars: the two beats and the four clicks that split them. The
+# clicks that split a beat are named so, and a tap changes that click only. Choosing a time signature afterwards gives one
+# click per written beat again; the split clicks were an eighth note apart, which is 6/8's beat, so the tempo rises by the old
+# split and the same clicks keep coming at the same speed.
+Select-Meter '6_8' '6/8'
+Open-Panel @('TempoEdit') 'Tempo'
+Select-Combo 'TempoUnit' 'Dotted quarter'
+Invoke-Control 'TempoOptionsDone'
+Wait-Absent 'TempoOptionsDone'
+Wait-Until { (Get-Dial) -like '120*BPM*Dotted quarter*' } '6/8 did not count in dotted quarters.'
+$null = Find-Control 'MainAccent1'
+Wait-Absent 'MainAccent2'
+Open-Panel @('QuickMeter', 'MeterCustom') 'Subdivision'
+Set-Number 'Subdivision' 3
+Invoke-Control 'RhythmOptionsDone'
+Wait-Absent 'RhythmOptionsDone'
+$null = Find-Control 'MainAccent5'
+Wait-Absent 'MainAccent6'
+$splitDial = Get-Dial
+$expectedNames = @('Beat 1, Strong', 'Beat 1, click 2 of 3, Soft', 'Beat 1, click 3 of 3, Soft',
+    'Beat 4, Strong', 'Beat 4, click 2 of 3, Soft', 'Beat 4, click 3 of 3, Soft')
+for ($click = 0; $click -lt $expectedNames.Count; $click++) {
+    Wait-Until { (Find-Control "MainAccent$click").Current.Name -eq $expectedNames[$click] } "Click $click of 6/8 felt in two is not named '$($expectedNames[$click])'."
+}
+Test-StripFits 6
+Invoke-Control 'MainAccent1'
+Wait-Until { (Find-Control 'MainAccent1').Current.Name -eq 'Beat 1, click 2 of 3, Medium' } 'Tapping a click that splits a beat did not change its strength.'
+foreach ($click in 0, 2, 3, 4, 5) {
+    if ((Find-Control "MainAccent$click").Current.Name -ne $expectedNames[$click]) {
+        throw "A tap on one split click changed click ${click}: '$((Find-Control "MainAccent$click").Current.Name)'."
+    }
+}
+foreach ($tap in 1..3) { Invoke-Control 'MainAccent1' }
+Wait-Until { (Find-Control 'MainAccent1').Current.Name -eq $expectedNames[1] } 'Four taps did not return the split click to its original strength.'
+Assert-NoErrorNotice 'Split-click strengths'
+Select-Meter '6_8' '6/8'
+Wait-Until { (Get-Dial) -like '360*BPM*Eighth*' } 'Choosing 6/8 after splitting its beats did not keep the click rate (the tempo rises by the split).'
+$null = Find-Control 'MainAccent5'
+Wait-Absent 'MainAccent6'
+# The dial changes a moment before the page is rebuilt, and the strip has six cells before and after, so neither the dial nor the
+# number of cells says the strip is the new one: its names are waited for, and the failure says what they were.
+try {
+    Wait-Until { (Find-Control 'MainAccent3').Current.Name -eq 'Beat 4, Strong' -and (Find-Control 'MainAccent1').Current.Name -eq 'Beat 2, Medium' } 'The strip was not rebuilt.'
+} catch {
+    throw "Choosing 6/8 after splitting its beats did not give one click per written beat: $((Find-Control 'MainAccent1').Current.Name), $((Find-Control 'MainAccent3').Current.Name)."
+}
+$meterEvidence += @{meter='6/8 felt in two, each beat split in three';beats=6;dial=$splitDial}
+Select-Meter '4_4' '4/4'
+Open-Panel @('TempoEdit') 'Tempo'
+Set-Number 'Tempo' 120
+Invoke-Control 'TempoOptionsDone'
+Wait-Absent 'TempoOptionsDone'
+Wait-Until { (Get-Dial) -like '120*BPM*Quarter*' } 'The original tempo and unit did not return after the split-click checks.'
+Assert-NoErrorNotice 'Split-click strengths (after choosing a time signature)'
 # Settings and Library: content-sized fields, a switch that takes effect as it is toggled, and no Apply button.
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'
@@ -804,10 +865,25 @@ function Find-DialogButton([string]$id) {
     $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants,
         [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id))
 }
+# Finds a button of the confirmation dialog and presses it in one step, looking again for a moment if it is not there. Waiting for
+# the button and then looking for it a second time raced with the dialog's own opening: the second look came back empty on a
+# loaded runner and the run died on a null instead of pressing the button.
+function Invoke-DialogButton([string]$id, [string]$failure, [int]$seconds = 8) {
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    do {
+        $button = Find-DialogButton $id
+        if ($null -ne $button) {
+            $button.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+            return
+        }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw $failure
+}
 Invoke-Control 'RemoveSong'
 Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Stage: Remove did not ask for confirmation.'
 Wait-Condition { -not (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist can still be used while a song is being removed.'
-(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'CloseButton' 'Stage: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Stage: Cancel did not close the confirmation.'
 Wait-Condition { (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist stayed switched off after the removal was cancelled.'
 Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: cancelling the removal removed a song.'
@@ -834,11 +910,13 @@ $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
 $liveSound = 'not-run-no-output'
 $liveTempoAndMeter = 'not-run-no-output'
+$liveSplitClicks = 'not-run-no-output'
 if (-not $playAudio) {
     $playback = 'not-run-audio-disabled'
     $practiceStops = 'not-run-audio-disabled'
     $liveSound = 'not-run-audio-disabled'
     $liveTempoAndMeter = 'not-run-audio-disabled'
+    $liveSplitClicks = 'not-run-audio-disabled'
 } elseif ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
 } else {
@@ -910,6 +988,27 @@ if (-not $playAudio) {
         Invoke-Control 'TempoDown'
         # Stopping mid-commit would leave the later counted-stop checks running at 121 or 122 BPM.
         Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;tempo=120;meter=4/4' } 'Live tempo and meter did not return to 120 BPM, 4/4 before stopping.' 20
+        # The clicks that split a beat are live too: split the beats while playing (spliced in at the next beat), then change the
+        # strength of one split click (heard from the next audio quantum). The active revision follows without Stop, and
+        # un-splitting the beats ends the strengths with them.
+        Open-Panel @('QuickMeter', 'MeterCustom') 'Subdivision'
+        Set-Number 'Subdivision' 2
+        Invoke-Control 'RhythmOptionsDone'
+        Wait-Absent 'RhythmOptionsDone'
+        Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;subdivision=2;*' } 'Live subdivision did not reach the active audio revision.' 15
+        $null = Find-Control 'MainAccent7'
+        Wait-Absent 'MainAccent8'
+        Invoke-Control 'MainAccent1'
+        Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;splits=2,1,1,1;*' } 'The strength of a split click never reached the active audio revision.' 15
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live split-click edit interrupted playback.' }
+        Open-Panel @('QuickMeter', 'MeterCustom') 'Subdivision'
+        Set-Number 'Subdivision' 1
+        Invoke-Control 'RhythmOptionsDone'
+        Wait-Absent 'RhythmOptionsDone'
+        Wait-Until { (Find-Control 'TransportStatus').Current.ItemStatus -like '*;splits=;tempo=120;meter=4/4' } 'Un-splitting the beats did not reach the active audio revision.' 15
+        Wait-Absent 'MainAccent4'
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Playing*') { throw 'Live un-split interrupted playback.' }
+        $liveSplitClicks = 'split-beats-and-split-click-strength-published-without-stop'
     } finally {
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
             Invoke-Control 'TransportStop'
@@ -1037,7 +1136,7 @@ foreach ($id in $laneFields) {
     Wait-Condition { -not (Find-Control $id).Current.IsEnabled } "Studio: $id can still be edited while a lane is being removed."
 }
 if (-not (Find-Control 'Lane0More').Current.IsEnabled) { throw 'Studio: the lane menu is switched off while a lane is being removed, so the keyboard focus has nowhere to return to.' }
-(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'CloseButton' 'Studio: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
 foreach ($id in $laneFields) {
     Wait-Condition { (Find-Control $id).Current.IsEnabled } "Studio: $id stayed switched off after the removal was cancelled."
@@ -1159,13 +1258,13 @@ Show-Control 'Program2More'
 Invoke-Control 'Program2More'
 Invoke-Control 'Program2Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
-(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'CloseButton' 'Studio: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
 $null = Find-Control 'Program2Card'
 Invoke-Control 'Program2More'
 Invoke-Control 'Program2Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Studio: Remove did not ask again.'
-(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'PrimaryButton' 'Studio: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program2Card') } 'Studio: removing a step did not take its card away.'
 Test-NoApplyButtons 'Studio'
 # The remaining steps are taken away too: with a program the Play page leaves the tempo and the time signature to the program, and
@@ -1174,7 +1273,7 @@ foreach ($stepIndex in 1, 0) {
     Invoke-Control "Program${stepIndex}More"
     Invoke-Control "Program${stepIndex}Remove"
     Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "Studio: Remove did not ask about step $($stepIndex + 1)."
-    (Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Invoke-DialogButton 'PrimaryButton' "Studio: the confirmation about step $($stepIndex + 1) went away before Remove could be confirmed."
     Wait-Condition { $null -eq (Find-Optional "Program${stepIndex}Card") } "Studio: removing step $($stepIndex + 1) did not take its card away."
 }
 Wait-Condition { $null -ne (Find-Optional 'AddProgramStep') -and $null -ne (Find-Optional 'ProgramCard') } 'Studio: the program card did not come back to its empty state.'
@@ -1277,7 +1376,7 @@ foreach ($id in 'Program0Name', 'Program0MoveUp', 'Program0MoveDown', 'Program0M
 Invoke-Control 'Program0More'
 Invoke-Control 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Dutch Studio program: Remove did not ask for confirmation.'
-(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'PrimaryButton' 'Dutch Studio program: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Dutch Studio program: removing the step did not take its card away.'
 # A project that groups its beats (7/8 as 2+2+3) gives every step the project's own time signature, so the two fields are off, and
 # Play offers no time signature while there is a program: the card itself offers Clear grouping, which keeps the program. The
@@ -1304,7 +1403,7 @@ Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Grouped Studio prog
 Invoke-Control 'Program0More'
 Invoke-Control 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Grouped Studio program: Remove did not ask for confirmation.'
-(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'PrimaryButton' 'Grouped Studio program: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Grouped Studio program: removing the step did not take its card away.'
 Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
@@ -1317,7 +1416,7 @@ Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
-  meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;
+  meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

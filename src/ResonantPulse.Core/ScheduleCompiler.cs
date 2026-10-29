@@ -71,8 +71,13 @@ public static class ScheduleCompiler
                     Rational offset = s.Swing == 0.5 || sub % 2 == 0
                         ? unit * new Rational(sub, s.Subdivision)
                         : unit * (new Rational(sub - 1, s.Subdivision) + new Rational(2, s.Subdivision) * swing);
+                    // A split click is Soft unless the project sets it; a Soft one stays quieter than a Soft beat, a stronger one
+                    // is as loud as a beat of that strength.
+                    Accent split = s.SubdivisionAccents is { Length: > 0 } splits
+                        ? splits[(pulseIndex * (s.Subdivision - 1) + sub - 1) % splits.Length]
+                        : Accent.Soft;
                     if (pulse + offset < section.Length)
-                        Add(pulse + offset, -2, Accent.Soft, 0.65f, 0, s.Sound, 1, GapAt(pulse + offset) || solo, false);
+                        Add(pulse + offset, -2, split, split == Accent.Soft ? 0.65f : 1f, 0, s.Sound, 1, GapAt(pulse + offset) || solo, false);
                 }
             }
             if (section.CountIn) continue;

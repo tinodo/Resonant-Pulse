@@ -206,6 +206,8 @@ public sealed partial class MainWindow
                 {
                     doc.Settings.Tempo = bpm;
                     doc.Settings.BeatUnitQuarters = unitValue;
+                    // The split clicks' strengths are laid out per beat of the old unit.
+                    if (unitChanged) doc.Settings.SubdivisionAccents = null;
                     applied = true;
                 }, editorChange: unitChanged ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
                 if (applied && unitChanged) BuildPage();
@@ -267,10 +269,13 @@ public sealed partial class MainWindow
                 await CommitAsync(doc =>
                 {
                     var target = doc.Settings;
+                    var divisionBefore = target.Subdivision;
                     if (target.BeatsPerBar != newBeats || target.BeatDenominator != newDenominator)
                         MeterPresets.Apply(target, newBeats, newDenominator, newGroups);
                     else target.Groups = newGroups;
                     target.Subdivision = newDivision;
+                    // The strengths of the split clicks belong to a split of this size.
+                    if (newDivision != divisionBefore) target.SubdivisionAccents = null;
                     target.Swing = newSwing;
                     target.CountInBars = newCountIn;
                     target.AudibleBars = newAudible;

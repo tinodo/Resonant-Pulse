@@ -65,17 +65,20 @@ public sealed partial class MainWindow
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tempoEdit, tempoName);
             }
         }
-        if (_beatStrip is { } strip)
+        if (_beatStrip is { } strip && _clickGrid is { } clicks)
         {
-            var pulse = -1;
-            // The strip edits the document's own bar; a program section in another meter has no matching cell to light.
+            var cell = -1;
+            // The strip edits the document's own bar; a program section in another meter has no matching cell to light. The position
+            // is the playing audio's, which has not taken a change of unit, subdivision or swing that is still waiting for its
+            // splice: until it has, its clicks are not where the strip's cells are, so nothing is lit.
             var stripMeterMatches = meterBeats == _document.Settings.BeatsPerBar && meterDenominator == _document.Settings.BeatDenominator;
-            if (stripMeterMatches && position is not null && !blind && snapshot.State is TransportState.Playing or TransportState.Paused)
+            if (stripMeterMatches && clicks.IsPlayedBy(shownSettings) && position is not null && !blind &&
+                snapshot.State is TransportState.Playing or TransportState.Paused)
             {
                 var withinBar = (position.BeatIndex + position.BeatPhase) * 4d / meterDenominator;
-                pulse = (int)Math.Floor(withinBar / Math.Max(1d / 64, settings.BeatUnitQuarters) + 1e-6);
+                cell = clicks.CellAt(withinBar, position.IsCountIn);
             }
-            strip.Highlight(pulse >= strip.Count ? -1 : pulse);
+            strip.Highlight(cell >= strip.Count ? -1 : cell);
         }
         if (_tempoCurve is { } curve)
         {
@@ -126,7 +129,7 @@ public sealed partial class MainWindow
             (_isOutputMissing ? $"\n{Text.Get("OutputMissing")}" : !HasSelectedOutput ? $"\n{Text.Get("ChooseOutput")}" : "") +
             (_hasPendingEdits ? $"\n{Text.Get("PendingEdits")}" : "");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemStatus(TransportStatus,
-            $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])};tempo={settings.Tempo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)};meter={meterBeats}/{meterDenominator}");
+            $"sound={settings.Sound};accents={string.Join(",", settings.Accents.Select(accent => (int)accent))};override={settings.AccentOverridesGroups};manual={string.Join(",", settings.ManualAccentIndices ?? [])};subdivision={settings.Subdivision};splits={string.Join(",", (settings.SubdivisionAccents ?? []).Select(accent => (int)accent))};tempo={settings.Tempo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)};meter={meterBeats}/{meterDenominator}");
         if (!blind && snapshot.Revision is { HasPracticeLimit: true } timed &&
             timed.FramesRemainingAt(snapshot.ProcessedFrame) is { } remaining)
         {

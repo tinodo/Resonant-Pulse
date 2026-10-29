@@ -36,6 +36,8 @@ public static class DocumentValidator
         Require(s.PracticeBeats is >= 0 and <= 6_400_000, "Practice beats must be 0..6400000.");
         Require(s.PracticeBars is >= 0 and <= 100_000, "Practice bars must be 0..100000.");
         Pattern(s.Accents, 256, "Main accents");
+        Require(s.SubdivisionAccents is null || (s.SubdivisionAccents.Length <= 1024 && s.SubdivisionAccents.All(x => Enum.IsDefined(x))),
+            "Subdivision accents contain invalid accents or exceed 1024 entries.");
         Require(s.ManualAccentIndices is null ||
             (s.ManualAccentIndices.Length <= 256 && s.ManualAccentIndices.All(index => index is >= 0 and < 256) &&
              s.ManualAccentIndices.Distinct().Count() == s.ManualAccentIndices.Length),
