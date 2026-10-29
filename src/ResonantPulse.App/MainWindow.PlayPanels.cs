@@ -202,11 +202,16 @@ public sealed partial class MainWindow
                 Field(taps, "UnitTaps"), Hint("TapStartCountHelp")
             }
         };
+        // What the panel showed when it was opened (set again each time it opens): Done writes only what was changed from it.
+        var openedTempo = settings.Tempo;
+        var openedUnit = settings.BeatUnitQuarters;
         return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
-                tempo.Value = _tempoRequested ?? _document.Settings.Tempo;
-                SelectChoice(unit, Invariant(_document.Settings.BeatUnitQuarters));
+                openedTempo = _tempoRequested ?? _document.Settings.Tempo;
+                openedUnit = _document.Settings.BeatUnitQuarters;
+                tempo.Value = openedTempo;
+                SelectChoice(unit, Invariant(openedUnit));
                 taps.Value = TapStartRules.ClampTaps(_preferences.TapInCount);
             },
             async () =>
@@ -214,25 +219,34 @@ public sealed partial class MainWindow
                 var bpm = Math.Round(Value(tempo), 1);
                 var unitValue = double.Parse(Selected(unit), CultureInfo.InvariantCulture);
                 var newTaps = Integer(taps);
-                var unitChanged = unitValue != _document.Settings.BeatUnitQuarters;
-                var tempoChanged = bpm != (_tempoRequested ?? _document.Settings.Tempo);
-                var applied = false;
-                // A tempo or unit chosen here by hand ends a Tap to start, and it does so before the commit: a commit that fails
-                // after it has published the change (the recovery file cannot be written) must not leave an intent that is still
-                // listening and would later overwrite what was chosen. A new number of taps only counts for the next one.
-                if (tempoChanged || unitChanged) CancelTapIn();
-                await CommitAsync(doc =>
+                // Only the fields that were changed in the panel are written. A tempo or unit that still shows what it showed when
+                // the panel opened would put that value over a newer one (the tempo a Tap to start saved meanwhile, or a nudge
+                // that was still on its way), and a number of taps changed alone changes nothing of the project.
+                var (tempoEdited, unitEdited) = TempoEdits.PanelEdits(openedTempo, openedUnit, bpm, unitValue);
+                if (tempoEdited || unitEdited)
                 {
-                    doc.Settings.Tempo = bpm;
-                    doc.Settings.BeatUnitQuarters = unitValue;
-                    // The split clicks' strengths are laid out per beat of the old unit.
-                    if (unitChanged) doc.Settings.SubdivisionAccents = null;
-                    applied = true;
-                }, editorChange: unitChanged ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
-                if (!applied) return false;
-                // The project holds the new unit now, so the page is built for it whether or not the number of taps can be
-                // remembered: a refused write of the preferences must not leave the page of the old unit behind.
-                if (unitChanged) BuildPage();
+                    // A tempo or unit chosen here by hand ends a Tap to start, and it does so before the commit: a commit that
+                    // fails after it has published the change (the recovery file cannot be written) must not leave an intent
+                    // that is still listening and would later overwrite what was chosen. A new number of taps only counts for the
+                    // next one.
+                    CancelTapIn();
+                    var applied = false;
+                    await CommitAsync(doc =>
+                    {
+                        if (tempoEdited) doc.Settings.Tempo = bpm;
+                        if (unitEdited)
+                        {
+                            doc.Settings.BeatUnitQuarters = unitValue;
+                            // The split clicks' strengths are laid out per beat of the old unit.
+                            doc.Settings.SubdivisionAccents = null;
+                        }
+                        applied = true;
+                    }, editorChange: unitEdited ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
+                    if (!applied) return false;
+                    // The project holds the new unit now, so the page is built for it whether or not the number of taps can be
+                    // remembered: a refused write of the preferences must not leave the page of the old unit behind.
+                    if (unitEdited) BuildPage();
+                }
                 if (newTaps != TapStartRules.ClampTaps(_preferences.TapInCount))
                 {
                     _preferences.TapInCount = newTaps;

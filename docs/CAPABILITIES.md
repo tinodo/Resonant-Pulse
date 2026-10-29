@@ -53,7 +53,9 @@ on both sides of them (the controls stay centred under the dial), as an icon alo
 as an icon at the end of the controls when the window is narrower still, and on a row of its own only in the narrowest
 windows, which costs the dial some height; the dial keeps its size at 800x600 and 1000x720. The number of taps (2 to 16,
 4 until changed) is an app preference kept in the Tempo panel: Cancel discards what was typed, Done keeps it, and it
-counts the next time the switch goes on. While it listens, TAP and the T key count the taps ("3 of 4 taps"), the dial
+counts the next time the switch goes on. Done writes only what was changed in the panel, so a number of taps changed
+alone neither ends Tap to start nor touches the project (a tapped tempo that is being saved stays); a tempo or unit
+changed there ends it, as a tempo chosen by hand does. While it listens, TAP and the T key count the taps ("3 of 4 taps"), the dial
 shows the tempo they make so far, and Stop, Esc or the switch cancel. The tempo is the estimate to the nearest 0.1 BPM
 in the project's own note unit, so the unit is never changed; the last tap saves it as one edit of the project (one
 step of Undo) and only then runs the normal Start, so the project's count-in still plays. A tap that is not steady

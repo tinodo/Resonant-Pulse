@@ -220,6 +220,21 @@ public sealed class TempoEditsTests
     }
 
     [TestMethod]
+    public void TheTempoPanelWritesOnlyWhatWasChangedInIt()
+    {
+        // A field that still shows what it showed when the panel opened must not put that value over a newer one: the tempo that a
+        // Tap to start has saved since, or a nudge that was still on its way. Only the number of taps changes nothing of the project.
+        Assert.AreEqual((false, false), TempoEdits.PanelEdits(120, 1, 120, 1));
+        Assert.AreEqual((true, false), TempoEdits.PanelEdits(120, 1, 90, 1));
+        Assert.AreEqual((false, true), TempoEdits.PanelEdits(120, 1, 120, 0.5));
+        Assert.AreEqual((true, true), TempoEdits.PanelEdits(120, 1, 90, 1.5));
+        // A tempo kept to more than a tenth shows as typed to the tenth: that is not an edit of it.
+        Assert.AreEqual((false, false), TempoEdits.PanelEdits(120.04, 1, 120, 1));
+        Assert.AreEqual((true, false), TempoEdits.PanelEdits(120.04, 1, 120.1, 1));
+        Assert.AreEqual((false, false), TempoEdits.PanelEdits(120, 1, double.NaN, 1));
+    }
+
+    [TestMethod]
     public void TheSetlistIsLeftAlone()
     {
         var song = new SongEntry { Name = "Song", Document = new PulseDocument { Program = [new() { StartTempo = 90, EndTempo = 90 }] } };

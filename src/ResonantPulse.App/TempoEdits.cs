@@ -8,6 +8,14 @@ internal static class TempoEdits
     internal static bool IsChange(double current, double proposed) =>
         double.IsFinite(proposed) && current != proposed;
 
+    /// <summary>
+    /// What the Tempo panel writes when Done is pressed: only the fields that were changed in it. A field that still shows what it
+    /// showed when the panel opened must not put that value over a newer one, such as the tempo that a Tap to start has saved
+    /// since or a nudge that was still on its way. The tempo is compared to the tenth it is typed to.
+    /// </summary>
+    internal static (bool Tempo, bool Unit) PanelEdits(double openedTempo, double openedUnit, double typedTempo, double typedUnit) =>
+        (IsChange(Math.Round(openedTempo, 1), typedTempo), typedUnit != openedUnit);
+
     internal static bool TryApplyTap(double current, double? estimate, out double proposed)
     {
         proposed = current;

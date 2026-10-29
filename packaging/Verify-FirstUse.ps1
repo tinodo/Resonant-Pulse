@@ -1124,6 +1124,46 @@ function Test-TapStartWithOutput {
         $null = Wait-Transport 'Stopped'
         Wait-Until { [Math]::Abs((Get-DialNumber) - $played) -le 0.05 } "The tempo that started ($played) is not the tempo the project kept ($(Get-Dial))."
         $script:tapStartDone.Add("two-taps-start-the-metronome-at-the-tapped-tempo-$played")
+        # The Tempo panel can be open when the last tap saves its tempo: a person who finds four taps too many changes the number
+        # there and taps. Done writes only what was changed in the panel, so the tempo that the panel showed when it opened must
+        # not be put back over the tapped one, on the dial, in the audio and in the project.
+        Open-Panel @('TempoEdit') 'Tempo'
+        Wait-Settled 'Tempo'
+        Set-Number 'Tempo' 120
+        Invoke-Control 'TempoOptionsDone'
+        Wait-Absent 'TempoOptionsDone'
+        Wait-Until { (Get-Dial) -like '120*BPM*' } 'The tempo did not return to 120 before the check of the Tempo panel.'
+        Switch-TapStart $true 'Tap to start did not switch on for the check of the Tempo panel.'
+        Wait-TapStatus 'armed:0:2:0' 'Tap to start did not listen for two taps before the Tempo panel was opened.'
+        Open-TapCount
+        Set-Number 'TapInCount' 3
+        $tapButton = (Find-Control 'TapTempo').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
+        $tapButton.Invoke()
+        Start-Sleep -Milliseconds 300
+        $tapButton.Invoke()
+        $null = Wait-Transport 'Playing'
+        Wait-TapStartState $false 'Tap to start stayed on after it started the metronome behind the Tempo panel.'
+        $tappedTempo = Get-DialNumber
+        if ($tappedTempo -lt 15 -or $tappedTempo -gt 100) { throw "Two taps behind the Tempo panel did not set a tempo of their own: $(Get-Dial)" }
+        Invoke-Control 'TempoOptionsDone'
+        Wait-Absent 'TempoOptionsDone'
+        Open-TapCount
+        Wait-Until { (Get-TapCount) -eq 3 } 'Done did not keep the number of taps that was changed behind Tap to start.'
+        Invoke-Control 'TempoOptionsCancel'
+        Wait-Absent 'TempoOptionsCancel'
+        if ([Math]::Abs((Get-DialNumber) - $tappedTempo) -gt 0.05) {
+            throw "Done in the Tempo panel put the tempo it showed when it opened over the tapped one: the dial shows $(Get-Dial), the taps made $tappedTempo."
+        }
+        $playingStatus = (Find-Control 'TransportStatus').Current.ItemStatus
+        if ($playingStatus -match ';tempo=([0-9.]+);') { $playedBehindPanel = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture) }
+        else { throw "The playing revision reports no tempo after Done in the Tempo panel: $playingStatus" }
+        if ([Math]::Abs($playedBehindPanel - $tappedTempo) -gt 0.05) {
+            throw "The metronome plays $playedBehindPanel, not the tempo that was tapped behind the Tempo panel ($tappedTempo)."
+        }
+        Invoke-Control 'TransportStop'
+        $null = Wait-Transport 'Stopped'
+        Wait-Until { [Math]::Abs((Get-DialNumber) - $tappedTempo) -le 0.05 } "The project did not keep the tempo that was tapped behind the Tempo panel ($tappedTempo): $(Get-Dial)."
+        $script:tapStartDone.Add("a-number-of-taps-changed-behind-a-saved-tap-in-leaves-the-tapped-tempo-$tappedTempo")
     } finally {
         if ((Get-TapStartState) -eq [Windows.Automation.ToggleState]::On) { Switch-TapStart $false 'Tap to start could not be switched off.' }
         if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
