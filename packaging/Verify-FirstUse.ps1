@@ -1075,9 +1075,10 @@ function Test-TapStartWithOutput {
     # would use). The taps are made through one button that is found once, and nothing is read in between: finding a control and
     # pressing a button each take as long as UI Automation takes on this desktop (a press took 2.0 seconds on the private desktop of
     # the local gate), and the taps are as late as the presses are. So the pauses follow what was measured: the second tap comes
-    # as soon as a beat of 0.3 seconds allows, and the third after about 2.2 times that beat, which is too far from it to be
-    # steady and still short of the idle time (4 seconds, or three beats if that is longer) after which counting would simply
-    # begin again. A run whose timing cannot tell the two apart is reported as not run, not as passed.
+    # as soon as a beat of 0.3 seconds allows, and the third about 1.3 beats plus 0.7 seconds after it, which is more than 30 % off
+    # the beat (so not steady) and still inside the four seconds after which Tap to start begins a new count, whatever the beat was
+    # (3.3 seconds for the 2.0-second beat of a slow desktop; a longer wait would be an idle gap, which starts a new count instead).
+    # A run whose timing cannot tell the two apart is reported as not run, not as passed.
     Switch-TapStart $true 'Tap to start did not switch on for the uneven tap.'
     Wait-TapStatus 'armed:0:4:0' 'Tap to start did not listen for the uneven tap.'
     $tapButton = (Find-Control 'TapTempo').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
@@ -1088,10 +1089,10 @@ function Test-TapStartWithOutput {
     $tapButton.Invoke(); $secondTap = $clock.Elapsed.TotalSeconds
     $beat = $secondTap - $firstTap
     $pressTime = [Math]::Max(0, $beat - $pause)
-    Start-Sleep -Milliseconds ([int]([Math]::Max(0, 2.2 * $beat - $pressTime) * 1000))
+    Start-Sleep -Milliseconds ([int]([Math]::Max(0, 1.3 * $beat + 0.7 - $pressTime) * 1000))
     $tapButton.Invoke(); $thirdTap = $clock.Elapsed.TotalSeconds
     $late = $thirdTap - $secondTap
-    if ($beat -ge 0.08 -and $late -gt 1.3 * $beat + 0.25 -and $late -lt [Math]::Max(4, 3 * $beat) - 0.4) {
+    if ($beat -ge 0.08 -and $late -gt 1.3 * $beat + 0.25 -and $late -lt 4 - 0.4) {
         Wait-TapStatus 'armed:0:4:1' "An uneven tap did not start the count again (the taps were $([Math]::Round($beat, 2)) and $([Math]::Round($late, 2)) seconds apart)."
         Wait-Until { (Get-Dial) -like '120*BPM*' } 'The dial kept an estimate after an uneven tap.'
         $script:tapStartDone.Add("uneven-tap-restarts-the-count-taps-$([Math]::Round($beat, 2))-and-$([Math]::Round($late, 2))-seconds-apart")
