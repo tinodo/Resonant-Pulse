@@ -51,9 +51,18 @@ head, request the review by hand:
     gh pr edit NUMBER -R tinodo/Resonant-Pulse --add-reviewer '@copilot'
 
 A review of that exact head followed within about two minutes both times and the
-check then passed by itself. That is not a bypass: the check still demands a
-completed review of the exact head, which is read in full and its conversations
-resolved like any other. After another merge a Dependabot pull request is out of
+check then passed by itself. Request it as soon as the head appears: the check
+gives up after 22.5 minutes, and a review that completes later does not wake it,
+because the workflow runs only when a pull request is opened, reopened, made
+ready or pushed to (true of every pull request, not only Dependabot's). Then
+re-run the failed check for the same head once the review has completed, with the
+run found by `gh run list -R tinodo/Resonant-Pulse --workflow copilot-review.yml --commit HEAD_SHA`:
+
+    gh run rerun RUN_ID -R tinodo/Resonant-Pulse --failed
+
+None of this is a bypass: the check still demands a completed review of the exact
+head, which is read in full and its conversations resolved like any other. After
+another merge a Dependabot pull request is out of
 date: comment `@dependabot rebase`, or run
 `gh pr update-branch NUMBER -R tinodo/Resonant-Pulse` when Dependabot has not
 answered within about ten minutes (it did not on PR #2).
