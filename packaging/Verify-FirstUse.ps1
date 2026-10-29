@@ -776,7 +776,11 @@ Select-Meter '6_8' '6/8'
 Wait-Until { (Get-Dial) -like '360*BPM*Eighth*' } 'Choosing 6/8 after splitting its beats did not keep the click rate (the tempo rises by the split).'
 $null = Find-Control 'MainAccent5'
 Wait-Absent 'MainAccent6'
-if ((Find-Control 'MainAccent3').Current.Name -ne 'Beat 4, Strong' -or (Find-Control 'MainAccent1').Current.Name -ne 'Beat 2, Medium') {
+# The dial changes a moment before the page is rebuilt, and the strip has six cells before and after, so neither the dial nor the
+# number of cells says the strip is the new one: its names are waited for, and the failure says what they were.
+try {
+    Wait-Until { (Find-Control 'MainAccent3').Current.Name -eq 'Beat 4, Strong' -and (Find-Control 'MainAccent1').Current.Name -eq 'Beat 2, Medium' } 'The strip was not rebuilt.'
+} catch {
     throw "Choosing 6/8 after splitting its beats did not give one click per written beat: $((Find-Control 'MainAccent1').Current.Name), $((Find-Control 'MainAccent3').Current.Name)."
 }
 $meterEvidence += @{meter='6/8 felt in two, each beat split in three';beats=6;dial=$splitDial}
