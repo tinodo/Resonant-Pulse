@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery; My projects with search, name and date, and Open once a project is chosen; ready-made rhythms with a name, a sentence, meter and tempo; WAV and checked MIDI export, with the export length (the bars written when the project has no program) beside the export buttons | Stem/media/chart/PDF processing, pitch-preserving stretch, tempo-map import, CSV history and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries (a test checks that every string exists in all five with matching placeholders), keyboard and automation handling, theme-aware controls, a Reduce motion switch (the marker jumps from beat to beat and the tape of upcoming clicks is hidden; also on whenever Windows has animation effects off), fields that give way in narrow windows and at larger text sizes | Musician translation review (the new and rewritten Dutch, German, French and Spanish text was written with GitHub Copilot; docs/design/glossary.md lists the terms to check first), Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance, Windows text sizes above 100% on the real setting |
-| Distribution | Published GitHub preview 0.1.0-preview.10 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.11 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -333,3 +333,34 @@ native-speaking musician's review of the new Dutch, German, French and Spanish t
 (docs/design/glossary.md lists the terms to check first), full-product acceptance or
 Store publication. When Windows activates the packaged app, keyboard focus starts on
 Settings (initial focus is not managed yet), so its focus ring can show at launch.
+
+[Preview 0.1.0-preview.11](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.11)
+answers two questions from using preview.10: the app opened on Settings, and the
+beat-strength bar of the ready-made *Compound 6/8* showed two bars while the dial,
+the tape and the status line counted six clicks. The owner was not available to
+choose, so the first option was taken (read-only bars, or a label alone, are the
+alternatives). The app now always opens on Play, and the strip has a bar for every
+click, with the strengths of the clicks that split a beat saved in the new optional
+`SubdivisionAccents`; a project that sets one cannot be opened by preview.10 or
+earlier. Choosing a time signature from the picker gives one click per written beat
+and, when the beat is exactly what the split clicks were, raises the tempo by the old
+split. Copilot reviewed the change five times; it raised five inline findings and listed
+three more that were not inline threads, and all eight were fixed before the merge
+(DELIVERY.md has the details). The hosted runner passes 550 App tests and the 240
+Core tests that run (4 skip, as before), and the hosted first-use verifier checks the
+start page, the six named bars, a tap on one split click and the picker conversion.
+The local silent-audio gate (inaudible master gain, isolated data folder, private
+desktop) passed on the final head's code, with live sound, tempo, meter and split-click
+edits published without stopping. Three of four local gate runs on that code stopped at
+8-second waits in Studio; replaying those steps showed Studio operations of 1.4 seconds to more than 8 on both preview.10 and preview.11 on that desktop, so they predate this change,
+and the verifier's page waits now allow 30 seconds. The shipped x64 binary then passed the whole gate once with those waits (live sound, beat-strength, tempo, meter and split-click edits published without stopping, the counted stops passed, and one expected error in its app log); two runs with the 8-second waits had stopped at the Studio Undo wait. The released ZIP was dry-run on private-desktop copies of the owner's
+saved state, one with its saved last page changed to Settings: both opened on Play with
+six named strength bars and left the saved state byte-identical. It was installed on the
+development PC without being started: preview.10 stays on disk, and the Start menu
+shortcut now targets preview.11. No audio was played in any instance started for the
+owner. This does not establish listening (the loudness of a Strong split click relative
+to a beat comes from the renderer's constants, not from ears), why Studio is slow on the
+private desktop, a native-speaking musician's review of the new Dutch, German, French and
+Spanish text, Windows text sizes above 100%, or the owner's acceptance of editable split
+clicks. When Windows activates the packaged app, keyboard focus starts on Settings
+(initial focus is not managed yet), so its focus ring can show at launch.
