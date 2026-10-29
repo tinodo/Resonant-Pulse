@@ -171,4 +171,12 @@
     <Setter Property="Height" Value="52" />
     <Setter Property="Padding" Value="16,0" />
   </Style>
+  <!-- "Tap to start": a switch that reads as a button beside TAP. Off it is as quiet as Stop and Mute; on, it takes the accent
+       colour that Start has. It is as tall as every other button (44 DIP) and a pill, like the controls it sits beside. -->
+  <Style x:Key="TapStartToggleStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="MinWidth" Value="44" />
+    <Setter Property="Padding" Value="14,0" />
+  </Style>
 </ResourceDictionary>

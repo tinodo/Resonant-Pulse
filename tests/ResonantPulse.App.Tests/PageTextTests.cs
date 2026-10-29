@@ -47,7 +47,10 @@ public sealed class PageTextTests
         "StepGapSentence", "StepGapHelp", "StepMeterGrouped", "ClearGrouping", "ProgramTooLong", "StepLength", "StepBarsPlayed", "StepNameRequired",
         "PositionsHelp", "PositionsConvert", "PositionsConvertHelp", "PositionsAdd", "PositionLimit", "PositionField", "PositionName",
         "PositionTied", "PositionInvalid", "PositionRange", "PositionTaken", "PositionPrecise", "PositionGone", "PositionStrength",
-        "PositionTie", "PositionChance"
+        "PositionTie", "PositionChance",
+        "TapStart", "TapStartHelp", "TapStartProgramHelp", "TapStartActive", "TapStartStopFirst", "TapStartMonitoring",
+        "TapStartCount", "TapStartRejected", "TapStartStarting", "TapStartCancelled", "TapStartOutputChanged", "TapStartRange",
+        "TapStartScaled", "TapStartCountField", "TapStartCountHelp", "UnitTaps", "HelpTapStart", "ShortcutTap"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>
@@ -256,5 +259,32 @@ public sealed class PageTextTests
         foreach (var language in Languages)
         foreach (var key in new[] { "PracticeStopAfter", "UnitSeconds", "UnitBeats", "UnitBars" })
             Assert.IsTrue(Get(language, key).Length <= 14, $"{language}/{key}: {Get(language, key)}");
+    }
+
+    [TestMethod]
+    public void TheTapStartTextFitsItsPlaceAndSaysWhatTheNumbersAre()
+    {
+        foreach (var language in Languages)
+        {
+            // The switch sits on a pill beside the tempo controls: a long label would push it into its icon-only form on a window
+            // of ordinary width. The unit sits right of a number box in the Tempo panel, like the units of the Timer panel.
+            Assert.IsTrue(Get(language, "TapStart").Length <= 22, $"{language}/TapStart: {Get(language, "TapStart")}");
+            Assert.IsTrue(Get(language, "UnitTaps").Length <= 14, $"{language}/UnitTaps: {Get(language, "UnitTaps")}");
+            Assert.IsTrue(Get(language, "TapStartCountField").Length <= 24, $"{language}/TapStartCountField: {Get(language, "TapStartCountField")}");
+            // The range of the number of taps and of the tempo is part of what the sentences promise.
+            var countHelp = Get(language, "TapStartCountHelp");
+            StringAssert.Contains(countHelp, "2", language);
+            StringAssert.Contains(countHelp, "16", language);
+            var range = Get(language, "TapStartRange");
+            StringAssert.Contains(range, "1000", language);
+            // A refused start ends Tap to start (the switch goes off), so the way on that the sentence gives is to switch it on
+            // again, by the name the switch has in that language; "tap again" would be a tap that nothing counts. The notice is
+            // compact: at 400 DIP wide 140 characters are four lines, and a longer one clips the page behind it.
+            StringAssert.Contains(range, Get(language, "TapStart"), language);
+            Assert.IsTrue(range.Length <= 140, $"{language}/TapStartRange: {range.Length} characters");
+            // What the help says to press is named as that language names it: the keyboard key and the Stop command.
+            StringAssert.Contains(Get(language, "TapStartActive"), Get(language, "Stop"), language);
+            StringAssert.Contains(Get(language, "TapStartStopFirst"), Get(language, "Stop"), language);
+        }
     }
 }

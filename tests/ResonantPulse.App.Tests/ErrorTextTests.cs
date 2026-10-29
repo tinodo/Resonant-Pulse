@@ -10,6 +10,35 @@ namespace ResonantPulse.App.Tests;
 public sealed class ErrorTextTests
 {
     [TestMethod]
+    public void ARefusedTapStartExplainsItselfInTheWordsOfEveryLanguageAndNamesNoDiagnostics()
+    {
+        var previousLanguage = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                var document = new PulseDocument { Program = [new() { StartTempo = 100, EndTempo = 200 }] };
+                var failure = Assert.ThrowsExactly<UserMessageException>(() => TempoEdits.ApplyTapIn(document, 1000));
+                Assert.AreEqual(Text.Get("TapStartRange"), failure.Message, language);
+                Assert.AreNotEqual("TapStartRange", failure.Message, language);
+                // A message written for the person is shown as it is: it must not be taken for a rhythm error because it
+                // happens to contain a keyword such as "tempo", and it carries no pointer to the diagnostic log.
+                Assert.AreEqual(failure.Message, ErrorText.Explain(failure), language);
+                Assert.AreNotEqual(Text.Get("ErrorRhythm"), ErrorText.Explain(failure), language);
+            }
+        }
+        finally
+        {
+            Text.Select(previousLanguage);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
     public void MidiConstraintsWinOverGenericConstantAndSwingKeywordsInEveryLanguage()
     {
         var previousLanguage = Text.Language;

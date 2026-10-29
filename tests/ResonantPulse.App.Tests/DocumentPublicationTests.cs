@@ -64,6 +64,43 @@ public sealed class DocumentPublicationTests
     }
 
     [TestMethod]
+    public async Task ACancelledWaitForTheEditLockRunsNothingRendersNothingAndTakesNothing()
+    {
+        // A start that waits for the edit lock (Tap to start after its last tap) must be able to let go of the wait when it is
+        // cancelled, instead of holding its busy state until the edit in front of it is done.
+        using var edits = new SemaphoreSlim(1);
+        await edits.WaitAsync();
+        using var cancel = new CancellationTokenSource();
+        var ran = false;
+        var rendered = false;
+        var waiting = DocumentPublication.RunAsync(edits, _ => { ran = true; return Task.CompletedTask; }, _ => rendered = true, cancel.Token);
+        Assert.IsFalse(waiting.IsCompleted, "the lock is held by someone else");
+        cancel.Cancel();
+        OperationCanceledException? observed = null;
+        try { await waiting; }
+        catch (OperationCanceledException exception) { observed = exception; }
+
+        Assert.IsNotNull(observed);
+        Assert.IsFalse(ran);
+        Assert.IsFalse(rendered);
+        Assert.AreEqual(0, edits.CurrentCount, "the lock still belongs to the one that held it");
+        edits.Release();
+        Assert.AreEqual(1, edits.CurrentCount, "the cancelled wait released nothing it did not take");
+    }
+
+    [TestMethod]
+    public async Task AWaitThatIsNotCancelledStillRunsAndRenders()
+    {
+        using var edits = new SemaphoreSlim(1);
+        using var cancel = new CancellationTokenSource();
+        var order = new List<string>();
+        await DocumentPublication.RunAsync(edits, published => { order.Add("publish"); published(); return Task.CompletedTask; },
+            _ => order.Add("render"), cancel.Token);
+        CollectionAssert.AreEqual(new[] { "publish", "render" }, order);
+        Assert.AreEqual(1, edits.CurrentCount);
+    }
+
+    [TestMethod]
     public async Task SuccessfulPublicationRendersAfterRecoveryAndAfterReleasingEditLock()
     {
         using var edits = new SemaphoreSlim(1);

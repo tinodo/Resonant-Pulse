@@ -70,7 +70,39 @@ can be added without changing these application-facing types.
   `double MedianOffsetMilliseconds`, `double SpreadMilliseconds`,
   `double Coverage`.
 - `TapTempoEstimator.Tap(double timestampSeconds)` returns `double?` BPM;
-  `Reset()` clears history.
+  `Reset()` clears history. The optional `RejectEarlyOutliers` property (init-only,
+  default `false`) applies the same interval gate after one interval instead of
+  three; regular tap tempo is unchanged.
+
+Tap to start (App) is an explicit, one-shot intent: never persisted or restored,
+and not part of the project. The number of taps, 2 to 16, is an app preference
+(`Preferences.TapInCount`, 4 by default; a stored value outside the range is
+clamped where it is used). Consecutive accepted taps count towards it: a rejected
+tap (bounce, outlier, non-increasing time) breaks the run and a gap of more than four
+seconds between two taps (a fixed limit, not the estimator's three beats, which lets
+slow taps wait longer) starts a new one. The tempo is the estimate to the nearest 0.1 BPM in the project's selected
+note unit, which is never changed. It is saved as one edit of the project and only
+then does the normal start run (the project's count-in applies). For a program,
+every section's start and end tempo is multiplied by `tapped / firstSection.StartTempo`
+as an exact fraction; no meter, ramp domain, repeat, count-in or setlist entry is
+rewritten. A tempo outside 1 to 1000 BPM, a failed validation or recovery save and
+a locked project never start playback, and each ends the intent: the notice for a tempo
+outside the limits says to switch Tap to start on again and tap a different tempo (a
+further tap would not count, and with a program TAP is off until the switch is on). A tempo change that is still being committed
+is settled first, so the tapped tempo is the last word, and an intent that is
+cancelled while its own change is being checked drops that change before it is
+published (no Undo step, nothing saved). What the start waits for (that tempo change,
+the edit queue) is cancelled with the intent, so Stop gives Start and the switch back
+at once. Stop, a start or pause by hand, a tempo
+chosen by hand (the intent ends before that change is committed, so a commit that
+fails after publishing cannot leave it listening), a rebuilt or left page, a change of
+output, a power transition and
+closing invalidate the intent before it publishes or plays. While it is armed a
+WinRT `DeviceWatcher` for audio render endpoints cancels it when the selected
+endpoint is removed or updated, without waiting for a refresh; reconnecting never
+arms it again, and when Windows cannot watch the outputs it stays off with a reason
+while a manual Start still works. The watcher lives only as long as the intent.
+This is not a phase-aligned or acoustically calibrated start.
 
 Prefer optional additions over breaking these APIs. Inform the coordinator about
 any essential contract correction before changing it.

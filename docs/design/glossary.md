@@ -25,6 +25,11 @@ match, so a translation cannot be left out or lose one.
 | `Groups` | Additive groups (e.g. 2+2+3; empty = none) | Additieve groepen (bv. 2+2+3; leeg = geen) | Additive Gruppen (z. B. 2+2+3; leer = keine) | Groupes additifs (ex. 2+2+3 ; vide = aucun) | Grupos aditivos (p. ej. 2+2+3; vacío = ninguno) |
 | `CountIn` | Count-in bars | Aftelmaten | Einzähltakte | Mesures de décompte | Compases de entrada |
 | `Tap` | Tap tempo | Tempo tikken | Tempo tippen | Taper le tempo | Marcar tempo |
+| `TapStart` | Tap to start | Start met tikken | Durch Tippen starten | Démarrer en tapant | Marcar para iniciar |
+| `TapStartCountField` | Taps to start | Tikken om te starten | Zum Start tippen | Frappes pour démarrer | Toques para iniciar |
+| `UnitTaps` | taps | tikken | Mal | frappes | toques |
+| `TapStartCount` | {0} of {1} taps | {0} van {1} tikken | {0}/{1} getippt | {0}/{1} frappes | {0} de {1} toques |
+| `TapStartRejected` | Tap again | Tik opnieuw | Nochmal tippen | Tapez encore | Marque otra vez |
 | `LevelStrong` | Strong | Sterk | Stark | Fort | Fuerte |
 | `LevelNormal` | Medium | Gemiddeld | Mittel | Moyen | Medio |
 | `LevelSoft` | Soft | Zacht | Leise | Doux | Suave |
@@ -63,7 +68,26 @@ none has been checked with a Dutch musician.
   other word that comes to mind.
 - **Aftelmaten** for the bars counted in before the music starts.
 - **Tik** for one click of the metronome (*Eigen tikposities*, *hier geen
-  nieuwe tik*).
+  nieuwe tik*). *Tik* is also what a tap is called (*Tempo tikken*, *Start met
+  tikken*, *3 van 4 tikken*), so one word means two things in the same window.
 - **Gemiddeld** for the middle strength, which English calls *Medium*.
 - **Tempocurve** for the way the tempo changes over a program step.
 - **Gebonden** for a click that is tied to the one before it.
+- **Start met tikken** for the *Tap to start* switch, and **tikken** for the number of taps.
+
+## Tap to start in German, French and Spanish
+
+Also questions, not findings; none has been checked with a native speaker.
+
+- German: **Durch Tippen starten** for the switch, **Mal** as the unit after the
+  number of taps (*Zum Start tippen: 4 Mal*), and *3/4 getippt* for the count.
+  *Tipps* was avoided on purpose, because it reads as "tips".
+- French: **Démarrer en tapant** for the switch, counted in **frappes**.
+- Spanish: **Marcar para iniciar** for the switch (*marcar* is also the verb of
+  *Marcar tempo*), counted in **toques**.
+- The sentence after a refused start (*Switch Tap to start on again and tap a
+  different tempo*, key `TapStartRange`) names the switch with its label, unquoted,
+  as the help for the number of taps does: *Zet Start met tikken weer aan*,
+  *Schalten Sie Durch Tippen starten wieder ein*, *Réactivez Démarrer en tapant*,
+  *Active de nuevo Marcar para iniciar*. Whether a label inside a sentence reads
+  better in quotation marks is a question for a native speaker.

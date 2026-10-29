@@ -187,6 +187,79 @@ public sealed class PlayLayoutTests
         Assert.AreEqual(scrolls, PlayLayout.StripNeedsScroll(available, beats, gaps));
     }
 
+    // The tempo row: slower, TAP and faster stay centred under the dial, and "Tap to start" sits to their right.
+    // Measured at 100% text size in English: the three controls are 264 wide, the labelled switch about 170, the icon-only one 44.
+    private const double Cluster = 264;
+    private const double SwitchLabelled = 170;
+    private const double SwitchIcon = 44;
+
+    [TestMethod]
+    [DataRow(760d, "Labelled")]   // the page of an 800 wide window
+    [DataRow(978d, "Labelled")]   // the page of a 1000 wide window
+    [DataRow(660d, "Labelled")]
+    [DataRow(600d, "Compact")]
+    [DataRow(440d, "Compact")]
+    [DataRow(399d, "Appended")]
+    [DataRow(360d, "Appended")]   // a 400 wide window
+    [DataRow(322d, "Appended")]
+    [DataRow(321d, "OwnRow")]
+    [DataRow(280d, "OwnRow")]     // a 320 wide window
+    public void TheSwitchStaysBesideTheTempoControlsAndOnlyInAVeryNarrowWindowTakesARowOfItsOwn(double rowWidth, string expected)
+    {
+        Assert.AreEqual(expected, PlayLayout.ChooseTapStart(rowWidth, Cluster, SwitchLabelled, SwitchIcon).ToString());
+    }
+
+    [TestMethod]
+    public void TheSwitchChoosesFromTheRoomLeftOfTheCentredControlsOnEachSide()
+    {
+        // Each side has (row - controls) / 2, less the gap between the controls and the switch.
+        var side = (double width) => (width - Cluster) / 2 - PlayLayout.TapStartGap;
+        var labelled = 2 * (SwitchLabelled + PlayLayout.TapStartGap) + Cluster;
+        Assert.AreEqual(SwitchLabelled, side(labelled), 1e-9);
+        Assert.AreEqual(TapStartPlacement.Labelled, PlayLayout.ChooseTapStart(labelled, Cluster, SwitchLabelled, SwitchIcon));
+        Assert.AreEqual(TapStartPlacement.Compact, PlayLayout.ChooseTapStart(Math.BitDecrement(labelled), Cluster, SwitchLabelled, SwitchIcon));
+        var compact = 2 * (SwitchIcon + PlayLayout.TapStartGap) + Cluster;
+        Assert.AreEqual(TapStartPlacement.Compact, PlayLayout.ChooseTapStart(compact, Cluster, SwitchLabelled, SwitchIcon));
+        Assert.AreEqual(TapStartPlacement.Appended, PlayLayout.ChooseTapStart(Math.BitDecrement(compact), Cluster, SwitchLabelled, SwitchIcon));
+        var appended = Cluster + PlayLayout.TapStartSpacing + SwitchIcon;
+        Assert.AreEqual(TapStartPlacement.Appended, PlayLayout.ChooseTapStart(appended, Cluster, SwitchLabelled, SwitchIcon));
+        Assert.AreEqual(TapStartPlacement.OwnRow, PlayLayout.ChooseTapStart(Math.BitDecrement(appended), Cluster, SwitchLabelled, SwitchIcon));
+    }
+
+    [TestMethod]
+    public void EveryRowWidthGetsAPlacementThatFitsAndAWiderRowNeverGetsASmallerOne()
+    {
+        // Independent of the closed forms: for each width the chosen placement must fit its row, and as the row grows the
+        // placement only ever goes from the row of its own, to the appended icon, to the icon beside, to the words beside.
+        var order = new[] { TapStartPlacement.OwnRow, TapStartPlacement.Appended, TapStartPlacement.Compact, TapStartPlacement.Labelled };
+        var previous = 0;
+        for (var width = 200d; width <= 1400; width += 1)
+        {
+            var placement = PlayLayout.ChooseTapStart(width, Cluster, SwitchLabelled, SwitchIcon);
+            var rank = Array.IndexOf(order, placement);
+            Assert.IsTrue(rank >= previous, $"{width}: {placement} after a wider-placement");
+            previous = rank;
+            var needed = placement switch
+            {
+                TapStartPlacement.Labelled => Cluster + 2 * (PlayLayout.TapStartGap + SwitchLabelled),
+                TapStartPlacement.Compact => Cluster + 2 * (PlayLayout.TapStartGap + SwitchIcon),
+                TapStartPlacement.Appended => Cluster + PlayLayout.TapStartSpacing + SwitchIcon,
+                _ => Cluster
+            };
+            Assert.IsTrue(needed <= width + 1e-9 || placement == TapStartPlacement.OwnRow, $"{width}: {placement} needs {needed}");
+        }
+    }
+
+    [TestMethod]
+    public void AWiderSwitchNeedsAWiderRowAndAnUnmeasuredRowKeepsTheDefault()
+    {
+        // Dutch and German labels, or a larger Windows text size, make the labelled switch wider: it gives way to the icon sooner.
+        Assert.AreEqual(TapStartPlacement.Labelled, PlayLayout.ChooseTapStart(760, Cluster, 170, SwitchIcon));
+        Assert.AreEqual(TapStartPlacement.Compact, PlayLayout.ChooseTapStart(760, Cluster, 260, SwitchIcon));
+        Assert.AreEqual(TapStartPlacement.Labelled, PlayLayout.ChooseTapStart(0, Cluster, SwitchLabelled, SwitchIcon));
+        Assert.AreEqual(TapStartPlacement.Labelled, PlayLayout.ChooseTapStart(760, 0, SwitchLabelled, SwitchIcon));
+    }
+
     [TestMethod]
     public void TheStripOverflowsItsRoomExactlyWhenItNeedsToScroll()
     {

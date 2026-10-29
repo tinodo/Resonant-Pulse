@@ -67,9 +67,16 @@ is specified in `metronome-design.md` and is not changed here.
 - **Timer:** three rows, "Time / Beats / Bars", each a narrow box with its unit; one sentence ("Whichever limit is
   reached first stops the metronome. 0 means no limit. The count-in does not count."); a plain-language summary of what
   is saved. Cancel and Done stay, side by side and equal. Heard: next Start.
-- **Tempo and Time signature:** same kit (natural-width fields), same behaviour.
+- **Tempo and Time signature:** same kit (natural-width fields), same behaviour. The Tempo panel also holds *Taps to start*
+  (a narrow box with its unit, 2 to 16, and one line that says it counts the next time *Tap to start* is switched on). It is a
+  preference of the app, not of the project: Cancel discards it with the rest of the panel, Done keeps it and saves it like
+  every other preference (best effort; if the save fails the error is shown and the value stays). Done writes only what was
+  changed in the panel, so changing the number alone never puts the tempo the panel showed when it opened over a newer one
+  (the tempo a *Tap to start* has just saved). With a program there is no
+  tempo readout to open the panel from, so the number cannot be changed until the program is removed.
 - **Project:** the name (up to 360) and two commands, *Save as file* and *Open file*.
-- **Help:** six short entries (start, tempo, time signature, beat strength, live changes, shortcuts). No internals.
+- **Help:** six short entries (start, tempo, time signature, beat strength, live changes, shortcuts). No internals. The first
+  entry says how *Tap to start* works, and the shortcuts list has T for a tap.
 
 ### Library
 - **My projects:** search (up to 280), the list with name, *Open* (primary) and *Save current to library*; *New*,

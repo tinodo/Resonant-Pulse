@@ -13,6 +13,11 @@ public sealed class Preferences
     /// <summary>No longer used: the app always opens on Play. Kept so that preferences saved by earlier previews still load.</summary>
     public string LastView { get; set; } = "Play";
     public int ExportBars { get; set; } = 16;
+    /// <summary>
+    /// How many steady taps start the metronome when "Tap to start" is on. Whether it is on is never saved: the metronome starts
+    /// stopped. The file is untrusted input, so a value outside 2 to 16 is brought into that range where it is used.
+    /// </summary>
+    public int TapInCount { get; set; } = TapStartRules.DefaultTaps;
 }
 
 public sealed record LibraryItem(string Path, string Name, DateTime? Modified = null);

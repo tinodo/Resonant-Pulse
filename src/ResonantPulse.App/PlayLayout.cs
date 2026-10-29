@@ -11,6 +11,19 @@ internal enum RailPlacement
 
 internal readonly record struct RailPlan(RailPlacement Placement, bool ShowLabels);
 
+/// <summary>Where the "Tap to start" switch sits relative to slower, TAP and faster.</summary>
+internal enum TapStartPlacement
+{
+    /// <summary>To their right, with its words, while they stay centred under the dial.</summary>
+    Labelled,
+    /// <summary>To their right as an icon alone, when only that fits there; they stay centred under the dial.</summary>
+    Compact,
+    /// <summary>Right against them as an icon alone, the whole group centred under the dial: for a window too narrow to keep them centred.</summary>
+    Appended,
+    /// <summary>On a row of its own below them, in a window too narrow for even the icon beside them.</summary>
+    OwnRow
+}
+
 /// <summary>
 /// Geometry rules for the Play page that depend on the dial. The dial is a square whose ring is a circle, so the corner
 /// beside it is free at most window sizes; the page-tools strip uses that corner, and a notice only appears when it would
@@ -103,6 +116,28 @@ internal static class PlayLayout
 
     /// <summary>Space before each additive group of the beat strip, after the first.</summary>
     internal const double StripGroupGap = 10;
+
+    /// <summary>Space between the tempo controls and the "Tap to start" switch beside them.</summary>
+    internal const double TapStartGap = 24;
+
+    /// <summary>Space between faster and an icon-only switch that is appended to them: the spacing the three controls have among themselves.</summary>
+    internal const double TapStartSpacing = 14;
+
+    /// <summary>
+    /// Where the "Tap to start" switch goes. Slower, TAP and faster stay centred under the dial, so the switch may only use the
+    /// room each side of them has: the words when they fit there, the icon alone when only that fits. In a window too narrow
+    /// for that the icon is appended to them and the group is centred (they move a little to the left, which keeps the dial's
+    /// height), and only when even that does not fit does the switch take a row of its own, below them, which costs the dial
+    /// some height. A row or a cluster that has not been measured yet gives the default, which is corrected as soon as it is.
+    /// </summary>
+    internal static TapStartPlacement ChooseTapStart(double rowWidth, double clusterWidth, double labelledWidth, double compactWidth)
+    {
+        if (rowWidth <= 0 || clusterWidth <= 0) return TapStartPlacement.Labelled;
+        var room = (rowWidth - clusterWidth) / 2 - TapStartGap;
+        if (labelledWidth <= room) return TapStartPlacement.Labelled;
+        if (compactWidth <= room) return TapStartPlacement.Compact;
+        return clusterWidth + TapStartSpacing + compactWidth <= rowWidth ? TapStartPlacement.Appended : TapStartPlacement.OwnRow;
+    }
 
     /// <summary>The narrowest and widest a beat's cell gets. Narrower than this stops being a comfortable target.</summary>
     internal const double StripMinCell = 32;

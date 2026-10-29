@@ -201,6 +201,9 @@ public sealed partial class MainWindow
         foreach (var button in strip.Children.OfType<Button>())
             if (button.Content is Grid { Children: [_, TextBlock label] })
                 label.FontSize *= factor;
+        // The switch under the dial has words that grow with the text size as well.
+        if (FindById(Root, "TapStart") is ToggleButton { Content: Grid { Children: [_, TextBlock words] } })
+            words.FontSize *= factor;
     }
 
     private static FrameworkElement? FindById(DependencyObject parent, string id)

@@ -189,29 +189,72 @@ public sealed partial class MainWindow
         var unit = Dropdown("Unit", "TempoUnit", Invariant(settings.BeatUnitQuarters), TempoUnitChoices(settings));
         var half = ActionButton("HalfTempo", "HalfTempo", () => { tempo.Value = Math.Max(1, Math.Round(tempo.Value / 2, 1)); });
         var twice = ActionButton("DoubleTempo", "DoubleTempo", () => { tempo.Value = Math.Min(1000, Math.Round(tempo.Value * 2, 1)); });
-        var tempoContent = new StackPanel { Spacing = 12, Children = { FieldRow(Field(tempo), Field(unit)), CommandRow(half, twice) } };
+        // How many steady taps start the metronome when Tap to start is on. It belongs to the app, not to the project: it is
+        // used the next time Tap to start is switched on, and it is remembered for the next session.
+        var taps = NumberInput("TapStartCountField", "TapInCount", TapStartRules.ClampTaps(_preferences.TapInCount),
+            TapStartRules.MinimumTaps, TapStartRules.MaximumTaps);
+        var tempoContent = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                FieldRow(Field(tempo), Field(unit)), CommandRow(half, twice),
+                Field(taps, "UnitTaps"), Hint("TapStartCountHelp")
+            }
+        };
+        // What the panel showed when it was opened (set again each time it opens): Done writes only what was changed from it.
+        var openedTempo = settings.Tempo;
+        var openedUnit = settings.BeatUnitQuarters;
         return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
-                tempo.Value = _tempoRequested ?? _document.Settings.Tempo;
-                SelectChoice(unit, Invariant(_document.Settings.BeatUnitQuarters));
+                openedTempo = _tempoRequested ?? _document.Settings.Tempo;
+                openedUnit = _document.Settings.BeatUnitQuarters;
+                tempo.Value = openedTempo;
+                SelectChoice(unit, Invariant(openedUnit));
+                taps.Value = TapStartRules.ClampTaps(_preferences.TapInCount);
             },
             async () =>
             {
                 var bpm = Math.Round(Value(tempo), 1);
                 var unitValue = double.Parse(Selected(unit), CultureInfo.InvariantCulture);
-                var unitChanged = unitValue != _document.Settings.BeatUnitQuarters;
-                var applied = false;
-                await CommitAsync(doc =>
+                var newTaps = Integer(taps);
+                // Only the fields that were changed in the panel are written. A tempo or unit that still shows what it showed when
+                // the panel opened would put that value over a newer one (the tempo a Tap to start saved meanwhile, or a nudge
+                // that was still on its way), and a number of taps changed alone changes nothing of the project.
+                var (tempoEdited, unitEdited) = TempoEdits.PanelEdits(openedTempo, openedUnit, bpm, unitValue);
+                if (tempoEdited || unitEdited)
                 {
-                    doc.Settings.Tempo = bpm;
-                    doc.Settings.BeatUnitQuarters = unitValue;
-                    // The split clicks' strengths are laid out per beat of the old unit.
-                    if (unitChanged) doc.Settings.SubdivisionAccents = null;
-                    applied = true;
-                }, editorChange: unitChanged ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
-                if (applied && unitChanged) BuildPage();
-                return applied;
+                    // A tempo or unit chosen here by hand ends a Tap to start, and it does so before the commit: a commit that
+                    // fails after it has published the change (the recovery file cannot be written) must not leave an intent
+                    // that is still listening and would later overwrite what was chosen. A new number of taps only counts for the
+                    // next one.
+                    CancelTapIn();
+                    var applied = false;
+                    await CommitAsync(doc =>
+                    {
+                        if (tempoEdited) doc.Settings.Tempo = bpm;
+                        if (unitEdited)
+                        {
+                            doc.Settings.BeatUnitQuarters = unitValue;
+                            // The split clicks' strengths are laid out per beat of the old unit.
+                            doc.Settings.SubdivisionAccents = null;
+                        }
+                        applied = true;
+                    }, editorChange: unitEdited ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
+                    if (!applied) return false;
+                    // The project holds the new unit now, so the page is built for it whether or not the number of taps can be
+                    // remembered: a refused write of the preferences must not leave the page of the old unit behind.
+                    if (unitEdited) BuildPage();
+                }
+                if (newTaps != TapStartRules.ClampTaps(_preferences.TapInCount))
+                {
+                    _preferences.TapInCount = newTaps;
+                    // Applied at once, like every setting of the app: remembering it for the next session is best effort, and
+                    // if that fails the error is shown and the value stays.
+                    await _workspace.SavePreferencesAsync(_preferences);
+                }
+                return true;
             });
     }
 
@@ -384,6 +427,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 12 };
         content.Children.Add(SectionHeading("HelpBasics"));
         content.Children.Add(Copy("FirstUseHint"));
+        content.Children.Add(Copy("HelpTapStart"));
         content.Children.Add(SectionHeading("HelpWhilePlaying"));
         content.Children.Add(Copy("LiveSoundHint"));
         content.Children.Add(SectionHeading("HelpShortcuts"));
@@ -393,6 +437,7 @@ public sealed partial class MainWindow
             ($"{ctrl} + M", Text.Get("ShortcutMute")),
             ($"{ctrl} + S", Text.Get("Save")),
             ($"{ctrl} + O", Text.Get("Open")),
+            ("T", Text.Get("ShortcutTap")),
             ("F", Text.Format("ShortcutHit", Text.Get("Train")))));
         return CreateOptionPanel("HelpTab", "PlayHelpPanel", content, null, null, null);
     }
