@@ -58,9 +58,12 @@ public static class PcmRenderer
     /// Writes mono or stereo. Loop repeats the entire plan including count-in; compile without count-in for body-only looping.
     /// Tails overlap loop boundaries; non-looping output is truncated at TotalFrames. Linear gain then hard peak protection [-1,1].
     /// Maximum callback buffer is 32768 frames; split larger buffers. MasterGain is explicit, not multiplied by document gain again.
+    /// Attack bounds use the absolute render coordinate, including loop cycles. When combining partitions,
+    /// disable peak limiting on each partition and clamp the final sum once.
     /// </summary>
     public static void Fill(Span<float> interleaved, RenderPlan plan, long startFrame, int channels = 2,
-        float masterGain = 0.5f, bool mute = false, bool loop = true)
+        float masterGain = 0.5f, bool mute = false, bool loop = true,
+        long? attacksFromFrame = null, long? attacksBeforeFrame = null, bool limitPeaks = true)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (channels is not (1 or 2)) throw new ArgumentException("Core supports mono/stereo only; multichannel routing requires an adapter.", nameof(channels));
@@ -91,6 +94,9 @@ public static class PcmRenderer
             for (int v = lo; v < voices.Length && voices[v].Frame < localEnd; v++)
             {
                 ref readonly var voice = ref voices[v];
+                long attack = origin + voice.Frame;
+                if (attacksFromFrame is { } first && attack < first ||
+                    attacksBeforeFrame is { } exclusive && attack >= exclusive) continue;
                 int sampleStart = (int)Math.Max(0, localStart - voice.Frame);
                 int sampleEnd = (int)Math.Min(voice.Samples.Length, localEnd - voice.Frame);
                 for (int j = sampleStart; j < sampleEnd; j++)
@@ -102,9 +108,28 @@ public static class PcmRenderer
                 }
             }
         }
-        for (int i = 0; i < interleaved.Length; i++) interleaved[i] = Math.Clamp(interleaved[i], -1f, 1f);
-        // A gap is an output mask, not just omission of new attacks: prior click tails must not leak into blind silence.
+        if (limitPeaks)
+            for (int i = 0; i < interleaved.Length; i++) interleaved[i] = Math.Clamp(interleaved[i], -1f, 1f);
+        ApplyGapMask(interleaved, plan, startFrame, channels, loop);
+    }
+
+    /// <summary>
+    /// Clears the frames of <paramref name="interleaved"/> (output starting at plan frame <paramref name="startFrame"/>)
+    /// that the plan's gap mask marks silent. A gap is an output mask, not just omission of new attacks: prior click
+    /// tails must not leak into blind silence. <see cref="Fill"/> applies it itself; callers that sum a partition
+    /// rendered from another plan (a live splice's ringing tails) apply the plan that governs the output to it.
+    /// Allocates nothing and takes no locks.
+    /// </summary>
+    public static void ApplyGapMask(Span<float> interleaved, RenderPlan plan, long startFrame, int channels = 2, bool loop = true)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (channels is not (1 or 2)) throw new ArgumentException("Core supports mono/stereo only; multichannel routing requires an adapter.", nameof(channels));
+        if (interleaved.Length % channels != 0) throw new ArgumentException("Buffer must contain whole frames.", nameof(interleaved));
+        if (startFrame < 0 || startFrame > long.MaxValue - interleaved.Length) throw new ArgumentOutOfRangeException(nameof(startFrame));
+        if (interleaved.IsEmpty || plan.SilentRanges.Count == 0) return;
+        long end = startFrame + interleaved.Length / channels;
         long firstOutputCycle = loop ? startFrame / plan.TotalFrames : 0;
+        long lastCycle = loop ? (end - 1) / plan.TotalFrames : 0;
         for (long cycle = firstOutputCycle; cycle <= lastCycle; cycle++)
         {
             long origin = cycle * plan.TotalFrames;

@@ -12,63 +12,6 @@ public sealed partial class MainWindow
         public override string ToString() => Label;
     }
 
-    private static StackPanel Column(params UIElement[] children)
-    {
-        var panel = new StackPanel { Spacing = 16 };
-        foreach (var child in children) panel.Children.Add(child);
-        return panel;
-    }
-
-    private static Grid Flow(params UIElement[] children) => WrapControls(220, children);
-
-    private static Grid WrapControls(double minimumWidth, params UIElement[] children)
-    {
-        var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        var panel = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
-        foreach (var child in children)
-        {
-            if (child is not FrameworkElement element)
-                throw new ArgumentException("Form controls must be framework elements.", nameof(children));
-            element.VerticalAlignment = VerticalAlignment.Top;
-            element.HorizontalAlignment = HorizontalAlignment.Stretch;
-            panel.Children.Add(child);
-        }
-        var lastColumns = 0;
-        void Arrange(double width)
-        {
-            var columns = Math.Clamp((int)Math.Floor((Math.Max(0, width) + 12) /
-                (minimumWidth * Math.Sqrt(scale) + 12)), 1, Math.Max(1, children.Length));
-            if (columns == lastColumns) return;
-            lastColumns = columns;
-            panel.ColumnDefinitions.Clear();
-            panel.RowDefinitions.Clear();
-            for (var column = 0; column < columns; column++)
-                panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (var row = 0; row < (children.Length + columns - 1) / columns; row++)
-                panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            for (var index = 0; index < children.Length; index++)
-            {
-                if (children[index] is FrameworkElement element)
-                {
-                    Grid.SetColumn(element, index % columns);
-                    Grid.SetRow(element, index / columns);
-                }
-            }
-        }
-        Arrange(0);
-        panel.SizeChanged += (_, args) => Arrange(args.NewSize.Width);
-        return panel;
-    }
-
-    private static StackPanel Commands(params UIElement[] children)
-    {
-        var panel = new StackPanel { Spacing = 8 };
-        foreach (var child in children) panel.Children.Add(child);
-        return panel;
-    }
-
-    private static UIElement CommandFlow(params UIElement[] children) => WrapControls(170, children);
-
     private static TextBlock Body(string text) => new()
     {
         Text = text, FontSize = 14,
@@ -91,19 +34,24 @@ public sealed partial class MainWindow
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto
     };
 
-    private Button ActionButton(string key, string id, Func<Task> action)
+    private Button ActionButton(string key, string id, Func<Task> action, string? glyph = null,
+        ButtonKind kind = ButtonKind.Secondary)
     {
         var button = new Button { HorizontalContentAlignment = HorizontalAlignment.Center };
-        LabelButton(button, key);
+        if (kind == ButtonKind.Primary) button.Style = ResonantStyle("PrimaryButtonStyle");
+        else if (kind == ButtonKind.Tertiary) button.Style = ResonantStyle("ToolButtonStyle");
+        LabelButton(button, key, glyph);
         Identify(button, id, Text.Get(key));
         button.Click += async (_, _) => await GuardAsync(action);
         return button;
     }
 
-    private Button ActionButton(string key, string id, Action action) =>
-        ActionButton(key, id, () => { action(); return Task.CompletedTask; });
+    private Button ActionButton(string key, string id, Action action, string? glyph = null,
+        ButtonKind kind = ButtonKind.Secondary) =>
+        ActionButton(key, id, () => { action(); return Task.CompletedTask; }, glyph, kind);
 
-    private static NumberBox Number(string key, string id, double value, double minimum, double maximum, double increment = 1)
+    private static NumberBox Number(string key, string id, double value, double minimum, double maximum, double increment = 1,
+        int fractionDigits = 1)
     {
         var input = new NumberBox
         {
@@ -115,14 +63,28 @@ public sealed partial class MainWindow
             LargeChange = increment * 10,
             NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter([Text.Culture.Name], "US")
             {
-                IntegerDigits = 1, FractionDigits = 1, IsGrouped = false,
+                IntegerDigits = 1, FractionDigits = fractionDigits, IsGrouped = false,
                 NumberRounder = new Windows.Globalization.NumberFormatting.SignificantDigitsNumberRounder { SignificantDigits = 12 }
             },
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };
         Identify(input, id, Text.Get(key));
+        return input;
+    }
+
+    private static NumberBox NumberInt(string key, string id, double value, double minimum, double maximum, double increment = 1)
+    {
+        var input = Number(key, id, value, minimum, maximum, increment);
+        input.NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter([Text.Culture.Name], "US")
+        {
+            IntegerDigits = 1, FractionDigits = 0, IsGrouped = false,
+            NumberRounder = new Windows.Globalization.NumberFormatting.IncrementNumberRounder
+            {
+                Increment = 1, RoundingAlgorithm = Windows.Globalization.NumberFormatting.RoundingAlgorithm.RoundHalfUp
+            }
+        };
         return input;
     }
 
@@ -158,41 +120,33 @@ public sealed partial class MainWindow
 
     private static string Selected(ComboBox combo) => ((Choice)combo.SelectedItem).Value;
 
-    private static VariableSizedWrapGrid AccentFlow()
-    {
-        var scale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor;
-        var panel = new VariableSizedWrapGrid
-        {
-            Orientation = Orientation.Horizontal, ItemWidth = 155 * Math.Sqrt(scale), ItemHeight = 76 * scale
-        };
-        panel.SizeChanged += (_, args) => panel.ItemWidth = Math.Min(Math.Max(100, args.NewSize.Width), 155 * Math.Sqrt(scale));
-        return panel;
-    }
-
-    private static CheckBox Check(string key, string id, bool value)
-    {
-        var check = new CheckBox { Content = new TextBlock { Text = Text.Get(key), TextWrapping = TextWrapping.Wrap }, IsChecked = value, MinHeight = 44 };
-        Identify(check, id, Text.Get(key));
-        return check;
-    }
-
     private static double Value(NumberBox number)
     {
         if (!double.IsFinite(number.Value)) throw new ArgumentException(Text.Get("Error"));
         return number.Value;
     }
 
-    private static int Integer(NumberBox number)
+    private static int Integer(NumberBox number) => Integer(number.Value);
+
+    /// <summary>
+    /// A NumberBox shows a whole number rounded, but reports the fraction typed ("1.9" shows as 2 and is 1.9), so a count must be
+    /// checked rather than cast: the project should hold what the field shows or refuse it with a message.
+    /// </summary>
+    private static int Integer(double value)
     {
-        var value = Value(number);
-        if (value != Math.Truncate(value) || value is < int.MinValue or > int.MaxValue)
-            throw new ArgumentException(Text.Get("WholeNumber"));
-        return (int)value;
+        if (!double.IsFinite(value)) throw new ArgumentException(Text.Get("Error"));
+        if (!WholeNumbers.TryGet(value, out var whole)) throw new ArgumentException(Text.Get("WholeNumber"));
+        return whole;
     }
+
+    /// <summary>The question being asked, if any. Closing the window dismisses it (as Cancel): nothing is confirmed while it saves.</summary>
+    private ContentDialog? _confirmation;
 
     private async Task<bool> ConfirmAsync(string message, string primary = "Continue")
     {
-        if (_isDialogOpen) return false;
+        // No question is asked while the window closes: a request that was still loading when closing began (an Open that is
+        // validating its file) would otherwise ask one after the last save has passed the point where it could be answered.
+        if (_isDialogOpen || _closeFlushing || _isClosed) return false;
         _isDialogOpen = true;
         try
         {
@@ -219,8 +173,13 @@ public sealed partial class MainWindow
                 args.Handled = true;
             };
             dialog.KeyboardAccelerators.Add(mute);
+            _confirmation = dialog;
             return await dialog.ShowAsync() == ContentDialogResult.Primary;
         }
-        finally { _isDialogOpen = false; }
+        finally
+        {
+            _confirmation = null;
+            _isDialogOpen = false;
+        }
     }
 }

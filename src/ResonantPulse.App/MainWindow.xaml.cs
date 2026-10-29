@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly Stack<PulseDocument> _redo = new();
     private readonly TapTempoEstimator _tap = new();
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private readonly DispatcherTimer _noticeTimer = new() { Interval = TimeSpan.FromSeconds(6) };
     private Preferences _preferences = new();
     private PulseDocument _document = new();
     private string _view = "Play";
@@ -38,11 +39,14 @@ public sealed partial class MainWindow : Window
     private bool _isOutputMissing;
     private int _transportIntent;
     private int _documentRevision;
+    /// <summary>Counts the times the whole project was replaced (opened, new, a ready-made rhythm, the next song).</summary>
+    private int _projectGeneration;
     private int _editorContentRevision;
     private int _armedSong = -1;
     private PulseInstrument? _instrument;
     private TextBlock? _position;
     private TextBlock? _stageTempo;
+    private TextBlock? _stageMeter;
     private TextBlock? _programStatus;
     private ProgressBar? _progress;
     private TextBlock? _timingStatus;
@@ -54,12 +58,32 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(nint window);
 
+    /// <summary>Implemented only in local verification builds (MainWindow.UiTest.cs, -p:UiTest=true).</summary>
+    partial void InstallUiTestHook();
+
+    /// <summary>Implemented only in local verification builds: makes an edit wait before it is validated, to widen a race.</summary>
+    partial void HoldEditForUiTest(ref Task? hold);
+
     public MainWindow()
     {
         Diagnostics.Write("MainWindow XAML initialization beginning");
         InitializeComponent();
         Diagnostics.Write("MainWindow XAML initialization completed");
         Title = "Resonant Pulse";
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(DragTitleBar);
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "App.ico");
+        if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
+        AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        Root.SizeChanged += (_, _) => UpdateTitleBarInset();
+        // The Windows text size can change while the app runs. UISettings raises the event on a worker thread; the fields that
+        // are sized from it (the page kit) listen for the UI-thread version.
+        void OnTextScaleChanged(Windows.UI.ViewManagement.UISettings sender, object args) =>
+            DispatcherQueue.TryEnqueue(RaiseTextScaleChanged);
+        TextSettings.TextScaleFactorChanged += OnTextScaleChanged;
+        Closed += (_, _) => TextSettings.TextScaleFactorChanged -= OnTextScaleChanged;
+        _noticeTimer.Tick += (_, _) => { _noticeTimer.Stop(); if (Notice.Severity == InfoBarSeverity.Informational) Notice.IsOpen = false; };
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);
         var scale = dpi == 0 ? 1 : dpi / 96.0;
@@ -82,21 +106,53 @@ public sealed partial class MainWindow : Window
             if (!_isReady) return;
             _view = args.IsSettingsSelected ? "Settings" :
                 (args.SelectedItemContainer?.Tag as string ?? "Play");
-            _preferences.LastView = _view;
             BuildPage();
-            _ = GuardAsync(() => _workspace.SavePreferencesAsync(_preferences));
         };
         StartButton.Click += async (_, _) => await GuardAsync(TogglePlaybackAsync);
         StopButton.Click += (_, _) =>
         {
-            _transportIntent++;
+            SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();
             _hasPendingEdits = false;
             RefreshSnapshot();
         };
         MuteButton.Click += (_, _) => { _transport.IsMuted = !_transport.IsMuted; RefreshSnapshot(); };
+        TransportPanel.SizeChanged += (_, args) =>
+        {
+            var compact = args.NewSize.Width < 520;
+            var narrow = args.NewSize.Width < 700;
+            var columns = compact ? 2 : 5;
+            if (TransportCommands.ColumnDefinitions.Count != columns)
+            {
+                TransportCommands.ColumnDefinitions.Clear();
+                for (int column = 0; column < columns; column++)
+                    TransportCommands.ColumnDefinitions.Add(new ColumnDefinition
+                    {
+                        Width = compact || column == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
+                    });
+            }
+            var statusRow = compact ? 2 : narrow ? 1 : 0;
+            if (TransportCommands.RowDefinitions.Count != statusRow + 1)
+            {
+                TransportCommands.RowDefinitions.Clear();
+                for (int row = 0; row <= statusRow; row++)
+                    TransportCommands.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+            Grid.SetColumn(MuteButton, compact ? 0 : 2);
+            Grid.SetRow(MuteButton, compact ? 1 : 0);
+            Grid.SetColumn(AudioOptionsButton, compact ? 1 : 4);
+            Grid.SetRow(AudioOptionsButton, compact ? 1 : 0);
+            Grid.SetColumn(TransportStatus, narrow ? 0 : 3);
+            Grid.SetColumnSpan(TransportStatus, compact ? 2 : narrow ? 5 : 1);
+            Grid.SetRow(TransportStatus, statusRow);
+            TransportCommands.RowSpacing = narrow ? 8 : 0;
+        };
         OutputButton.Click += async (_, _) => await GuardAsync(RefreshOutputsAsync);
+        AudioOptionsClose.Click += (_, _) => AudioOptionsFlyout.Hide();
+        AudioOptionsPanel.KeyDown += OnKeyDown;
+        AudioOptionsFlyout.Opening += (_, _) => SizeOptionsFlyout(AudioOptionsFlyout, AudioOptionsPanel, AudioOptionsScroll);
+        AudioOptionsFlyout.Opened += (_, _) => OutputPicker.Focus(FocusState.Programmatic);
         OutputPicker.SelectionChanged += async (_, _) =>
         {
             if (!_isRefreshingOutputs && OutputPicker.SelectedItem is OutputDevice device)
@@ -134,13 +190,15 @@ public sealed partial class MainWindow : Window
         });
         _refresh.Tick += (_, _) => RefreshSnapshot();
         InstallPowerHook(hwnd);
+        InstallUiTestHook();
+        InstallCloseFlush();
         Closed += (_, _) =>
         {
             _isClosed = true;
             _refresh.Stop();
             RemovePowerHook(hwnd);
             _transport.Dispose();
-            Diagnostics.Write("Native window closed");
+            Diagnostics.Write($"Native window closed: {DescribeClose()}");
         };
     }
 
@@ -161,8 +219,8 @@ public sealed partial class MainWindow : Window
             {
                 var recovered = await DocumentStore.LoadAsync(_workspace.RecoveryPath);
                 await ValidateAsync(recovered);
+                // Your last settings simply come back; a metronome should not announce that. Failures still report below.
                 _document = recovered;
-                ShowNotice("Recovered");
             }
             catch (Exception exception) { ShowError(exception); }
         }
@@ -170,7 +228,9 @@ public sealed partial class MainWindow : Window
         ApplyTheme();
         _isReady = true;
         RebuildNavigation();
-        SelectView(_preferences.LastView);
+        // A metronome opens on the metronome. The page left last is not restored: opening on Settings, or on a page that
+        // takes a moment to build, is never what someone starting to play wants.
+        SelectView("Play");
         LocalizeTransport();
         _refresh.Start();
         Diagnostics.Write("Workspace initialized; no playback or capture started");
@@ -179,9 +239,13 @@ public sealed partial class MainWindow : Window
     private void RebuildNavigation()
     {
         Navigation.MenuItems.Clear();
+        var icons = new Dictionary<string, string>
+        {
+            ["Play"] = "\uE768", ["Studio"] = "\uE9E9", ["Train"] = "\uEC4A", ["Stage"] = "\uE7F4", ["Library"] = "\uE8F1"
+        };
         foreach (var key in new[] { "Play", "Studio", "Train", "Stage", "Library" })
         {
-            var item = new NavigationViewItem { Content = Text.Get(key), Tag = key };
+            var item = new NavigationViewItem { Content = Text.Get(key), Tag = key, Icon = new FontIcon { Glyph = icons[key] } };
             Identify(item, "Destination" + key, Text.Get(key));
             Navigation.MenuItems.Add(item);
         }
@@ -200,20 +264,47 @@ public sealed partial class MainWindow : Window
         BuildPage();
     }
 
+    /// <summary>
+    /// Counts how often the page was built. The Studio page, built while edits are still being applied, is built again once they
+    /// are in; that second build is skipped if the page was built again (or left) in the meantime.
+    /// </summary>
+    private int _pageGeneration;
+
     private void BuildPage()
     {
+        _pageGeneration++;
+        // The notes box is about to be replaced. What was typed in it goes with the request that saves it, not with the box, so
+        // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
+        QueueStageNotesSave();
         _instrument = null;
+        _beatStrip = null;
+        _clickGrid = null;
+        _tempoEdit = null;
         _position = null;
         _stageTempo = null;
+        _stageMeter = null;
+        _stageList = null;
+        _stageCue = null;
+        _stageNotes = null;
+        _stageLockNote = null;
+        _stageNotesCaption = null;
         _programStatus = null;
         _progress = null;
+        _programHost = null;
         _timingStatus = null;
         _timingTarget = null;
         _timingToleranceInput = null;
         _timingSilentTargets = null;
+        _timingBegin = null;
+        _timingHit = null;
+        _timingFinish = null;
         _tempoCurve = null;
         _libraryList = null;
         _search = null;
+        _libraryStatus = null;
+        _libraryNoMatch = null;
+        _libraryEmpty = null;
+        _editorOperationControls.Clear();
         PageHost.Content = _view switch
         {
             "Studio" => BuildStudio(),
@@ -228,7 +319,8 @@ public sealed partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
-        if (_isBusy || !_isReady) return;
+        // While the window closes nothing new may start or resume (Stop and Mute stay available), whichever button or key asked.
+        if (_isBusy || !_isReady || _closeFlushing) return;
         InvalidateTiming();
         if (_transport.State == TransportState.Playing)
         {
@@ -246,6 +338,39 @@ public sealed partial class MainWindow : Window
         try
         {
             var retainsRevision = _transport.State is TransportState.Paused or TransportState.Faulted;
+            // A new start plays the project as it is after every change asked for before it. Changes are applied in turn, so
+            // Start takes its place in the queue first; a change still being checked would otherwise be left out of what plays
+            // and only be heard after Stop and Start. A resume keeps the revision it paused on and does not wait.
+            if (!retainsRevision)
+            {
+                // Stop, a change of output, a power transition and a replaced project end the wait by superseding the transport
+                // intent (which also cancels the wait, so Start lets go of the busy state at once, not when the queue clears).
+                // Stop stays available while Start waits, so a save that stalls cannot leave a start that cannot be cancelled.
+                var intent = _transportIntent;
+                using var wait = new CancellationTokenSource();
+                _startWait = wait;
+                _startWaitingIntent = intent;
+                try
+                {
+                    // The tempo is submitted one step at a time and the newest request waits outside the queue until the one
+                    // being committed is done, so it is waited for first, as closing does.
+                    await _tempoPump.WaitAsync(wait.Token);
+                    await WaitForPendingEditsAsync(wait.Token);
+                }
+                catch (OperationCanceledException) { return; }
+                finally
+                {
+                    _startWait = null;
+                    _startWaitingIntent = null;
+                }
+                // The window may have begun to close, or the start been cancelled or overtaken, while Start waited.
+                if (intent != _transportIntent || _closeFlushing || _isClosed) return;
+                if (!HasSelectedOutput)
+                {
+                    PromptForOutput();
+                    return;
+                }
+            }
             var startRevision = _documentRevision;
             await _transport.StartAsync(_document, _preferences.OutputId);
             if (!retainsRevision) _hasPendingEdits = startRevision != _documentRevision;
@@ -253,9 +378,42 @@ public sealed partial class MainWindow : Window
         finally { _isBusy = false; RefreshSnapshot(); }
     }
 
-    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
-        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document)
+    /// <summary>The transport intent of a Start that waits for the edits asked for before it, while it waits.</summary>
+    private int? _startWaitingIntent;
+
+    /// <summary>Cancels the wait of a Start that waits for earlier edits, while it waits.</summary>
+    private CancellationTokenSource? _startWait;
+
+    /// <summary>True while a Start waits for earlier edits and nothing has cancelled it: Stop is available then, and ends the wait.</summary>
+    private bool IsStartPending => _startWaitingIntent is { } waiting && waiting == _transportIntent;
+
+    /// <summary>
+    /// Ends whatever the transport was about to do. A Start that waits for earlier edits is one such thing: it checks the intent
+    /// when it wakes, and its wait is cancelled so that it lets go of the busy state at once.
+    /// </summary>
+    private void SupersedeTransportIntent()
     {
+        _transportIntent++;
+        _startWait?.Cancel();
+    }
+
+    /// <summary>
+    /// Returns once every edit asked for before this call has been applied (the edit lock is handed out in the order it was
+    /// asked for). <paramref name="cancel"/> ends the wait without taking the lock.
+    /// </summary>
+    private async Task WaitForPendingEditsAsync(CancellationToken cancel = default)
+    {
+        await _edits.WaitAsync(cancel);
+        _edits.Release();
+    }
+
+    private async Task CommitAsync(Action<PulseDocument> edit, bool affectsPlayback = true,
+        int? expectedRevision = null, EditorChangeKind editorChange = EditorChangeKind.Document, string? coalesceKey = null,
+        Action? onPublished = null)
+    {
+        // When the person made the change, not when the queue reaches it: a slow validation or recovery write must not split quick
+        // changes into several Undo steps, and a queue that drains must not join changes that were made seconds apart.
+        var madeAt = DateTime.UtcNow;
         if (_isLocked) { ShowNotice("Locked"); return; }
         await DocumentPublication.RunAsync(_edits, async published =>
         {
@@ -264,24 +422,38 @@ public sealed partial class MainWindow : Window
                 EditorOperationGate.EnsureRevision(revision, _editorContentRevision);
             var revised = LocalWorkspace.Clone(_document);
             edit(revised);
+            Task? hold = null;
+            HoldEditForUiTest(ref hold);
+            if (hold is not null) await hold;
             await ValidateAsync(revised);
-            _undo.Push(_document);
-            if (_undo.Count > 64)
+            // Live-eligible edits follow the running transport (sound at the next quantum, tempo/meter/feel at the
+            // next pulse). This happens before the document is replaced so a failed update changes nothing.
+            var live = LiveEditOutcome.NotPlaying;
+            var countInChanged = false;
+            if (LiveEditPolicy.IsLive(editorChange))
             {
-                var recent = _undo.Take(64).Reverse().ToArray();
-                _undo.Clear();
-                foreach (var item in recent) _undo.Push(item);
+                // Stop (or a restart) during the off-thread compile only means the edit has nothing to follow:
+                // it is still a valid document change, so keep it instead of reporting an error.
+                try { live = await _transport.UpdateLiveAsync(revised.Settings); }
+                catch (LiveSessionChangedException) { live = LiveEditOutcome.NotPlaying; }
+                countInChanged = _transport.Snapshot().Revision is { } audible &&
+                    audible.Document.Settings.CountInBars != revised.Settings.CountInBars;
             }
-            _redo.Clear();
+            RecordUndo(coalesceKey, madeAt);
             _document = revised;
+            _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision, editorChange);
-            if (affectsPlayback && _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted)
+            if (LiveEditPolicy.LeavesPendingEdit(editorChange, affectsPlayback,
+                    _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted,
+                    live, countInChanged))
                 _hasPendingEdits = true;
-            // Edits are pending until Stop + Start. The immutable active
+            // Edits that cannot follow live are pending until Stop + Start. The immutable active
             // revision and a measurement against it have not changed.
             published();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+            // From here the project holds the edit, whatever happens to the recovery file next.
+            onPublished?.Invoke();
+            await SaveRecoveryAsync();
         }, succeeded =>
         {
             if (_isClosed) return;
@@ -290,7 +462,48 @@ public sealed partial class MainWindow : Window
             if (!succeeded) SynchronizeGain();
             if (EditorRevisionPolicy.ShouldRebuild(succeeded, editorChange)) BuildPage();
             else RefreshSnapshot();
+            // Undo and Redo become available (or not) with every change.
+            RefreshEditorControlState();
         });
+    }
+
+    /// <summary>True from the moment the project changes until the recovery file has been written with that change.</summary>
+    private bool _recoveryUnsaved;
+
+    /// <summary>
+    /// Writes the project to the recovery file. Until a write has succeeded the file is behind the project; closing the window
+    /// checks that, writes again, and stays open if that fails too. A write of an older snapshot that finishes after a newer
+    /// change leaves the file marked behind.
+    /// </summary>
+    private async Task SaveRecoveryAsync()
+    {
+        var revision = _documentRevision;
+        await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
+        if (revision == _documentRevision) _recoveryUnsaved = false;
+    }
+
+    private string? _undoKey;
+    private DateTime _undoKeyAt;
+
+    /// <summary>
+    /// Keeps the project as it is now so Undo can come back to it. An edit that continues a burst on one field (the same
+    /// <paramref name="coalesceKey"/>, soon after the last) joins that burst's undo step instead of adding its own, so
+    /// nudging a value ten times is one step back, not ten. "Soon after" is measured between the moments the changes were
+    /// made (<paramref name="madeAt"/>), not the moments the queue applied them. Called with the edit queue held.
+    /// </summary>
+    private void RecordUndo(string? coalesceKey = null, DateTime? madeAt = null)
+    {
+        var now = madeAt ?? DateTime.UtcNow;
+        var joinsBurst = _undo.Count > 0 && UndoCoalescing.ShouldMerge(_undoKey, coalesceKey, _undoKeyAt, now);
+        _undoKey = coalesceKey;
+        _undoKeyAt = now;
+        _redo.Clear();
+        if (joinsBurst) return;
+        _undo.Push(_document);
+        if (_undo.Count <= 64) return;
+        var recent = _undo.Take(64).Reverse().ToArray();
+        _undo.Clear();
+        foreach (var item in recent) _undo.Push(item);
     }
 
     private static Task ValidateAsync(PulseDocument document) =>
@@ -299,6 +512,9 @@ public sealed partial class MainWindow : Window
     private async Task UndoAsync(bool redo, int? expectedRevision = null)
     {
         if (_isLocked) { ShowNotice("Locked"); return; }
+        // Notes typed or on their way belong to the project as it is now. They are saved first, in order, so the undo acts on the
+        // latest completed edit and no save that was queued behind it can land on top of its result (and clear what Redo holds).
+        if (!await FlushStageNotesAsync()) return;
         await DocumentPublication.RunAsync(_edits, async published =>
         {
             if (_isLocked) { ShowNotice("Locked"); return; }
@@ -307,15 +523,20 @@ public sealed partial class MainWindow : Window
             var source = redo ? _redo : _undo;
             var target = redo ? _undo : _redo;
             if (source.Count == 0) return;
+            // The next edit starts a step of its own, even on the field that was just undone.
+            _undoKey = null;
             target.Push(_document);
             _document = source.Pop();
+            // The setlist may be shorter now; the song that was up next may not exist any more.
+            if (_armedSong >= _document.Setlist.Count) _armedSong = -1;
+            _recoveryUnsaved = true;
             _documentRevision++;
             _editorContentRevision = EditorRevisionPolicy.Advance(_editorContentRevision);
             _hasPendingEdits = _transport.State is TransportState.Playing or TransportState.Paused or TransportState.Faulted;
             published();
             SynchronizeGain();
-            await _workspace.SaveRecoveryAsync(LocalWorkspace.Clone(_document));
-        }, _ => { if (!_isClosed) BuildPage(); });
+            await SaveRecoveryAsync();
+        }, _ => { if (!_isClosed) RebuildPreservingScroll(); });
     }
 
     private void SynchronizeGain()
@@ -346,21 +567,34 @@ public sealed partial class MainWindow : Window
         Notice.Title = Text.Get(key);
         Notice.Message = "";
         Notice.IsOpen = true;
+        // Informational notices (restored session, saved) fade away; errors stay until dismissed.
+        _noticeTimer.Stop();
+        _noticeTimer.Start();
     }
 
     private void ShowError(Exception exception, string key = "Error")
     {
         Diagnostics.Write(key, exception);
+        _noticeTimer.Stop();
         Notice.Severity = InfoBarSeverity.Error;
         Notice.Title = Text.Get(key);
-        Notice.Message = $"{ErrorText.Explain(exception)}\n{Text.Format("ErrorDiagnostics", Diagnostics.LogPath)}";
+        Notice.Message = exception is UserMessageException
+            ? ErrorText.Explain(exception)
+            : $"{ErrorText.Explain(exception)}\n{Text.Format("ErrorDiagnostics", Diagnostics.LogPath)}";
         Notice.IsOpen = true;
     }
 
     private void LocalizeTransport()
     {
-        LabelButton(StopButton, "Stop");
-        OutputPicker.Header = Text.Get("Output");
+        LabelButton(StopButton, "Stop", "\uE71A");
+        LabelButton(AudioOptionsButton, "AudioOptions", "\uE7F5");
+        LabelButton(AudioOptionsClose, "CloseOptions");
+        AudioOptionsTitle.Text = Text.Get("AudioOptions");
+        ToolTipService.SetToolTip(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
+        AutomationProperties.SetHelpText(AudioOptionsButton, Text.Get("AudioOptionsHelp"));
+        OutputPicker.Header = null;
+        OutputCaption.Text = Text.Get("Output");
+        OutputNote.Text = Text.Get("AudioNote");
         OutputPicker.PlaceholderText = Text.Get("ChooseOutput");
         Identify(OutputPicker, "AudioOutputPicker", Text.Get("Output"));
         AutomationProperties.SetName(OutputButton, Text.Get("RefreshDevices"));
@@ -371,16 +605,66 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(Navigation, Text.Get("Destinations"));
     }
 
-    private static void LabelButton(Button button, string key)
+    private static void LabelButton(Button button, string key, string? glyph = null)
     {
-        button.Content = new TextBlock { Text = Text.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
+        FrameworkElement content = new TextBlock
+        {
+            Text = Text.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        if (glyph is not null)
+        {
+            // The label has a star column of its own, so in a button narrower than icon + label (a narrow window, a large text
+            // size) it wraps inside the button instead of being clipped. At its natural width nothing changes.
+            // The gap between icon and label belongs to the label (a margin), so a label that is hidden leaves no gap.
+            var row = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16, VerticalAlignment = VerticalAlignment.Center });
+            content.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(content, 1);
+            row.Children.Add(content);
+            content = row;
+        }
+        button.Content = content;
         AutomationProperties.SetName(button, Text.Get(key));
     }
 
-    private void ApplyTheme() => Root.RequestedTheme = _preferences.Theme switch
+    private void ApplyTheme()
     {
-        "Dark" => ElementTheme.Dark, "Light" => ElementTheme.Light, _ => ElementTheme.Default
-    };
+        Root.RequestedTheme = _preferences.Theme switch
+        {
+            "Dark" => ElementTheme.Dark, "Light" => ElementTheme.Light, _ => ElementTheme.Default
+        };
+        ApplyCaptionTheme();
+    }
+
+    private void UpdateTitleBarInset()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var scale = GetDpiForWindow(hwnd) / 96.0;
+        CaptionInset.Width = new GridLength(AppWindow.TitleBar.RightInset / Math.Max(1.0, scale));
+    }
+
+    private void ApplyCaptionTheme()
+    {
+        var bar = AppWindow.TitleBar;
+        var palette = CaptionPalettes.Choose(ThemeBrushes.IsHighContrast, Root.ActualTheme == ElementTheme.Light);
+        if (palette == CaptionPalette.System)
+        {
+            // A null color restores the system default, which a Contrast theme pairs legibly.
+            bar.ButtonForegroundColor = null;
+            bar.ButtonInactiveForegroundColor = null;
+            bar.ButtonBackgroundColor = null;
+            bar.ButtonInactiveBackgroundColor = null;
+            return;
+        }
+        var foreground = palette == CaptionPalette.DarkOnLight ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+        bar.ButtonForegroundColor = foreground;
+        bar.ButtonInactiveForegroundColor = foreground;
+        bar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        bar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+    }
 
     private static void Identify(DependencyObject control, string id, string name)
     {
@@ -400,6 +684,8 @@ public sealed partial class MainWindow : Window
             args.Handled = true;
             return;
         }
+        // While the window is closing nothing new is started: not a save or an open, not playback.
+        if (_closeFlushing) return;
         if (ctrl && args.Key is VirtualKey.S or VirtualKey.O)
         {
             _ = GuardAsync(args.Key == VirtualKey.S ? SaveProjectAsync : OpenProjectAsync);

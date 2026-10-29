@@ -60,6 +60,49 @@ public sealed class ErrorTextTests
     }
 
     [TestMethod]
+    public void AGroupedTimeSignatureThatTheProgramStepsDoNotShareIsExplainedAsThat()
+    {
+        var document = new PulseDocument
+        {
+            Settings = new PulseSettings { BeatsPerBar = 7, BeatDenominator = 8, Groups = [2, 2, 3] },
+            Program = [new ProgramStep { BeatsPerBar = 4, BeatDenominator = 4 }]
+        };
+        var refusal = Assert.ThrowsExactly<ArgumentException>(() => DocumentValidator.Validate(document));
+        var previousLanguage = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var language in new[] { "en", "nl", "de", "fr", "es" })
+            {
+                Text.Select(language);
+                Assert.AreEqual(Text.Get("ErrorGroupMeters"), ErrorText.Explain(refusal), language);
+                Assert.AreNotEqual(Text.Get("ErrorGroup"), ErrorText.Explain(refusal), language);
+            }
+        }
+        finally
+        {
+            Text.Select(previousLanguage);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    [TestMethod]
+    public void AMessageWrittenForTheUserIsShownAsItIsEvenWithWordsTheClassifierKnows()
+    {
+        // These words ("group", "Constant", "MIDI", "gap") would send an ordinary error to a different explanation.
+        foreach (var message in new[]
+                 {
+                     "This project groups its beats, so every step uses its time signature.",
+                     "Constant gap MIDI group density 4096",
+                     "A position must be at least 0 and less than the cycle length (4 quarter notes)."
+                 })
+            Assert.AreEqual(message, ErrorText.Explain(new UserMessageException(message)));
+        Assert.AreEqual("", ErrorText.Explain(new UserMessageException("")));
+    }
+
+    [TestMethod]
     public void TimingGuardsAndPartialLibraryWarningsAreLocalizedInAllFiveLanguages()
     {
         var previousLanguage = Text.Language;

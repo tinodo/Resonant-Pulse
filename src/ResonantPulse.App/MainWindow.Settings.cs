@@ -1,4 +1,6 @@
+using System.Reflection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using ResonantPulse.App.Localization;
 
@@ -8,7 +10,7 @@ public sealed partial class MainWindow
 {
     private UIElement BuildSettings()
     {
-        var language = SelectChoices("Language", "Language", _preferences.Language,
+        var language = Dropdown("Language", "Language", _preferences.Language,
         [
             new("", Text.Get("System")), new("en", "English"), new("nl", "Nederlands"),
             new("de", "Deutsch"), new("fr", "Français"), new("es", "Español")
@@ -24,7 +26,7 @@ public sealed partial class MainWindow
             BuildPage();
             await _workspace.SavePreferencesAsync(_preferences);
         });
-        var theme = SelectChoices("Theme", "Theme", _preferences.Theme,
+        var theme = Dropdown("Theme", "Theme", _preferences.Theme,
         [
             new("Default", Text.Get("System")), new("Dark", Text.Get("Dark")), new("Light", Text.Get("Light"))
         ]);
@@ -34,26 +36,37 @@ public sealed partial class MainWindow
             ApplyTheme();
             await _workspace.SavePreferencesAsync(_preferences);
         });
-        var reduced = Check("ReducedMotion", "ReducedMotion", _preferences.IsReducedMotion);
-        async void SaveMotion(object sender, RoutedEventArgs args) => await GuardAsync(async () =>
+        // The presentation loop reads the preference on every frame, so the change is seen at once.
+        var motion = Toggle("ReducedMotion", "ReducedMotion", _preferences.IsReducedMotion);
+        motion.Toggled += async (_, _) => await GuardAsync(async () =>
         {
-            _preferences.IsReducedMotion = reduced.IsChecked == true;
+            _preferences.IsReducedMotion = motion.IsOn;
             await _workspace.SavePreferencesAsync(_preferences);
         });
-        reduced.Checked += SaveMotion;
-        reduced.Unchecked += SaveMotion;
-        var bars = Number("ExportBars", "ExportBars", _preferences.ExportBars, 1, 1024);
-        var panel = Column(Heading(Text.Get("Settings")), Flow(language, theme), reduced,
-            Heading(Text.Get("Output")), Copy("OutputPolicy"),
-            bars,
-            ActionButton("Apply", "SaveExportBars", async () =>
-            {
-                _preferences.ExportBars = Integer(bars);
-                await _workspace.SavePreferencesAsync(_preferences);
-                ShowNotice("Saved");
-            }),
-            Heading(Text.Get("Capabilities")), Copy("IntegrationGates"), Copy("RemainingMusic"), Copy("WorkflowGaps"), Copy("RemainingMedia"),
-            Copy("ValidationGate"), Copy("Privacy"), Copy("KeyboardHelp"));
-        return Scroll(panel);
+
+        var appearance = Card("Appearance", SettingRows(
+            SettingRow("Language", null, language),
+            SettingRow("Theme", null, theme),
+            SettingRow("ReducedMotion", "ReducedMotionHelp", motion)), id: "AppearanceCard");
+
+        var version = new TextBlock
+        {
+            Text = Text.Format("VersionLine", AppVersion()), Style = ResonantStyle("BodyStyle"), FontSize = 14,
+            IsTextSelectionEnabled = true
+        };
+        AutomationProperties.SetAutomationId(version, "AppVersion");
+        var about = Card("AboutApp", new StackPanel { Spacing = 8, Children = { version, Copy("Privacy"), Copy("TimingHonesty") } },
+            id: "AboutCard");
+        return PageScaffold("Settings", null, null, appearance, about);
+    }
+
+    /// <summary>The release number the build was stamped with, without any source-revision suffix.</summary>
+    private static string AppVersion()
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? assembly.GetName().Version?.ToString() ?? "";
+        var revision = version.IndexOf('+');
+        return revision >= 0 ? version[..revision] : version;
     }
 }

@@ -52,6 +52,15 @@ Disabled timers are omitted from JSON so ordinary projects retain the previous
 shape. A nonzero timer requires a timer-capable reader; older strict readers
 reject the new property rather than silently dropping the stop condition.
 
+Live beat/bar auto-stop uses optional `PracticeBeats` (0..6400000) and
+`PracticeBars` (0..100000). Count-in is excluded. Beats are the written meter's
+denominator units, independent of the BPM note unit and audible subdivision.
+Meter changes, ramps and repeats use the compiler's exact rational coordinates;
+long loop counts reuse the prepared body rather than compiling a giant plan.
+The first enabled seconds/beats/bars/program boundary wins. Silence still counts.
+These settings do not truncate exported files. Zero-valued fields are omitted
+for backwards compatibility; older strict readers reject enabled new fields.
+
 ## Musical coordinates and projection
 
 `Rational` is a reduced arbitrary-precision fraction; default is zero. Arithmetic,

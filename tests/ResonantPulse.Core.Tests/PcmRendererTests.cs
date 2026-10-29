@@ -182,6 +182,59 @@ public sealed class PcmRendererTests
     }
 
     [TestMethod]
+    public void ApplyGapMask_ClearsExactlyTheSilentRanges_ForBlockOffsetsLoopingAndChannels()
+    {
+        var d = Check.LaneDocument();
+        d.Settings.AudibleBars = d.Settings.SilentBars = 1;
+        var p = Check.Plan(d, 2);
+        var gap = p.SilentRanges.Single();
+        Assert.AreEqual((16000L, 32000L), gap);
+
+        // A window that straddles both edges of the gap, without looping.
+        var window = Enumerable.Repeat(1f, 2 * 20000).ToArray();
+        PcmRenderer.ApplyGapMask(window, p, 10000, 2, loop: false);
+        for (var frame = 0; frame < 20000; frame++)
+        {
+            var expected = 10000 + frame >= gap.StartFrame && 10000 + frame < gap.EndFrame ? 0f : 1f;
+            Assert.AreEqual(expected, window[frame * 2], $"left {frame}");
+            Assert.AreEqual(expected, window[frame * 2 + 1], $"right {frame}");
+        }
+
+        // Looping: the plan repeats, so the gap recurs every TotalFrames, including across the loop edge.
+        var looped = Enumerable.Repeat(1f, 40000).ToArray();
+        PcmRenderer.ApplyGapMask(looped, p, 30000, 1, loop: true);
+        for (var frame = 0; frame < looped.Length; frame++)
+        {
+            var local = (30000 + frame) % p.TotalFrames;
+            Assert.AreEqual(local >= gap.StartFrame && local < gap.EndFrame ? 0f : 1f, looped[frame], $"loop {frame}");
+        }
+
+        // Block-wise application equals one call: masks have no state.
+        var whole = Enumerable.Repeat(1f, 2 * 5000).ToArray();
+        PcmRenderer.ApplyGapMask(whole, p, 14000, 2, loop: true);
+        var pieces = Enumerable.Repeat(1f, 2 * 5000).ToArray();
+        for (var done = 0; done < 5000; done += 700)
+        {
+            var count = Math.Min(700, 5000 - done);
+            PcmRenderer.ApplyGapMask(pieces.AsSpan(done * 2, count * 2), p, 14000 + done, 2, loop: true);
+        }
+        Check.Sequence(whole, pieces);
+    }
+
+    [TestMethod]
+    public void ApplyGapMask_RejectsInvalidArguments_AndIgnoresPlansWithoutGaps()
+    {
+        var gapless = Check.Plan();
+        var buffer = Enumerable.Repeat(1f, 200).ToArray();
+        PcmRenderer.ApplyGapMask(buffer, gapless, 0);
+        Assert.IsTrue(buffer.All(x => x == 1f));
+        Assert.ThrowsExactly<ArgumentNullException>(() => PcmRenderer.ApplyGapMask(buffer, null!, 0));
+        Assert.ThrowsExactly<ArgumentException>(() => PcmRenderer.ApplyGapMask(buffer, gapless, 0, 3));
+        Assert.ThrowsExactly<ArgumentException>(() => PcmRenderer.ApplyGapMask(buffer.AsSpan(0, 199), gapless, 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => PcmRenderer.ApplyGapMask(buffer, gapless, -1));
+    }
+
+    [TestMethod]
     public void Fill_EachSoundAndAccent_IsFiniteDistinctAndTapered()
     {
         var signatures = new List<float[]>();

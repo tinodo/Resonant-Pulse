@@ -17,7 +17,23 @@ public sealed record PulseSettings
     /// <summary>Live practice duration after count-in; zero disables the timer. Pauses do not consume audio frames.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int PracticeSeconds { get; set; }
+    /// <summary>Live stop after written denominator-unit beats, excluding count-in; zero disables.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int PracticeBeats { get; set; }
+    /// <summary>Live stop after complete authored bars, excluding count-in; zero disables.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int PracticeBars { get; set; }
     public Accent[] Accents { get; set; } = [Accent.Strong, Accent.Normal, Accent.Normal, Accent.Normal];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AccentOverridesGroups { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int[]? ManualAccentIndices { get; set; }
+    /// <summary>
+    /// Strength of the clicks that split each beat (Subdivision − 1 for every primary pulse), in bar order: the first pulse's
+    /// split clicks, then the second's, and so on. The pattern repeats like Accents. Null or empty leaves every split click Soft.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Accent[]? SubdivisionAccents { get; set; }
     public int AudibleBars { get; set; }
     public int SilentBars { get; set; }
     public bool BlindGaps { get; set; } = true;

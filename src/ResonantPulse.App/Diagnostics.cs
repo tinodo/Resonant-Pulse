@@ -2,9 +2,7 @@ namespace ResonantPulse.App;
 
 internal static class Diagnostics
 {
-    public static string LogPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ResonantPulse", "Logs", "app.log");
+    public static string LogPath { get; } = Path.Combine(Storage.LocalWorkspace.DefaultRoot(), "Logs", "app.log");
 
     public static void Write(string message, Exception? exception = null)
     {

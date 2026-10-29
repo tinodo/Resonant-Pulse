@@ -8,9 +8,12 @@ internal static class ThemeBrushes
 {
     private static readonly AccessibilitySettings Accessibility = new();
 
+    /// <summary>True while a Windows Contrast theme is active.</summary>
+    internal static bool IsHighContrast => Accessibility.HighContrast;
+
     internal static Brush Resolve(FrameworkElement owner, string key)
     {
-        var theme = Accessibility.HighContrast ? "HighContrast" :
+        var theme = IsHighContrast ? "HighContrast" :
             owner.ActualTheme == ElementTheme.Light ? "Light" : "Dark";
         foreach (var merged in Application.Current.Resources.MergedDictionaries)
             if (merged.ThemeDictionaries.TryGetValue(theme, out var themed) &&

@@ -52,6 +52,20 @@ public sealed class DocumentValidatorTests
     }
 
     [TestMethod]
+    public void Validate_SubdivisionAccents_AcceptsNullAndEveryDefinedAccentUpToTheLimit()
+    {
+        var d = Fixture();
+        foreach (var accents in new Accent[]?[] { null, [], Enum.GetValues<Accent>(), Enumerable.Repeat(Accent.Soft, 1024).ToArray() })
+        {
+            d.Settings.SubdivisionAccents = accents;
+            DocumentValidator.Validate(d);
+        }
+        Invalid(x => x.Settings.SubdivisionAccents = Enumerable.Repeat(Accent.Soft, 1025).ToArray());
+        Invalid(x => x.Settings.SubdivisionAccents = [(Accent)4]);
+        Invalid(x => x.Settings.SubdivisionAccents = [Accent.Strong, (Accent)(-1)]);
+    }
+
+    [TestMethod]
     [DataRow(0, true)]
     [DataRow(1, true)]
     [DataRow(86400, true)]
@@ -61,6 +75,34 @@ public sealed class DocumentValidatorTests
     {
         var document = Fixture();
         document.Settings.PracticeSeconds = seconds;
+        if (supported) DocumentValidator.Validate(document);
+        else Check.Throws<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
+
+    [TestMethod]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(100000, true)]
+    [DataRow(-1, false)]
+    [DataRow(100001, false)]
+    public void Validate_PracticeBars_EnforcesBounds(int bars, bool supported)
+    {
+        var document = Fixture();
+        document.Settings.PracticeBars = bars;
+        if (supported) DocumentValidator.Validate(document);
+        else Check.Throws<ArgumentException>(() => DocumentValidator.Validate(document));
+    }
+
+    [TestMethod]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(6400000, true)]
+    [DataRow(-1, false)]
+    [DataRow(6400001, false)]
+    public void Validate_PracticeBeats_EnforcesBounds(int beats, bool supported)
+    {
+        var document = Fixture();
+        document.Settings.PracticeBeats = beats;
         if (supported) DocumentValidator.Validate(document);
         else Check.Throws<ArgumentException>(() => DocumentValidator.Validate(document));
     }

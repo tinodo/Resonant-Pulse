@@ -43,7 +43,7 @@ public sealed partial class MainWindow
     {
         if (_preferences.OutputId == device.Id && !_isOutputMissing) return;
         InvalidateTiming();
-        _transportIntent++;
+        SupersedeTransportIntent();
         _transport.SuspendForEndpointChange();
         _preferences.OutputId = device.Id;
         _preferences.OutputName = device.Name;
@@ -63,7 +63,6 @@ public sealed partial class MainWindow
     private void PromptForOutput()
     {
         ShowNotice("ChooseOutput");
-        OutputPicker.Focus(FocusState.Programmatic);
-        OutputPicker.IsDropDownOpen = true;
+        AudioOptionsFlyout.ShowAt(AudioOptionsButton);
     }
 }

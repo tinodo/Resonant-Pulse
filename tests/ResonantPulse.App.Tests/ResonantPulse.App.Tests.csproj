@@ -12,14 +12,39 @@
     <!-- Exercise the actual UI-independent App sources without bootstrapping
          WinUI or requiring package identity/audio on the test host. -->
     <Compile Include="../../src/ResonantPulse.App/AccentPatterns.cs" Link="App/AccentPatterns.cs" />
+    <Compile Include="../../src/ResonantPulse.App/ClickGrid.cs" Link="App/ClickGrid.cs" />
+    <Compile Include="../../src/ResonantPulse.App/CaptionPalette.cs" Link="App/CaptionPalette.cs" />
+    <Compile Include="../../src/ResonantPulse.App/MeterPresets.cs" Link="App/MeterPresets.cs" />
+    <Compile Include="../../src/ResonantPulse.App/PlayLayout.cs" Link="App/PlayLayout.cs" />
+    <Compile Include="../../src/ResonantPulse.App/FormMetrics.cs" Link="App/FormMetrics.cs" />
+    <Compile Include="../../src/ResonantPulse.App/StageNotes.cs" Link="App/StageNotes.cs" />
+    <Compile Include="../../src/ResonantPulse.App/StudioRules.cs" Link="App/StudioRules.cs" />
+    <Compile Include="../../src/ResonantPulse.App/SubmissionTracker.cs" Link="App/SubmissionTracker.cs" />
+    <Compile Include="../../src/ResonantPulse.App/ProgramRules.cs" Link="App/ProgramRules.cs" />
+    <Compile Include="../../src/ResonantPulse.App/RowOrder.cs" Link="App/RowOrder.cs" />
+    <Compile Include="../../src/ResonantPulse.App/WholeNumbers.cs" Link="App/WholeNumbers.cs" />
+    <Compile Include="../../src/ResonantPulse.App/PracticeFormat.cs" Link="App/PracticeFormat.cs" />
+    <Compile Include="../../src/ResonantPulse.App/PresetSummary.cs" Link="App/PresetSummary.cs" />
+    <Compile Include="../../src/ResonantPulse.App/TempoFormat.cs" Link="App/TempoFormat.cs" />
+    <Compile Include="../../src/ResonantPulse.App/TempoReadout.cs" Link="App/TempoReadout.cs" />
+    <Compile Include="../../src/ResonantPulse.App/LiveSoundEdits.cs" Link="App/LiveSoundEdits.cs" />
+    <Compile Include="../../src/ResonantPulse.App/LiveSettingsEdits.cs" Link="App/LiveSettingsEdits.cs" />
+    <Compile Include="../../src/ResonantPulse.App/LiveEditPolicy.cs" Link="App/LiveEditPolicy.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoEdits.cs" Link="App/TempoEdits.cs" />
     <Compile Include="../../src/ResonantPulse.App/StageOperationGate.cs" Link="App/StageOperationGate.cs" />
     <Compile Include="../../src/ResonantPulse.App/EditorOperationGate.cs" Link="App/EditorOperationGate.cs" />
     <Compile Include="../../src/ResonantPulse.App/DocumentPublication.cs" Link="App/DocumentPublication.cs" />
     <Compile Include="../../src/ResonantPulse.App/TimingRunRules.cs" Link="App/TimingRunRules.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoCurveState.cs" Link="App/TempoCurveState.cs" />
+    <Compile Include="../../src/ResonantPulse.App/TrainProgramView.cs" Link="App/TrainProgramView.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/AudioOutputSelection.cs" Link="App/Audio/AudioOutputSelection.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/ConsistentRead.cs" Link="App/Audio/ConsistentRead.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackDeadline.cs" Link="App/Audio/PlaybackDeadline.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackRevision.cs" Link="App/Audio/PlaybackRevision.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/LiveEditOutcome.cs" Link="App/Audio/LiveEditOutcome.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/LiveTimeline.cs" Link="App/Audio/LiveTimeline.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/LiveSplice.cs" Link="App/Audio/LiveSplice.cs" />
+    <Compile Include="../../src/ResonantPulse.App/Audio/LiveEditQueue.cs" Link="App/Audio/LiveEditQueue.cs" />
     <Compile Include="../../src/ResonantPulse.App/Storage/LocalWorkspace.cs" Link="App/Storage/LocalWorkspace.cs" />
     <Compile Include="../../src/ResonantPulse.App/Localization/Text.cs" Link="App/Localization/Text.cs" />
     <Compile Include="../../src/ResonantPulse.App/Localization/ErrorText.cs" Link="App/Localization/ErrorText.cs" />
