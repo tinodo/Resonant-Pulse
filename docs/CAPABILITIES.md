@@ -51,7 +51,11 @@ one-shot (never saved: the application always opens stopped, silent and not list
 the metronome is stopped and an output is selected. It sits beside -, TAP and + with its words when there is room
 on both sides of them (the controls stay centred under the dial), as an icon alone when there is only room for that,
 as an icon at the end of the controls when the window is narrower still, and on a row of its own only in the narrowest
-windows, which costs the dial some height; the dial keeps its size at 800x600 and 1000x720. The number of taps (2 to 16,
+windows, which costs the dial some height; the dial keeps its size at 800x600 and 1000x720. The room for these forms is
+the page's width, not the width of the row that holds the switch (a row wider than the page is clipped at its own width and
+reports that as its room): the code merged with PR #33, which was never released, showed 2 DIP of the switch at a window
+width of 320 DIP on a 100% display, and PR #34 fixed it; the switch is on its own row, 124 DIP wide (152 in Dutch), at
+320 DIP at 100% and at 150%, and the first-use verifier fails on a switch narrower than 40 DIP. The number of taps (2 to 16,
 4 until changed) is an app preference kept in the Tempo panel: Cancel discards what was typed, Done keeps it, and it
 counts the next time the switch goes on. Done writes only what was changed in the panel, so a number of taps changed
 alone neither ends Tap to start nor touches the project (a tapped tempo that is being saved stays); a tempo or unit

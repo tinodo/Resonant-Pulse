@@ -164,7 +164,7 @@ public sealed partial class MainWindow
         tempoCluster.Children.Add(tap);
         tempoCluster.Children.Add(faster);
         Identify(tempoCluster, "PlayQuickControls", Text.Get("Tempo"));
-        var tempoRow = BuildTempoRow(tempoCluster, BuildTapStart());
+        var tempoRow = BuildTempoRow(tempoCluster, BuildTapStart(), hero);
         var unitNotice = !followsProgram && MeterPresets.UnitNeedsFix(settings) ? BuildUnitNotice(settings) : null;
         // Stretched, so that the switch beside the tempo controls can use the room each side of them while they stay centred.
         var tempoArea = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Stretch };
