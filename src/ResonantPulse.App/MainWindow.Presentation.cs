@@ -68,9 +68,12 @@ public sealed partial class MainWindow
         if (_beatStrip is { } strip && _clickGrid is { } clicks)
         {
             var cell = -1;
-            // The strip edits the document's own bar; a program section in another meter has no matching cell to light.
+            // The strip edits the document's own bar; a program section in another meter has no matching cell to light. The position
+            // is the playing audio's, which has not taken a change of unit, subdivision or swing that is still waiting for its
+            // splice: until it has, its clicks are not where the strip's cells are, so nothing is lit.
             var stripMeterMatches = meterBeats == _document.Settings.BeatsPerBar && meterDenominator == _document.Settings.BeatDenominator;
-            if (stripMeterMatches && position is not null && !blind && snapshot.State is TransportState.Playing or TransportState.Paused)
+            if (stripMeterMatches && clicks.IsPlayedBy(shownSettings) && position is not null && !blind &&
+                snapshot.State is TransportState.Playing or TransportState.Paused)
             {
                 var withinBar = (position.BeatIndex + position.BeatPhase) * 4d / meterDenominator;
                 cell = clicks.CellAt(withinBar, position.IsCountIn);

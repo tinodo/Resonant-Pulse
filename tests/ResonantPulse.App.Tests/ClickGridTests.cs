@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ResonantPulse.Core;
 
@@ -79,8 +80,85 @@ public sealed class ClickGridTests
 
         // A dotted quarter in 4/4: three beats, the last cut short by the bar line.
         CollectionAssert.AreEqual(new[] { "1", "2", "3" }, Labels(ClickGrid.Of(new PulseSettings { BeatUnitQuarters = 1.5 })));
-        CollectionAssert.AreEqual(new[] { "1", "·", "·", "2", "·", "·", "3", "·", "·" },
-            Labels(ClickGrid.Of(new PulseSettings { BeatUnitQuarters = 1.5, Subdivision = 3 })));
+    }
+
+    [TestMethod]
+    public void ABarWhoseUnitDoesNotFitShowsItsBeatsAloneBecauseItsLastBeatIsCutShort()
+    {
+        // 4/4 counted in dotted quarters, each beat split in three: Core plays eight clicks in the bar, not nine, because the click
+        // that would fall on the bar line is cut. Cells for nine would promise one that never sounds.
+        var settings = new PulseSettings { BeatUnitQuarters = 1.5, Subdivision = 3, CountInBars = 0 };
+        Assert.IsTrue(MeterPresets.UnitNeedsFix(settings));
+        var plan = ScheduleCompiler.Compile(new PulseDocument { Settings = settings }, Rate, 1, false);
+        Assert.AreEqual(8, plan.Onsets.Count, "what Core really plays in that bar");
+        var grid = ClickGrid.Of(settings);
+        Assert.AreEqual(3, grid.Beats);
+        Assert.AreEqual(1, grid.Split);
+        Assert.AreEqual(0, grid.SplitSlots);
+        CollectionAssert.AreEqual(new[] { "1", "2", "3" }, Labels(grid));
+
+        // A unit the bar divides shows every click, and each of them sounds.
+        settings.BeatUnitQuarters = 2;
+        Assert.IsFalse(MeterPresets.UnitNeedsFix(settings));
+        var fitting = ClickGrid.Of(settings);
+        Assert.AreEqual(6, fitting.Count);
+        Assert.AreEqual(fitting.Count, ScheduleCompiler.Compile(new PulseDocument { Settings = settings }, Rate, 1, false).Onsets.Count);
+    }
+
+    [TestMethod]
+    public void ASwungClickIsNumberedWhereCorePlaysItNotWhereAStraightOneWouldBe()
+    {
+        // Half-note beats in 4/4 split in two with swing 0.75: Core plays the clicks at 0, 1.5, 2 and 3.5 quarter notes, so the
+        // second and fourth are between written beats, not on beats 2 and 4.
+        var settings = new PulseSettings { BeatUnitQuarters = 2, Subdivision = 2, Swing = 0.75, CountInBars = 0 };
+        CollectionAssert.AreEqual(new[] { "1", "·", "3", "·" }, Labels(ClickGrid.Of(settings)));
+        settings.Swing = 0.5;
+        CollectionAssert.AreEqual(new[] { "1", "2", "3", "4" }, Labels(ClickGrid.Of(settings)), "straight, the clicks do fall on beats 2 and 4");
+    }
+
+    [TestMethod]
+    [DataRow(80d, 4, 4, 2.0, 2, 0.75, "")]
+    [DataRow(80d, 4, 4, 1.0, 2, 0.5, "")]
+    [DataRow(80d, 4, 4, 1.0, 4, 2d / 3, "")]
+    [DataRow(80d, 6, 8, 1.5, 3, 0.5, "3+3")]
+    [DataRow(80d, 6, 8, 1.5, 4, 0.7, "3+3")]
+    [DataRow(80d, 6, 8, 1.5, 2, 0.75, "3+3")]
+    [DataRow(80d, 7, 8, 0.5, 2, 0.6, "2+2+3")]
+    public void ANumberIsOnAWrittenBeatOfTheCompiledScheduleAndADotIsBetweenTwo(
+        double tempo, int beats, int denominator, double unit, int subdivision, double swing, string groups)
+    {
+        var settings = new PulseSettings
+        {
+            Tempo = tempo, BeatsPerBar = beats, BeatDenominator = denominator, BeatUnitQuarters = unit,
+            Subdivision = subdivision, Swing = swing, CountInBars = 0,
+            Groups = groups.Length == 0 ? [] : groups.Split('+').Select(int.Parse).ToArray()
+        };
+        var grid = ClickGrid.Of(settings);
+        var plan = ScheduleCompiler.Compile(new PulseDocument { Settings = settings }, Rate, 1, false);
+        var onsets = plan.Onsets.OrderBy(onset => onset.Frame).ToArray();
+        Assert.AreEqual(grid.Count, onsets.Length);
+        var writtenBeatQuarters = 4d / denominator;
+        for (var cell = 0; cell < onsets.Length; cell++)
+        {
+            var quarters = onsets[cell].Frame / (double)Rate * tempo * unit / 60d;
+            var written = quarters / writtenBeatQuarters;
+            var onWrittenBeat = Math.Abs(written - Math.Round(written)) < 1e-3;
+            var expected = onWrittenBeat ? (Math.Round(written) + 1).ToString(CultureInfo.CurrentCulture) : "·";
+            Assert.AreEqual(expected, grid.Label(cell),
+                $"click {cell} of {beats}/{denominator} (split {subdivision}, swing {swing}) sounds {quarters:0.###} quarter notes into the bar");
+        }
+    }
+
+    [TestMethod]
+    public void TheStripIsLitOnlyByAudioThatPlacesItsClicksWhereTheCellsAre()
+    {
+        var shown = ClickGrid.Of(new PulseSettings { Subdivision = 2, Swing = 0.5 });
+        Assert.IsTrue(shown.IsPlayedBy(new PulseSettings { Subdivision = 2, Swing = 0.5 }));
+        Assert.IsTrue(shown.IsPlayedBy(new PulseSettings { Subdivision = 2, Swing = 0.5, Tempo = 200 }), "tempo does not move a click within the bar");
+        Assert.IsFalse(shown.IsPlayedBy(new PulseSettings { Subdivision = 1 }), "a subdivision that has not reached the audio yet");
+        Assert.IsFalse(shown.IsPlayedBy(new PulseSettings { Subdivision = 2, Swing = 0.7 }), "a swing that has not");
+        Assert.IsFalse(shown.IsPlayedBy(new PulseSettings { Subdivision = 2, BeatUnitQuarters = 0.5 }), "a unit that has not");
+        Assert.IsFalse(shown.IsPlayedBy(new PulseSettings { Subdivision = 2, BeatsPerBar = 3 }), "a meter that has not");
     }
 
     [TestMethod]
