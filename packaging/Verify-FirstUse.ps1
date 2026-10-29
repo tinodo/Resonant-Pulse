@@ -280,6 +280,12 @@ function Test-TapStartRow([string]$where) {
     $page = (Get-CurrentWindow).Current.BoundingRectangle
     if ($toggle.IsEmpty -or $cluster.IsEmpty) { throw "${where}: Tap to start or the tempo controls have no rectangle ($toggle, $cluster)." }
     Test-Visible $toggle $page "${where}: Tap to start"
+    # "Inside the window" is not enough: a switch pushed past the edge of the page is clipped to what is left of it, and the rectangle
+    # that remains lies inside the window. The hosted runner (100 % DPI) showed 2 DIP of it at 320x900 and this check passed. Whatever
+    # its form, the switch keeps its own size: at least its icon, which is 46 DIP wide and 44 high.
+    if ($toggle.Width -lt 40 * $scale -or $toggle.Height -lt 40 * $scale) {
+        throw "${where}: Tap to start is squeezed to $([Math]::Round($toggle.Width / $scale, 1)) x $([Math]::Round($toggle.Height / $scale, 1)) DIP by the edge of the page (its smallest form is 46 x 44): $toggle, tempo controls $cluster."
+    }
     $one = 1 * $scale
     if ($toggle.Left -lt $cluster.Right - $one -and $toggle.Right -gt $cluster.Left + $one -and
         $toggle.Top -lt $cluster.Bottom - $one -and $toggle.Bottom -gt $cluster.Top + $one) {
