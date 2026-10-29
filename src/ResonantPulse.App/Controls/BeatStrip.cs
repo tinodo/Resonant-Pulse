@@ -35,8 +35,9 @@ public sealed class BeatStrip : StackPanel
     public Func<int, string> Label { get; set; } = index => (index + 1).ToString(System.Globalization.CultureInfo.CurrentCulture);
 
     /// <summary>
-    /// True for a click that splits a beat: its bar is narrower and its label quieter than a beat's, so the strip reads as beats
-    /// with clicks between them.
+    /// True for a click that splits a beat: its bar is narrower and its number smaller than a beat's, so the strip reads as beats
+    /// with clicks between them. The number keeps the full text colour: fading it would drop it below the contrast the theme's
+    /// text needs, in Light and in the Contrast themes.
     /// </summary>
     public Func<int, bool> IsSplit { get; set; } = _ => false;
 
@@ -98,7 +99,7 @@ public sealed class BeatStrip : StackPanel
             };
             var number = new TextBlock
             {
-                Text = Label(index), FontSize = split ? 11 : 12, Opacity = split ? 0.7 : 1,
+                Text = Label(index), FontSize = split ? 11 : 12,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
             };
             var glow = new Border

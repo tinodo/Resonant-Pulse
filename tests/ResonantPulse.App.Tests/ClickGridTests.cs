@@ -67,6 +67,99 @@ public sealed class ClickGridTests
     }
 
     [TestMethod]
+    public void ABeatThatFallsBetweenWrittenBeatsIsNumberedLikeEveryOtherBeat()
+    {
+        // An eighth note in 4/4: every other beat falls between two written beats, so all of them count 1, 2, 3 and on
+        // (written-beat numbers for some and pulse numbers for the rest gave 1 2 2 4 3 6 4 8).
+        var eighths = new PulseSettings { BeatUnitQuarters = 0.5 };
+        CollectionAssert.AreEqual(new[] { "1", "2", "3", "4", "5", "6", "7", "8" }, Labels(ClickGrid.Of(eighths)));
+        eighths.Subdivision = 2;
+        CollectionAssert.AreEqual(
+            new[] { "1", "·", "2", "·", "3", "·", "4", "·", "5", "·", "6", "·", "7", "·", "8", "·" }, Labels(ClickGrid.Of(eighths)));
+
+        // A dotted quarter in 4/4: three beats, the last cut short by the bar line.
+        CollectionAssert.AreEqual(new[] { "1", "2", "3" }, Labels(ClickGrid.Of(new PulseSettings { BeatUnitQuarters = 1.5 })));
+        CollectionAssert.AreEqual(new[] { "1", "·", "·", "2", "·", "·", "3", "·", "·" },
+            Labels(ClickGrid.Of(new PulseSettings { BeatUnitQuarters = 1.5, Subdivision = 3 })));
+    }
+
+    [TestMethod]
+    [DataRow(4, 4, 1.0, 1, "")]
+    [DataRow(4, 4, 0.5, 1, "")]
+    [DataRow(4, 4, 0.5, 3, "")]
+    [DataRow(4, 4, 2.0, 2, "")]
+    [DataRow(4, 4, 1.5, 3, "")]
+    [DataRow(6, 8, 1.5, 1, "3+3")]
+    [DataRow(6, 8, 1.5, 2, "3+3")]
+    [DataRow(6, 8, 1.5, 3, "3+3")]
+    [DataRow(6, 8, 0.5, 2, "3+3")]
+    [DataRow(7, 8, 0.5, 3, "2+2+3")]
+    [DataRow(12, 8, 1.5, 1, "3+3+3+3")]
+    [DataRow(12, 8, 1.5, 3, "3+3+3+3")]
+    [DataRow(3, 4, 1.0, 4, "")]
+    [DataRow(5, 4, 2.0, 2, "")]
+    [DataRow(2, 2, 2.0, 2, "")]
+    public void NoTwoBeatsShareANumberAndNoTwoClicksShareAName(int beats, int denominator, double unit, int subdivision, string groups)
+    {
+        var settings = new PulseSettings
+        {
+            BeatsPerBar = beats, BeatDenominator = denominator, BeatUnitQuarters = unit, Subdivision = subdivision,
+            Groups = groups.Length == 0 ? [] : groups.Split('+').Select(int.Parse).ToArray()
+        };
+        var grid = ClickGrid.Of(settings);
+        var beatNumbers = Enumerable.Range(0, grid.Beats).Select(beat => grid.Label(beat * grid.Split)).ToArray();
+        var where = $"{beats}/{denominator} counted in {unit} quarters, split {subdivision}";
+        CollectionAssert.AllItemsAreUnique(beatNumbers, where);
+        Assert.IsFalse(beatNumbers.Contains("·"), $"a beat is never a dot: {where}");
+        // A click is named by the number of the beat it belongs to and its place in it, as the accessible names read.
+        var names = Enumerable.Range(0, grid.Count).Select(cell => (grid.Label(grid.BeatOf(cell) * grid.Split), grid.PartOf(cell))).ToArray();
+        Assert.AreEqual(grid.Count, names.Distinct().Count(), $"every click has its own name: {where}");
+    }
+
+    [TestMethod]
+    public void AStripIsTheSameBarOnlyWhenItsCellsMeanTheSameClicks()
+    {
+        var twoWay = ClickGrid.Of(new PulseSettings { Subdivision = 2 });
+        Assert.IsTrue(twoWay.SameCells(ClickGrid.Of(new PulseSettings { Subdivision = 2, Tempo = 200 })), "tempo does not move a cell");
+        Assert.IsFalse(twoWay.SameCells(ClickGrid.Of(new PulseSettings { Subdivision = 3 })), "cell 2 is beat 2, then the third click of beat 1");
+        Assert.IsFalse(twoWay.SameCells(ClickGrid.Of(new PulseSettings { Subdivision = 2, BeatUnitQuarters = 0.5 })));
+        Assert.IsFalse(twoWay.SameCells(ClickGrid.Of(new PulseSettings { Subdivision = 2, BeatsPerBar = 3 })));
+    }
+
+    [TestMethod]
+    public void ACountInLightsTheBeatsThatSoundAndSkipsTheSilentClicksBetweenThem()
+    {
+        var compound = ClickGrid.Of(Compound());
+        foreach (var (position, cell) in new[] { (0d, 0), (0.5, 0), (1.0, 0), (1.49, 0), (1.5, 3), (2.0, 3), (2.9, 3) })
+            Assert.AreEqual(cell, compound.CellAt(position, countIn: true), $"{position} quarters into a count-in bar");
+        Assert.AreEqual(1, compound.CellAt(0.5), "the body of the bar still lights its split clicks");
+        var plain = ClickGrid.Of(new PulseSettings());
+        Assert.AreEqual(2, plain.CellAt(2.5, countIn: true), "without a split a count-in lights the beat as always");
+    }
+
+    [TestMethod]
+    public void NoSplitClickIsLitWhileTheScheduleCountsIn()
+    {
+        var settings = Compound();
+        settings.CountInBars = 1;
+        var grid = ClickGrid.Of(settings);
+        var plan = ScheduleCompiler.Compile(new PulseDocument { Settings = settings }, Rate, 1, includeCountIn: true);
+        Assert.IsTrue(plan.CountInFrames > 0, "the plan has a count-in");
+        Assert.AreEqual(grid.Beats, plan.Onsets.Count(onset => onset.Frame < plan.CountInFrames), "a count-in plays the beats alone");
+
+        var lit = new List<int>();
+        for (var frame = 0L; frame < plan.CountInFrames; frame += 480)
+        {
+            var position = plan.PositionAtFrame(frame);
+            Assert.IsTrue(position.IsCountIn, $"frame {frame}");
+            var cell = grid.CellAt((position.BeatIndex + position.BeatPhase) * 4d / settings.BeatDenominator, position.IsCountIn);
+            Assert.IsFalse(grid.IsSplit(cell), $"frame {frame} lit a click that does not sound");
+            if (lit.Count == 0 || lit[^1] != cell) lit.Add(cell);
+        }
+        CollectionAssert.AreEqual(new[] { 0, 3 }, lit, "each beat of the count-in bar is lit in its turn");
+    }
+
+    [TestMethod]
     public void AdditiveGroupsSpaceTheirStartsAndTheStripNeverHasMoreThanTheMaximumOfCells()
     {
         var seven = new PulseSettings { BeatsPerBar = 7, BeatDenominator = 8, BeatUnitQuarters = 0.5, Groups = [2, 2, 3] };

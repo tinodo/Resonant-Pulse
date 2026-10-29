@@ -251,8 +251,8 @@ public sealed partial class MainWindow
         _beatStrip = strip;
         _clickGrid = clicks;
         strip.Rebuild(clicks.Count, clicks.SpaceBefore(), 44, clicks.Levels(settings));
-        strip.BeatInvoked += async (_, index) => await GuardAsync(() => ChangeAccentAsync(index, 1, wrap: true));
-        strip.BeatNudged += async (_, args) => await GuardAsync(() => ChangeAccentAsync(args.Index, args.Delta, wrap: false));
+        strip.BeatInvoked += async (_, index) => await GuardAsync(() => ChangeAccentAsync(clicks, index, 1, wrap: true));
+        strip.BeatNudged += async (_, args) => await GuardAsync(() => ChangeAccentAsync(clicks, args.Index, args.Delta, wrap: false));
         var stripScroll = new ScrollViewer
         {
             Content = strip, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -456,41 +456,18 @@ public sealed partial class MainWindow
             Text.Format("TempoAnnouncement", PulseInstrument.FormatTempo(bpm)), "TempoChanged");
     }
 
-    private async Task ChangeAccentAsync(int cell, int delta, bool wrap)
+    /// <param name="shown">The strip the tap was made on. A tap that reaches the document after the bar was cut differently (a
+    /// subdivision change was still being applied) is dropped before anything is recorded: no Undo step, no save, no message.</param>
+    private async Task ChangeAccentAsync(ClickGrid shown, int cell, int delta, bool wrap)
     {
         try
         {
             await CommitAsync(doc =>
             {
-                var settings = doc.Settings;
-                var clicks = ClickGrid.Of(settings);
-                // A click that is gone (the bar changed under a tap that was already on its way) changes nothing.
-                if (cell < 0 || cell >= clicks.Count) return;
-                if (clicks.IsSplit(cell))
-                {
-                    var splits = AccentPatterns.ExpandSplit(settings.SubdivisionAccents, clicks.SplitSlots);
-                    var slot = clicks.SlotOf(cell);
-                    splits[slot] = NextStrength(splits[slot], delta, wrap);
-                    settings.SubdivisionAccents = splits;
-                    return;
-                }
-                var beat = clicks.BeatOf(cell);
-                var count = Math.Max(settings.Accents.Length, clicks.Beats);
-                var chosen = AccentPatterns.ExpandEffectiveMain(settings, count)[beat];
-                var pattern = AccentPatterns.ExpandMain(settings.Accents, count);
-                pattern[beat] = NextStrength(chosen, delta, wrap);
-                settings.Accents = pattern;
-                settings.ManualAccentIndices = (settings.ManualAccentIndices ?? []).Append(beat).Distinct().Order().ToArray();
+                if (!AccentPatterns.ChangeStrength(doc.Settings, shown, cell, delta, wrap)) throw new OperationCanceledException();
             }, editorChange: EditorChangeKind.SoundAndAccentsOnly);
         }
         finally { RefreshBeatStrength(); }
-    }
-
-    /// <summary>A tap cycles Silent, Soft, Medium and Strong; an arrow key steps up or down and stops at the ends.</summary>
-    private static Accent NextStrength(Accent current, int delta, bool wrap)
-    {
-        var next = (int)current + delta;
-        return (Accent)(wrap ? (next % 4 + 4) % 4 : Math.Clamp(next, 0, 3));
     }
 
     private void RefreshBeatStrength()

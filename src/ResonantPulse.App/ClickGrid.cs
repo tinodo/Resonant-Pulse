@@ -19,6 +19,7 @@ internal sealed class ClickGrid
 
     private readonly Rational _unit;
     private readonly Rational _writtenBeat;
+    private readonly bool _countsWrittenBeats;
     private readonly double _unitQuarters;
     private readonly double _swing;
     private readonly IReadOnlySet<int> _groupBeats;
@@ -30,6 +31,7 @@ internal sealed class ClickGrid
         _unit = Rational.FromDouble(settings.BeatUnitQuarters);
         _unitQuarters = Math.Max(1d / 64, settings.BeatUnitQuarters);
         _writtenBeat = new Rational(4, settings.BeatDenominator);
+        _countsWrittenBeats = (_unit / _writtenBeat).Denominator.IsOne;
         _swing = settings.Swing;
         _groupBeats = GroupBeats(settings, Beats, _unit);
     }
@@ -46,6 +48,12 @@ internal sealed class ClickGrid
 
     /// <summary>How many split clicks one bar has when they are shown; the length of the pattern that edits them.</summary>
     internal int SplitSlots => Beats * (Split - 1);
+
+    /// <summary>
+    /// True when both grids cut a bar into the same cells, so a cell number means the same click in each. A tap names a cell of the
+    /// strip it was made on; this tells whether that strip still matches the bar.
+    /// </summary>
+    internal bool SameCells(ClickGrid other) => Beats == other.Beats && Split == other.Split;
 
     internal bool IsSplit(int cell) => cell % Split != 0;
 
@@ -84,23 +92,31 @@ internal sealed class ClickGrid
     }
 
     /// <summary>
-    /// The number under a cell: the written beat it falls on (6/8 felt in two reads 1 2 3 4 5 6, as the dial and the status
-    /// line count), or a dot for a split click between two written beats.
+    /// The number under a cell, one scheme for the whole bar. When the BPM unit is a whole number of written beats (a 6/8 felt in
+    /// two counts three eighths a beat), every click is numbered by the written beat it falls on, as the dial and the status
+    /// line count: 6/8 felt in two reads 1 2 3 4 5 6, half notes in 4/4 read 1 3, and a click between two written beats is a
+    /// dot. Any other unit (an eighth note in 4/4) has beats that fall between written beats, so there the beats are
+    /// numbered 1, 2, 3 and on, and the clicks that split them are dots. Either way no two beats share a number.
     /// </summary>
     internal string Label(int cell)
     {
-        var position = _unit * new Rational(cell, Split);
-        var written = position / _writtenBeat;
-        if (written.Denominator.IsOne) return ((int)written.Numerator + 1).ToString(CultureInfo.CurrentCulture);
+        if (_countsWrittenBeats)
+        {
+            var written = _unit * new Rational(cell, Split) / _writtenBeat;
+            if (written.Denominator.IsOne) return ((int)written.Numerator + 1).ToString(CultureInfo.CurrentCulture);
+        }
         return IsSplit(cell) ? "·" : (BeatOf(cell) + 1).ToString(CultureInfo.CurrentCulture);
     }
 
-    /// <summary>The cell sounding at a position in the bar, in quarter notes, following Core's swing placement of split clicks.</summary>
-    internal int CellAt(double withinBarQuarters)
+    /// <summary>
+    /// The cell sounding at a position in the bar, in quarter notes, following Core's swing placement of split clicks. A count-in
+    /// plays the beats alone, so during it the beat that sounded last stays lit and the silent clicks between beats are skipped.
+    /// </summary>
+    internal int CellAt(double withinBarQuarters, bool countIn = false)
     {
         var beatsElapsed = withinBarQuarters / _unitQuarters + 1e-6;
         var beat = (int)Math.Floor(beatsElapsed);
-        if (Split == 1) return beat;
+        if (Split == 1 || countIn) return beat * Split;
         var fraction = beatsElapsed - beat;
         var part = 0;
         for (var sub = 1; sub < Split; sub++)

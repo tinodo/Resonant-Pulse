@@ -73,7 +73,7 @@ public sealed partial class MainWindow
             if (stripMeterMatches && position is not null && !blind && snapshot.State is TransportState.Playing or TransportState.Paused)
             {
                 var withinBar = (position.BeatIndex + position.BeatPhase) * 4d / meterDenominator;
-                cell = clicks.CellAt(withinBar);
+                cell = clicks.CellAt(withinBar, position.IsCountIn);
             }
             strip.Highlight(cell >= strip.Count ? -1 : cell);
         }
