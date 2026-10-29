@@ -861,10 +861,25 @@ function Find-DialogButton([string]$id) {
     $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants,
         [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id))
 }
+# Finds a button of the confirmation dialog and presses it in one step, looking again for a moment if it is not there. Waiting for
+# the button and then looking for it a second time raced with the dialog's own opening: the second look came back empty on a
+# loaded runner and the run died on a null instead of pressing the button.
+function Invoke-DialogButton([string]$id, [string]$failure, [int]$seconds = 8) {
+    $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+    do {
+        $button = Find-DialogButton $id
+        if ($null -ne $button) {
+            $button.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+            return
+        }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw $failure
+}
 Invoke-Control 'RemoveSong'
 Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Stage: Remove did not ask for confirmation.'
 Wait-Condition { -not (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist can still be used while a song is being removed.'
-(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'CloseButton' 'Stage: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Stage: Cancel did not close the confirmation.'
 Wait-Condition { (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist stayed switched off after the removal was cancelled.'
 Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: cancelling the removal removed a song.'
@@ -1117,7 +1132,7 @@ foreach ($id in $laneFields) {
     Wait-Condition { -not (Find-Control $id).Current.IsEnabled } "Studio: $id can still be edited while a lane is being removed."
 }
 if (-not (Find-Control 'Lane0More').Current.IsEnabled) { throw 'Studio: the lane menu is switched off while a lane is being removed, so the keyboard focus has nowhere to return to.' }
-(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'CloseButton' 'Studio: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
 foreach ($id in $laneFields) {
     Wait-Condition { (Find-Control $id).Current.IsEnabled } "Studio: $id stayed switched off after the removal was cancelled."
@@ -1239,13 +1254,13 @@ Show-Control 'Program2More'
 Invoke-Control 'Program2More'
 Invoke-Control 'Program2Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
-(Find-DialogButton 'CloseButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'CloseButton' 'Studio: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
 $null = Find-Control 'Program2Card'
 Invoke-Control 'Program2More'
 Invoke-Control 'Program2Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Studio: Remove did not ask again.'
-(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'PrimaryButton' 'Studio: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program2Card') } 'Studio: removing a step did not take its card away.'
 Test-NoApplyButtons 'Studio'
 # The remaining steps are taken away too: with a program the Play page leaves the tempo and the time signature to the program, and
@@ -1254,7 +1269,7 @@ foreach ($stepIndex in 1, 0) {
     Invoke-Control "Program${stepIndex}More"
     Invoke-Control "Program${stepIndex}Remove"
     Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "Studio: Remove did not ask about step $($stepIndex + 1)."
-    (Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Invoke-DialogButton 'PrimaryButton' "Studio: the confirmation about step $($stepIndex + 1) went away before Remove could be confirmed."
     Wait-Condition { $null -eq (Find-Optional "Program${stepIndex}Card") } "Studio: removing step $($stepIndex + 1) did not take its card away."
 }
 Wait-Condition { $null -ne (Find-Optional 'AddProgramStep') -and $null -ne (Find-Optional 'ProgramCard') } 'Studio: the program card did not come back to its empty state.'
@@ -1357,7 +1372,7 @@ foreach ($id in 'Program0Name', 'Program0MoveUp', 'Program0MoveDown', 'Program0M
 Invoke-Control 'Program0More'
 Invoke-Control 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Dutch Studio program: Remove did not ask for confirmation.'
-(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'PrimaryButton' 'Dutch Studio program: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Dutch Studio program: removing the step did not take its card away.'
 # A project that groups its beats (7/8 as 2+2+3) gives every step the project's own time signature, so the two fields are off, and
 # Play offers no time signature while there is a program: the card itself offers Clear grouping, which keeps the program. The
@@ -1384,7 +1399,7 @@ Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Grouped Studio prog
 Invoke-Control 'Program0More'
 Invoke-Control 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Grouped Studio program: Remove did not ask for confirmation.'
-(Find-DialogButton 'PrimaryButton').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+Invoke-DialogButton 'PrimaryButton' 'Grouped Studio program: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Grouped Studio program: removing the step did not take its card away.'
 Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
