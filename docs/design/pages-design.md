@@ -83,9 +83,10 @@ is specified in `metronome-design.md` and is not changed here.
   waits for Stop and Start; a program sets the tempo and time signature itself), *Keyboard shortcuts* (T for a tap, and where
   the keys work) and *Musical reference* (BPM and the note value, the time signature and the click, subdivision and swing, the
   strength of a beat), each with one example in a quiet box. No internals: a sentence names a control with the label it has in
-  the language shown, taken from the same string as the control, so a renamed control renames the Help. Tests check the
-  claims and the examples against the engine (HelpFactsTests) and reject the words of the engine in all five languages
-  (HelpContentTests).
+  the language shown, taken from the same string as the control, so a renamed control renames the Help; the few names that
+  have to be written into a sentence (the Tempo panel, the Subdivision and Swing fields) are pinned to their labels by a test.
+  Tests check the claims and the examples against the engine (HelpFactsTests) and reject the words of the engine in all five
+  languages (HelpContentTests).
 
 ### Library
 - **My projects:** search (up to 280), the list with name, *Open* (primary) and *Save current to library*; *New*,

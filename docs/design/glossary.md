@@ -101,8 +101,10 @@ Also questions, not findings; none has been checked with a native speaker.
 
 Also questions, not findings; none of this has been checked with a native speaker.
 Every sentence of the Help names a control with the label that control has in that
-language (the label is inserted from the control's own string), so a label changed
-in `Text.cs` changes the Help with it.
+language: the label is inserted from the control's own string, so a label changed
+in `Text.cs` changes the Help with it. The few names that are written into a sentence
+(the Tempo panel, and the first words of the Subdivision and Swing labels) are pinned
+to their labels by a test, which fails if they stop matching.
 
 - Dutch: **Snel starten** and **Muzikale uitleg** for the two headings;
   **nootwaarde** for the note that BPM counts (the Tempo panel says *Tempo-nootwaarde*,

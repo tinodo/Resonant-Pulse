@@ -177,6 +177,25 @@ public sealed class HelpContentTests
     }
 
     [TestMethod]
+    public void TheFeelTextCallsTheTwoFieldsByTheFirstWordsOfTheirLabels()
+    {
+        // The labels of these fields are long ("Subdivision: clicks between beats (1 = none)", "Swing · first share (0.5 = straight)"),
+        // so the sentences name them by the words that start them instead of inserting them. This keeps those words the ones the
+        // fields show, in every language.
+        foreach (var language in Languages)
+        {
+            var subdivision = Get(language, "SubdivisionLabel").Split(':')[0].Trim();
+            var swing = Get(language, "Swing").Split('·')[0].Trim();
+            var entries = Written(language).ToDictionary(entry => entry.Id, entry => entry.Text);
+            foreach (var id in new[] { "HelpFeel", "HelpFeelExample" })
+            {
+                Assert.IsTrue(entries[id].Contains(subdivision, StringComparison.OrdinalIgnoreCase), $"{language}/{id} does not use “{subdivision}”: {entries[id]}");
+                Assert.IsTrue(entries[id].Contains(swing, StringComparison.OrdinalIgnoreCase), $"{language}/{id} does not use “{swing}”: {entries[id]}");
+            }
+        }
+    }
+
+    [TestMethod]
     public void TheHelpAvoidsTheWordsOfTheEngine()
     {
         foreach (var entry in Written("en"))

@@ -92,7 +92,8 @@ Ctrl+S and Ctrl+O still work); and a musical reference with one example each (80
 as 240 BPM in eighths; 6/8 clicks six times a bar, or twice with a dotted-quarter note value; a subdivision of 3 gives three
 clicks a beat, swing needs an even subdivision and about 0.67 swings eighth notes; a Silent click makes no sound and keeps its
 place, and the clicks between beats start Soft). Each sentence names a control with the label it has in the language shown,
-inserted from the control's own string, so a renamed control renames the Help. It explains Play and what Play shares with the
+inserted from the control's own string, so a renamed control renames the Help; the few names that are written into a sentence
+(the Tempo panel, the Subdivision and Swing fields) are pinned to their labels by a test. It explains Play and what Play shares with the
 other pages; it does not walk through Studio, Train, Stage, Library or Settings. Tests compute each claim and example from the
 engine (HelpFactsTests) and check the order, the length, the labels and the absence of the engine's words in all five languages
 (HelpContentTests). The first-use verifier opens the panel at the first-use size, 800x600, 1000x720, 400x720 and 320x900 and in
