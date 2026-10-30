@@ -56,6 +56,11 @@ match, so a translation cannot be left out or lose one.
 | `Setlist` | Setlist | Setlijst | Setliste | Liste de scène | Repertorio |
 | `NextCountIn` | Next + count-in | Volgende + aftellen | Weiter + Einzählen | Suivant + décompte | Siguiente + entrada |
 | `ReducedMotion` | Reduce motion | Minder beweging | Bewegung reduzieren | Réduire les mouvements | Reducir el movimiento |
+| `HelpQuickStart` | Quick start | Snel starten | Schnellstart | Prise en main | Inicio rápido |
+| `HelpReference` | Musical reference | Muzikale uitleg | Musikalische Grundlagen | Repères musicaux | Referencia musical |
+| `HelpBpmTitle` | BPM and the note value | BPM en de nootwaarde | BPM und Notenwert | BPM et valeur de note | BPM y figura de la nota |
+| `HelpMeterTitle` | Time signature and the click | Maatsoort en de tik | Taktart und Klick | Mesure et clic | Compás y clic |
+| `HelpFeelTitle` | Subdivision and swing | Onderverdeling en swing | Unterteilung und Swing | Subdivision et swing | Subdivisión y swing |
 
 ## Dutch terms to check first
 
@@ -91,3 +96,32 @@ Also questions, not findings; none has been checked with a native speaker.
   *Schalten Sie Durch Tippen starten wieder ein*, *Réactivez Démarrer en tapant*,
   *Active de nuevo Marcar para iniciar*. Whether a label inside a sentence reads
   better in quotation marks is a question for a native speaker.
+
+## The Help panel: quick start and musical reference
+
+Also questions, not findings; none of this has been checked with a native speaker.
+Every sentence of the Help names a control with the label that control has in that
+language: the label is inserted from the control's own string, so a label changed
+in `Text.cs` changes the Help with it. The few names that are written into a sentence
+(the Tempo panel, and the first words of the Subdivision and Swing labels) are pinned
+to their labels by a test, which fails if they stop matching.
+
+- Dutch: **Snel starten** and **Muzikale uitleg** for the two headings;
+  **nootwaarde** for the note that BPM counts (the Tempo panel says *Tempo-nootwaarde*,
+  while *Telwaarde* above is the bottom number of a time signature, which the Help
+  explains as *welke noot één tel is*); **onderverdeling** for a subdivision (the
+  field says *Onderverdeling: tikken tussen de tellen*); **lang-kort** for the swung
+  pair; **tel** (a beat), **tik** (a click) and **maat** (a bar) kept apart. The
+  Help speaks to the reader as *u*.
+- German: **Schnellstart** and **Musikalische Grundlagen**; **Zählzeit** for a beat
+  with **Betonung** for its strength (the strip is called *Zählzeit-Betonung*);
+  **Unterteilung** for the subdivision; **Lang-kurz** for the swung pair. The Help
+  uses *Sie*.
+- French: **Prise en main** for the quick start (*Démarrage rapide* is the other
+  choice) and **Repères musicaux**; **temps** for a beat; **force** for its
+  strength; **noire pointée** and **croches swinguées**; **Arrêter** and **Échap**
+  as the names of the Stop button and the Esc key. The Help uses *vous*.
+- Spanish: **Inicio rápido** and **Referencia musical**; **pulso** for a beat and
+  **intensidad** for its strength; **figura** for the note that BPM counts (the Tempo
+  panel says *Unidad de tempo*); **negra con puntillo** and **corcheas con swing**;
+  **entrada** for the count-in. The Help uses *usted*.

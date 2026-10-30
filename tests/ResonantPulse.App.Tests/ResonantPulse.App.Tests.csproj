@@ -33,6 +33,7 @@
     <Compile Include="../../src/ResonantPulse.App/TempoEdits.cs" Link="App/TempoEdits.cs" />
     <Compile Include="../../src/ResonantPulse.App/TapInSession.cs" Link="App/TapInSession.cs" />
     <Compile Include="../../src/ResonantPulse.App/TapStartRules.cs" Link="App/TapStartRules.cs" />
+    <Compile Include="../../src/ResonantPulse.App/HelpContent.cs" Link="App/HelpContent.cs" />
     <Compile Include="../../src/ResonantPulse.App/StageOperationGate.cs" Link="App/StageOperationGate.cs" />
     <Compile Include="../../src/ResonantPulse.App/EditorOperationGate.cs" Link="App/EditorOperationGate.cs" />
     <Compile Include="../../src/ResonantPulse.App/DocumentPublication.cs" Link="App/DocumentPublication.cs" />

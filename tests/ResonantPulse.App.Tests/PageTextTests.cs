@@ -20,7 +20,7 @@ public sealed class PageTextTests
     private static readonly string[] PageKeys =
     [
         "On", "Off", "Appearance", "ReducedMotion", "ReducedMotionHelp", "AboutApp", "VersionLine", "TimingHonesty",
-        "AudioNote", "UnitSeconds", "UnitBeats", "UnitBars", "HelpBasics", "HelpWhilePlaying", "HelpShortcuts",
+        "AudioNote", "UnitSeconds", "UnitBeats", "UnitBars", "HelpWhilePlaying", "HelpShortcuts",
         "ShortcutStart", "ShortcutMute", "ShortcutHit", "KeySpace", "KeyCtrl", "ExportBars", "ExportBarsHelp",
         "PracticeStopAfter", "PracticeTimerHint", "PracticeLimitsSaved",
         "LibraryPurpose", "LibraryProjects", "LibraryLoading", "LibraryUnreadable", "CloseUnsaved", "NotesProjectChanged", "LibraryNoMatch", "LibraryEmptyTitle", "ExportTitle", "PresetsHelp",
@@ -50,7 +50,11 @@ public sealed class PageTextTests
         "PositionTie", "PositionChance",
         "TapStart", "TapStartHelp", "TapStartProgramHelp", "TapStartActive", "TapStartStopFirst", "TapStartMonitoring",
         "TapStartCount", "TapStartRejected", "TapStartStarting", "TapStartCancelled", "TapStartOutputChanged", "TapStartRange",
-        "TapStartScaled", "TapStartCountField", "TapStartCountHelp", "UnitTaps", "HelpTapStart", "ShortcutTap"
+        "TapStartScaled", "TapStartCountField", "TapStartCountHelp", "UnitTaps", "HelpTapStart", "ShortcutTap",
+        "HelpQuickStart", "HelpStepOutput", "HelpStepStart", "HelpStepTempo", "HelpStepMeter", "HelpStepStrength",
+        "HelpTapStartLimits", "HelpPlaying", "HelpLive", "HelpProgram", "HelpShortcutScope",
+        "HelpReference", "HelpBpmTitle", "HelpBpm", "HelpBpmExample", "HelpMeterTitle", "HelpMeter", "HelpMeterExample",
+        "HelpFeelTitle", "HelpFeel", "HelpFeelExample", "HelpStrength", "HelpStrengthExample"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>

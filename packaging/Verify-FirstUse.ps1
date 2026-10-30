@@ -721,6 +721,136 @@ function Select-Destination([string]$id) {
     if ($item.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select() }
     else { $item.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke() }
 }
+# Help is a read-only panel on Play with a quick start and a musical reference (docs/design/pages-design.md, Play panels). It is opened
+# and read without changing anything. Whatever the window size its text stays between the edges of the text area, a step of the quick
+# start is not squeezed to a sliver, the first step is on screen without scrolling, Done is whole, on screen and below the text, the
+# text can be scrolled to its last line, and where keys can be sent the keyboard reads it. The ids are HelpContent's (a unit test pins
+# them); what each one says, in every language, is checked by the unit tests, not here.
+$helpWide = @('HelpStep1', 'HelpStep2', 'HelpStep3', 'HelpStep4', 'HelpStep5', 'HelpTapStartText', 'HelpTapStartLimits', 'HelpPlaying',
+    'HelpLive', 'HelpProgram', 'HelpShortcutScope', 'HelpBpm', 'HelpBpmExample', 'HelpMeter', 'HelpMeterExample', 'HelpFeel',
+    'HelpFeelExample', 'HelpStrength', 'HelpStrengthExample')
+$helpIds = @('HelpQuickStartHeading', 'HelpTapStartHeading', 'HelpPlayingHeading', 'HelpShortcutsHeading', 'HelpReferenceHeading',
+    'HelpBpmTitle', 'HelpMeterTitle', 'HelpFeelTitle', 'HelpStrengthTitle') + $helpWide
+$helpLastLine = 'HelpStrengthExample'
+function Get-HelpScroll { (Find-Control 'PlayHelpPanelScroll').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern) }
+function Get-FocusedAutomationId { [Windows.Automation.AutomationElement]::FocusedElement.Current.AutomationId }
+# Keys go to the application only while it owns the keyboard, so nobody working in another window can receive them.
+function Send-HelpKeys([string]$keys) {
+    Add-Type -AssemblyName System.Windows.Forms
+    if ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -ne $AppProcessId) {
+        throw "Keyboard focus is not in the application; refusing to send $keys to another window."
+    }
+    [Windows.Forms.SendKeys]::SendWait($keys)
+    Start-Sleep -Milliseconds 300
+}
+function Test-HelpPanel([string]$where, [string]$shot = '', [bool]$shotEnd = $false) {
+    $transportBefore = (Find-Control 'TransportStatus').Current.Name
+    $dialBefore = Get-Dial
+    $dialRectBefore = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    # Open-Panel and Invoke-Control say what they do on the output stream; that must not become part of what this returns.
+    $null = Open-Panel @('PlayHelp') 'PlayHelpPanelDone'
+    Wait-Settled 'PlayHelpPanelDone'
+    Wait-Settled 'HelpStep1'
+    $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+    $viewport = (Find-Control 'PlayHelpPanelScroll').Current.BoundingRectangle
+    $done = (Find-Control 'PlayHelpPanelDone').Current.BoundingRectangle
+    $one = 1 * $scale
+    # The text area and Done are whole, inside the window, and Done is the size of every other panel's (120 x 44), below the text.
+    Test-Visible $viewport $windowRect "${where}: the text area"
+    Test-Visible $done $windowRect "${where}: Done"
+    if ($done.Width -lt 100 * $scale -or $done.Height -lt 40 * $scale) {
+        throw "${where}: Done is squeezed to $([Math]::Round($done.Width / $scale, 1)) x $([Math]::Round($done.Height / $scale, 1)) DIP (a panel's is 120 x 44): $done."
+    }
+    if ($viewport.Height -lt 200 * $scale) {
+        throw "${where}: the text area is only $([Math]::Round($viewport.Height / $scale)) DIP high, too little to read a quick start in: $viewport."
+    }
+    if ($viewport.Bottom -gt $done.Top + $one) { throw "${where}: the text runs under Done ($viewport over $done)." }
+    # Every entry is there with its text. One that has a rectangle (the others are scrolled out of view) lies between the edges of the
+    # text area, and a step or paragraph is wide enough to read: a Stretch element wider than its slot is clipped, not shrunk.
+    foreach ($id in $helpIds) {
+        $element = Find-Control $id
+        if ([string]::IsNullOrWhiteSpace($element.Current.Name)) { throw "${where}: $id has no text." }
+        $rect = $element.Current.BoundingRectangle
+        if ($rect.IsEmpty) { continue }
+        if ($rect.Left -lt $viewport.Left - $one -or $rect.Right -gt $viewport.Right + $one) {
+            throw "${where}: $id is clipped sideways ($rect in a text area of $viewport)."
+        }
+        if ($helpWide -contains $id -and $rect.Width -lt 150 * $scale) {
+            throw "${where}: $id is squeezed to $([Math]::Round($rect.Width / $scale, 1)) DIP wide: $rect."
+        }
+    }
+    $step1 = (Find-Control 'HelpStep1').Current.BoundingRectangle
+    Test-Visible $step1 $viewport "${where}: the first step of the quick start (the panel opens at its first line)"
+    Test-NoApplyButtons "${where}"
+    # The panel as a person sees it, kept with the run (a runner takes screenshots; a local run does not).
+    if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
+    # The text can be scrolled to its last line, and back.
+    $scroll = Get-HelpScroll
+    $scrollable = $scroll.Current.VerticallyScrollable
+    if ($scrollable) {
+        $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll, 100)
+        Wait-Settled $helpLastLine
+    }
+    Test-Visible (Find-Control $helpLastLine).Current.BoundingRectangle $viewport "${where}: the last line of the text"
+    if ($shot -and $shotEnd) { $null = Save-PlayScreenshot "$shot-end.png" }
+    $scroll = Get-HelpScroll
+    if ($scrollable) {
+        $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll, 0)
+        Wait-Settled 'HelpStep1'
+        Test-Visible (Find-Control 'HelpStep1').Current.BoundingRectangle $viewport "${where}: the first step after scrolling back"
+    }
+    # A keyboard reads it: the text area is the tab stop, the keys scroll it, and Tab goes on to Done. Keys can be sent only on a
+    # desktop that nobody else is using (a hosted runner); the private desktop of a local run cannot send them.
+    $keyboard = 'not-run-keyboard-disabled'
+    if ($sendKeys -and $scrollable) {
+        (Find-Control 'PlayHelpPanelScroll').SetFocus()
+        Wait-Condition { (Get-FocusedAutomationId) -eq 'PlayHelpPanelScroll' } "${where}: the text area did not take the keyboard focus (it is on '$(Get-FocusedAutomationId)')."
+        Send-HelpKeys '{PGDN}'
+        Wait-Condition { (Get-HelpScroll).Current.VerticalScrollPercent -gt 5 } "${where}: Page Down did not scroll the Help."
+        Send-HelpKeys '{END}'
+        Wait-Condition { (Get-HelpScroll).Current.VerticalScrollPercent -gt 95 } "${where}: End did not reach the last line of the Help."
+        Send-HelpKeys '{HOME}'
+        Wait-Condition { (Get-HelpScroll).Current.VerticalScrollPercent -lt 1 } "${where}: Home did not return to the first line of the Help."
+        Send-HelpKeys '{TAB}'
+        Wait-Condition { (Get-FocusedAutomationId) -eq 'PlayHelpPanelDone' } "${where}: Tab did not go on to Done (the focus is on '$(Get-FocusedAutomationId)')."
+        $keyboard = 'page-down-end-home-and-tab-to-done'
+    }
+    # The panel opens at its first line whatever was read before. Every check above ends at the first line (the text is scrolled back
+    # and Home is pressed), so none of them could see a panel that opens where it was left: close it at its last line, open it
+    # again, and require the first step on screen before anything asks for any scrolling.
+    $reopens = 'not-scrollable'
+    if ($scrollable) {
+        (Get-HelpScroll).SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll, 100)
+        Wait-Settled $helpLastLine
+        $null = Invoke-Control 'PlayHelpPanelDone'
+        Wait-Absent 'PlayHelpPanelDone'
+        $null = Open-Panel @('PlayHelp') 'PlayHelpPanelDone'
+        Wait-Settled 'PlayHelpPanelDone'
+        Wait-Settled 'HelpStep1'
+        Test-Visible (Find-Control 'HelpStep1').Current.BoundingRectangle (Find-Control 'PlayHelpPanelScroll').Current.BoundingRectangle "${where}: the first step after the panel was closed at its last line and opened again (it opens at its first line)"
+        $reopenedAt = (Get-HelpScroll).Current.VerticalScrollPercent
+        if ($reopenedAt -gt 1) { throw "${where}: the panel opened again $([Math]::Round($reopenedAt)) percent down its text, not at its first line." }
+        $reopens = 'at-first-line-after-closing-at-the-last'
+    }
+    $evidence = @{
+        viewportHeight = [Math]::Round($viewport.Height / $scale, 1); step1Width = [Math]::Round($step1.Width / $scale, 1)
+        doneWidth = [Math]::Round($done.Width / $scale, 1); doneHeight = [Math]::Round($done.Height / $scale, 1)
+        scrollable = $scrollable; keyboard = $keyboard; reopens = $reopens
+    }
+    $null = Invoke-Control 'PlayHelpPanelDone'
+    Wait-Absent 'PlayHelpPanelDone'
+    # Reading the Help changes nothing: the transport is as it was, the dial is where it was and says what it said, no error is open.
+    if ((Find-Control 'TransportStatus').Current.Name -ne $transportBefore) {
+        throw "${where}: the Help changed the transport ('$transportBefore' then '$((Find-Control 'TransportStatus').Current.Name)')."
+    }
+    if ((Get-Dial) -ne $dialBefore) { throw "${where}: the Help changed the tempo readout ('$dialBefore' then '$(Get-Dial)')." }
+    $dialRectAfter = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    if ([Math]::Abs($dialRectAfter.Width - $dialRectBefore.Width) -gt $one -or [Math]::Abs($dialRectAfter.Height - $dialRectBefore.Height) -gt $one) {
+        throw "${where}: the dial is not the size it was before the Help was opened ($dialRectBefore, then $dialRectAfter)."
+    }
+    Assert-NoErrorNotice $where
+    return $evidence
+}
 $panels = @(
     @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
     @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
@@ -790,6 +920,17 @@ foreach ($panel in $panels) {
     Invoke-Control $panel.close
     Wait-Absent $panel.field
 }
+# Help is read in the sizes that the layout gates use (the first-use size, 800x600, 1000x720) and the two narrowest windows: whole and
+# readable in each, with Done on screen, and opening it never changes what Play shows.
+$helpEvidence = @{}
+$helpEvidence['firstUse'] = Test-HelpPanel 'Help at the first-use size' 'help-first-use'
+foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
+    $helpEvidence["$($size[0])x$($size[1])"] = Test-HelpPanel "Help at $($size[0])x$($size[1])" "help-$($size[0])x$($size[1])" ($size[0] -ne 1000)
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 # At the smallest windows a panel still fits: its Cancel/Done pair is on screen, and the pair and the fields stay between the
 # panel's own edges. Both failed in a shipped build: a pair wider than a narrow panel poked out and was clipped, and a panel
 # that Windows placed above a button low in a short window was cut off above its footer.
@@ -1646,6 +1787,13 @@ foreach ($panel in $panels) {
     Invoke-Control $panel.close
     Wait-Absent $panel.field
 }
+# The Help in Dutch, whose words are longer: the same rules at the first-use size and at 400x720.
+$helpEvidence['dutch'] = Test-HelpPanel 'Dutch Help' 'help-nl'
+Resize-To 400 720
+Start-Sleep -Milliseconds 800
+$helpEvidence['dutch400x720'] = Test-HelpPanel 'Dutch Help at 400x720' 'help-nl-400x720' $true
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 # The same for the commands each page shows on its first screen (the rest is reached by scrolling).
 function Test-OnScreen([string]$where, [string]$id) {
     $element = Find-Control $id
@@ -1720,7 +1868,7 @@ Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
-  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;
+  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;help=$helpEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

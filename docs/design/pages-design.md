@@ -75,8 +75,18 @@ is specified in `metronome-design.md` and is not changed here.
   (the tempo a *Tap to start* has just saved). With a program there is no
   tempo readout to open the panel from, so the number cannot be changed until the program is removed.
 - **Project:** the name (up to 360) and two commands, *Save as file* and *Open file*.
-- **Help:** six short entries (start, tempo, time signature, beat strength, live changes, shortcuts). No internals. The first
-  entry says how *Tap to start* works, and the shortcuts list has T for a tap.
+- **Help:** read-only, so Done alone (there is nothing to cancel). It grows the panel Play already had instead of adding a
+  page or a control to Play: the dial keeps its size, and a beginner finds the quick start where they begin. It opens at its
+  first line, and its text scrolls inside the panel with Done always on screen, down to 320x900. In reading order:
+  *Quick start* (five steps: the output, Start, the tempo, the time signature, the strength of a beat), *Tap to start* (how it
+  works, then its limits), *While it plays* (Pause, Stop and Mute; what is heard at once, what from the next beat and what
+  waits for Stop and Start; a program sets the tempo and time signature itself), *Keyboard shortcuts* (T for a tap, and where
+  the keys work) and *Musical reference* (BPM and the note value, the time signature and the click, subdivision and swing, the
+  strength of a beat), each with one example in a quiet box. No internals: a sentence names a control with the label it has in
+  the language shown, taken from the same string as the control, so a renamed control renames the Help; the few names that
+  have to be written into a sentence (the Tempo panel, the Subdivision and Swing fields) are pinned to their labels by a test.
+  Tests check the claims and the examples against the engine (HelpFactsTests) and reject the words of the engine in all five
+  languages (HelpContentTests).
 
 ### Library
 - **My projects:** search (up to 280), the list with name, *Open* (primary) and *Save current to library*; *New*,
