@@ -32,6 +32,12 @@ internal static class TempoGuide
     private const double MinimumUnit = 1d / 64;
     private const double MaximumUnit = 16;
 
+    /// <summary>
+    /// Between the two names of one reading: no-break spaces, so that the pair stays whole when the line wraps in the narrow column
+    /// beside the panel's title ("Moderato /" above "Allegro" reads as two readings).
+    /// </summary>
+    internal const string NameSeparator = "\u00A0/\u00A0";
+
     /// <summary>The eleven terms, slow to fast. Each is in the same place in <see cref="Bands"/>.</summary>
     internal static IReadOnlyList<string> Names { get; } =
         ["Larghissimo", "Grave", "Largo", "Larghetto", "Adagio", "Andante", "Moderato", "Allegro", "Vivace", "Presto", "Prestissimo"];
@@ -70,10 +76,18 @@ internal static class TempoGuide
         return names;
     }
 
-    /// <summary>The line the Tempo panel shows: the markings and what they are counted in, or what to enter when there is nothing to name.</summary>
-    internal static string Describe(double tempo, double unitQuarters) =>
-        For(tempo, unitQuarters) is { } markings
-            ? Text.Format("TempoGuideValue", TempoFormat.Format(markings.QuarterNotesPerMinute, Text.Culture),
-                Text.Get("UnitQuarterNotes"), string.Join(" / ", markings.Names))
-            : Text.Get("TempoGuideInput");
+    /// <summary>
+    /// The line the Tempo panel shows beside its title: the markings, or what to enter when there is nothing to name. A tempo counted
+    /// in quarter notes is the speed itself, which the unit beside the box already says, so the line only names the markings; counted
+    /// in any other note it also says the speed in quarter notes that they are for (80 dotted quarters: 120 BPM in quarter notes).
+    /// </summary>
+    internal static string Describe(double tempo, double unitQuarters)
+    {
+        if (For(tempo, unitQuarters) is not { } markings) return Text.Get("TempoGuideInput");
+        var names = string.Join(NameSeparator, markings.Names);
+        return unitQuarters == 1
+            ? Text.Format("TempoGuideValue", names)
+            : Text.Format("TempoGuideConverted", TempoFormat.Format(markings.QuarterNotesPerMinute, Text.Culture),
+                Text.Get("UnitQuarterNotes"), names);
+    }
 }
