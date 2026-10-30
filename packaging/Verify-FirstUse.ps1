@@ -851,6 +851,111 @@ function Test-HelpPanel([string]$where, [string]$shot = '', [bool]$shotEnd = $fa
     Assert-NoErrorNotice $where
     return $evidence
 }
+# The tempo guide is one line of the Tempo panel (docs/design/pages-design.md, Play panels). It names the approximate Italian markings
+# of the speed that the panel holds (Moderato / Allegro), counted in quarter notes a minute whatever note value is chosen (80 dotted
+# quarters are 120 quarter notes, and picking 6/8 counts eighth notes), and it follows the number and the note value in the panel
+# before anything is applied. The names are the same in every language; the sentence around them is translated, and what it says is
+# checked by the unit tests, not here: this reads the line on the real window, in the panel, at every size.
+$tempoGuideNames = @('Larghissimo', 'Grave', 'Largo', 'Larghetto', 'Adagio', 'Andante', 'Moderato', 'Allegro', 'Vivace', 'Presto', 'Prestissimo')
+function Get-TempoGuideMarkings([string]$text) {
+    @($tempoGuideNames | Where-Object { $text -match "(?<!\p{L})$_(?!\p{L})" })
+}
+# Waits for the guide to name exactly these markings at this speed (the rate in quarter notes a minute, as the sentence prints it).
+function Wait-TempoGuide([string[]]$names, [string]$rate, [string]$what) {
+    $limit = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $text = (Find-Control 'TempoGuide').Current.Name
+        if (((Get-TempoGuideMarkings $text) -join ' ') -eq ($names -join ' ') -and $text -match "(?<![\d.,])$([regex]::Escape($rate))(?!\d)") { return $text }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $limit)
+    throw "${what}: the tempo guide says '$text', but it should name $($names -join ' / ') at $rate quarter notes a minute."
+}
+function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, [string]$eighth = 'Eighth note', [string]$quarter = 'Quarter note') {
+    $transportBefore = (Find-Control 'TransportStatus').Current.Name
+    $dialBefore = Get-Dial
+    $dialRectBefore = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    $null = Open-Panel @('TempoEdit') 'TempoGuide'
+    Wait-Settled 'TempoGuide'
+    Wait-Settled 'TempoOptionsDone'
+    $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+    $one = 1 * $scale
+    $guide = (Find-Control 'TempoGuide').Current.BoundingRectangle
+    $tempoBox = (Find-Control 'Tempo').Current.BoundingRectangle
+    $unitBox = (Find-Control 'TempoUnit').Current.BoundingRectangle
+    $done = (Find-Control 'TempoOptionsDone').Current.BoundingRectangle
+    # Whole and inside the window, and as large as a line of text that can be read: a Stretch element wider than its slot is clipped,
+    # not shrunk, and a line squeezed by a neighbour is a sliver (the Tap to start switch once showed 2 DIP of itself).
+    Test-Visible $guide $windowRect "${where}: the tempo guide"
+    if ($guide.Width -lt 150 * $scale -or $guide.Height -lt 14 * $scale) {
+        throw "${where}: the tempo guide is squeezed to $([Math]::Round($guide.Width / $scale, 1)) x $([Math]::Round($guide.Height / $scale, 1)) DIP (a line of it is at least 150 DIP wide and 14 high): $guide."
+    }
+    # It sits under the number and the note value it describes, above the commands that change them, between the edges of the panel.
+    if ($guide.Top -lt [Math]::Max($tempoBox.Bottom, $unitBox.Bottom) - $one) {
+        throw "${where}: the tempo guide is not under the tempo and the note value it describes ($guide, tempo $tempoBox, note value $unitBox)."
+    }
+    if ($guide.Bottom -gt $done.Top + $one) { throw "${where}: the tempo guide runs under Done ($guide over $done)." }
+    if ($guide.Left -lt $tempoBox.Left - 2 * $scale -or $guide.Right -gt $done.Right + 2 * $scale) {
+        throw "${where}: the tempo guide is clipped sideways ($guide between $($tempoBox.Left) and $($done.Right))."
+    }
+    $half = Find-Optional 'HalfTempo'
+    if ($null -ne $half) {
+        $halfRect = $half.Current.BoundingRectangle
+        if (-not $halfRect.IsEmpty -and $halfRect.Top -lt $guide.Bottom - $one) { throw "${where}: Half tempo is not under the tempo guide ($halfRect, guide $guide)." }
+    }
+    Test-NoApplyButtons $where
+    # The project holds 120 BPM counted in quarter notes here, and 120 quarter notes a minute is where two markings meet.
+    $initial = Wait-TempoGuide @('Moderato', 'Allegro') '120' "${where}: the tempo of the project"
+    if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
+    $follows = 'not-run'
+    $emptied = 'not-run'
+    if ($Interact) {
+        # The guide follows what the panel holds, before Done: the number (committed in the box by Enter, a stepper or leaving it) ...
+        Set-Number 'Tempo' 90
+        $null = Wait-TempoGuide @('Andante') '90' "${where}: a tempo of 90"
+        Set-Number 'Tempo' 42
+        $null = Wait-TempoGuide @('Grave', 'Largo') '42' "${where}: a tempo of 42, where two markings overlap"
+        Set-Number 'Tempo' 120
+        $null = Wait-TempoGuide @('Moderato', 'Allegro') '120' "${where}: a tempo typed back to 120"
+        # ... and the note value: 120 counted in eighth notes is 60 quarter notes a minute, which is another speed and other names.
+        Select-Combo 'TempoUnit' $eighth
+        $null = Wait-TempoGuide @('Largo', 'Larghetto') '60' "${where}: 120 BPM counted in eighth notes"
+        Select-Combo 'TempoUnit' $quarter
+        $null = Wait-TempoGuide @('Moderato', 'Allegro') '120' "${where}: the note value chosen back to a quarter note"
+        $follows = 'the-number-and-the-note-value'
+        # An emptied box is not a tempo: the guide says what to enter. The box hands its text over when it loses the focus, and a
+        # keyboard is not needed for that; where the box cannot be reached the check says so instead of passing.
+        $edit = (Find-Control 'Tempo').FindFirst([Windows.Automation.TreeScope]::Descendants,
+            [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Edit))
+        [object]$valuePattern = $null
+        if ($null -ne $edit -and $edit.TryGetCurrentPattern([Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) {
+            $valuePattern.SetValue('')
+            (Find-Control 'TempoUnit').SetFocus()
+            Wait-Condition { (Get-TempoGuideMarkings (Find-Control 'TempoGuide').Current.Name).Count -eq 0 } "${where}: an emptied tempo box still has markings in the guide."
+            if ((Find-Control 'TempoGuide').Current.Name -notmatch '1000') { throw "${where}: the guide does not say which tempos it can name when the box is empty: '$((Find-Control 'TempoGuide').Current.Name)'." }
+            $emptied = 'says-what-to-enter'
+            Set-Number 'Tempo' 120
+            $null = Wait-TempoGuide @('Moderato', 'Allegro') '120' "${where}: a tempo typed after the box was emptied"
+        } else { $emptied = 'not-run-the-box-has-no-text-to-set' }
+    }
+    $evidence = @{
+        guideWidth = [Math]::Round($guide.Width / $scale, 1); guideHeight = [Math]::Round($guide.Height / $scale, 1)
+        text = $initial; follows = $follows; emptiedBox = $emptied
+    }
+    $null = Invoke-Control 'TempoOptionsCancel'
+    Wait-Absent 'TempoOptionsCancel'
+    # Reading the guide, and trying other tempos and note values in the panel, changes nothing: Cancel leaves the transport, the dial
+    # and what it says as they were, and no error is open. The guide never writes anything.
+    if ((Find-Control 'TransportStatus').Current.Name -ne $transportBefore) {
+        throw "${where}: the Tempo panel changed the transport ('$transportBefore' then '$((Find-Control 'TransportStatus').Current.Name)')."
+    }
+    if ((Get-Dial) -ne $dialBefore) { throw "${where}: the tempo guide changed the tempo readout ('$dialBefore' then '$(Get-Dial)')." }
+    $dialRectAfter = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
+    if ([Math]::Abs($dialRectAfter.Width - $dialRectBefore.Width) -gt $one -or [Math]::Abs($dialRectAfter.Height - $dialRectBefore.Height) -gt $one) {
+        throw "${where}: the dial is not the size it was before the Tempo panel was opened ($dialRectBefore, then $dialRectAfter)."
+    }
+    Assert-NoErrorNotice $where
+    return $evidence
+}
 $panels = @(
     @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
     @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
@@ -931,6 +1036,18 @@ foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
+# The tempo guide is read in the same windows: the first-use size, 800x600, 1000x720 and the two narrowest. At the first-use size the
+# panel is also tried: the guide follows the number and the note value typed in it, names the markings of an emptied box (what to
+# enter), and Cancel leaves everything as it was.
+$tempoGuideEvidence = @{}
+$tempoGuideEvidence['firstUse'] = Test-TempoGuide 'Tempo guide at the first-use size' 'tempo-first-use' -Interact
+foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
+    $tempoGuideEvidence["$($size[0])x$($size[1])"] = Test-TempoGuide "Tempo guide at $($size[0])x$($size[1])" "tempo-$($size[0])x$($size[1])"
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 # At the smallest windows a panel still fits: its Cancel/Done pair is on screen, and the pair and the fields stay between the
 # panel's own edges. Both failed in a shipped build: a pair wider than a narrow panel poked out and was clipped, and a panel
 # that Windows placed above a button low in a short window was cut off above its footer.
@@ -973,7 +1090,11 @@ Start-Sleep -Milliseconds 800
 # split and the same clicks keep coming at the same speed.
 Select-Meter '6_8' '6/8'
 Open-Panel @('TempoEdit') 'Tempo'
+# Picking 6/8 counts eighth notes, so 120 BPM is 60 quarter notes a minute and not the 120 that the same number means in 4/4; counted
+# in dotted quarters (6/8 felt in two) it is 180. The guide names the speed, not the number.
+$tempoGuideEvidence['sixEightEighths'] = Wait-TempoGuide @('Largo', 'Larghetto') '60' 'Tempo guide in 6/8 counted in eighth notes'
 Select-Combo 'TempoUnit' 'Dotted quarter'
+$tempoGuideEvidence['sixEightDottedQuarters'] = Wait-TempoGuide @('Presto') '180' 'Tempo guide in 6/8 counted in dotted quarters'
 Invoke-Control 'TempoOptionsDone'
 Wait-Absent 'TempoOptionsDone'
 Wait-Until { (Get-Dial) -like '120*BPM*Dotted quarter*' } '6/8 did not count in dotted quarters.'
@@ -1794,6 +1915,13 @@ Start-Sleep -Milliseconds 800
 $helpEvidence['dutch400x720'] = Test-HelpPanel 'Dutch Help at 400x720' 'help-nl-400x720' $true
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
+# The tempo guide in Dutch, whose sentence is longer: the same rules, and the note values chosen by their Dutch names.
+$tempoGuideEvidence['dutch'] = Test-TempoGuide 'Dutch tempo guide' 'tempo-nl' -Interact -eighth 'Achtste noot' -quarter 'Kwartnoot'
+Resize-To 400 720
+Start-Sleep -Milliseconds 800
+$tempoGuideEvidence['dutch400x720'] = Test-TempoGuide 'Dutch tempo guide at 400x720' 'tempo-nl-400x720'
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 # The same for the commands each page shows on its first screen (the rest is reached by scrolling).
 function Test-OnScreen([string]$where, [string]$id) {
     $element = Find-Control $id
@@ -1868,7 +1996,7 @@ Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
-  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;help=$helpEvidence;
+  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
