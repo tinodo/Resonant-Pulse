@@ -54,7 +54,8 @@ public sealed class PageTextTests
         "HelpQuickStart", "HelpStepOutput", "HelpStepStart", "HelpStepTempo", "HelpStepMeter", "HelpStepStrength",
         "HelpTapStartLimits", "HelpPlaying", "HelpLive", "HelpProgram", "HelpShortcutScope",
         "HelpReference", "HelpBpmTitle", "HelpBpm", "HelpBpmExample", "HelpMeterTitle", "HelpMeter", "HelpMeterExample",
-        "HelpFeelTitle", "HelpFeel", "HelpFeelExample", "HelpStrength", "HelpStrengthExample"
+        "HelpFeelTitle", "HelpFeel", "HelpFeelExample", "HelpStrength", "HelpStrengthExample",
+        "TempoGuideValue", "TempoGuideInput"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>

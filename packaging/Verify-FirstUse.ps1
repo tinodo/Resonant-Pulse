@@ -936,6 +936,10 @@ function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, 
             Set-Number 'Tempo' 120
             $null = Wait-TempoGuide @('Moderato', 'Allegro') '120' "${where}: a tempo typed after the box was emptied"
         } else { $emptied = 'not-run-the-box-has-no-text-to-set' }
+        # A draft left in the panel is only a draft: 90 BPM counted in eighth notes is 45 quarter notes a minute (two markings meet there).
+        Set-Number 'Tempo' 90
+        Select-Combo 'TempoUnit' $eighth
+        $null = Wait-TempoGuide @('Grave', 'Largo') '45' "${where}: a draft of 90 BPM counted in eighth notes, left in the panel"
     }
     $evidence = @{
         guideWidth = [Math]::Round($guide.Width / $scale, 1); guideHeight = [Math]::Round($guide.Height / $scale, 1)
@@ -954,6 +958,15 @@ function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, 
         throw "${where}: the dial is not the size it was before the Tempo panel was opened ($dialRectBefore, then $dialRectAfter)."
     }
     Assert-NoErrorNotice $where
+    if ($Interact) {
+        # The panel opens again on what the project holds, and its guide names that, not the draft that was left in it.
+        $null = Open-Panel @('TempoEdit') 'TempoGuide'
+        Wait-Settled 'TempoGuide'
+        $null = Wait-TempoGuide @('Moderato', 'Allegro') '120' "${where}: the panel opened again after Cancel"
+        $null = Invoke-Control 'TempoOptionsCancel'
+        Wait-Absent 'TempoOptionsCancel'
+        $evidence['discard'] = 'cancel-leaves-the-project-and-the-panel-opens-on-it-again'
+    }
     return $evidence
 }
 $panels = @(

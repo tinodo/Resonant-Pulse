@@ -216,12 +216,29 @@ public sealed partial class MainWindow
         // used the next time Tap to start is switched on, and it is remembered for the next session.
         var taps = NumberInput("TapStartCountField", "TapInCount", TapStartRules.ClampTaps(_preferences.TapInCount),
             TapStartRules.MinimumTaps, TapStartRules.MaximumTaps);
+        // The tempo guide: one line under the number and the note value it describes. It names the approximate Italian markings of
+        // the speed that the panel holds and follows the number (when the box accepts it: Enter, leaving it, a stepper, Half or Double
+        // tempo) and the note value as they change, before Done. It only reads the two fields: nothing it works out is written.
+        var guide = new TextBlock { Style = ResonantStyle("NoteStyle"), Margin = new Thickness(0, -4, 0, 0) };
+        Identify(guide, "TempoGuide", "");
+        void ShowGuide()
+        {
+            var unitQuarters = unit.SelectedItem is Choice choice ? double.Parse(choice.Value, CultureInfo.InvariantCulture) : double.NaN;
+            var line = TempoGuide.Describe(tempo.Value, unitQuarters);
+            guide.Text = line;
+            AutomationProperties.SetName(guide, line);
+        }
+        tempo.ValueChanged += (_, _) => ShowGuide();
+        unit.SelectionChanged += (_, _) => ShowGuide();
+        ShowGuide();
+        // A screen reader that reaches the box hears the guide as its description.
+        AutomationProperties.GetDescribedBy(tempo).Add(guide);
         var tempoContent = new StackPanel
         {
             Spacing = 12,
             Children =
             {
-                FieldRow(Field(tempo), Field(unit)), CommandRow(half, twice),
+                FieldRow(Field(tempo), Field(unit)), guide, CommandRow(half, twice),
                 Field(taps, "UnitTaps"), Hint("TapStartCountHelp")
             }
         };
@@ -236,6 +253,7 @@ public sealed partial class MainWindow
                 tempo.Value = openedTempo;
                 SelectChoice(unit, Invariant(openedUnit));
                 taps.Value = TapStartRules.ClampTaps(_preferences.TapInCount);
+                ShowGuide();
             },
             async () =>
             {
