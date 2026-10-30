@@ -123,21 +123,24 @@ public sealed class HelpContentTests
     }
 
     [TestMethod]
-    public void EveryParagraphIsOneIdeaOfAtMostThreeHundredCharacters()
+    public void EveryParagraphStaysShort()
     {
+        // One idea each: at most 320 characters in English, 420 in the longer translations. The limits paragraph of Tap to start (a list
+        // of its conditions) is the longest.
         foreach (var language in Languages)
         foreach (var entry in Written(language).Where(entry => entry.Kind is HelpKind.Paragraph or HelpKind.Example))
-            Assert.IsTrue(entry.Text.Length <= (language == "en" ? 300 : 400), $"{language}/{entry.Id}: {entry.Text.Length} characters: {entry.Text}");
+            Assert.IsTrue(entry.Text.Length <= (language == "en" ? 320 : 420), $"{language}/{entry.Id}: {entry.Text.Length} characters: {entry.Text}");
     }
 
     [TestMethod]
     public void TheWholeHelpStaysCompact()
     {
-        // Short enough to read in a few screens of a small panel: about 3,000 characters in English.
+        // Short enough to read in a few screens of a small panel: about 3,500 characters in English, which states the conditions that
+        // its claims depend on (a shorter text said less than was true).
         foreach (var language in Languages)
         {
             var total = Written(language).Sum(entry => entry.Text.Length);
-            Assert.IsTrue(total <= (language == "en" ? 3300 : 4300), $"{language}: {total} characters");
+            Assert.IsTrue(total <= (language == "en" ? 3600 : 4700), $"{language}: {total} characters");
         }
     }
 
@@ -192,6 +195,32 @@ public sealed class HelpContentTests
                 Assert.IsTrue(entries[id].Contains(subdivision, StringComparison.OrdinalIgnoreCase), $"{language}/{id} does not use “{subdivision}”: {entries[id]}");
             foreach (var id in new[] { "HelpFeel", "HelpFeelExample" })
                 Assert.IsTrue(entries[id].Contains(swing, StringComparison.OrdinalIgnoreCase), $"{language}/{id} does not use “{swing}”: {entries[id]}");
+        }
+    }
+
+    [TestMethod]
+    public void TheTextStatesWhatItsClaimsDependOn()
+    {
+        // A sentence that is only true under a condition says the condition, in every language: a new project's count-in, the output
+        // that Tap to start needs, a count-in that Start plays again (a project can have none), the note value that makes Subdivision 2
+        // swing eighth notes (HelpFactsTests computes each of these), and the keyboard's own conditions, which OnKeyDown decides: Space
+        // does nothing while a button has the focus (it presses that button), and Esc and T need no panel open.
+        var words = new Dictionary<string, string[][]>
+        {
+            ["HelpStep2"] = [["new project", "nieuw project", "neues Projekt", "nouveau projet", "proyecto nuevo"], ["focus", "focus", "Fokus", "focus", "foco"]],
+            ["HelpTapStartLimits"] = [["output", "uitvoer", "Ausgabe", "sortie", "salida"], ["panel", "paneel", "Zusatzfenster", "panneau", "panel"]],
+            ["HelpPlaying"] = [["count-in", "aftellen", "Einzählen", "décompte", "entrada"]],
+            ["HelpShortcutScope"] = [["focus", "focus", "Fokus", "focus", "foco"], ["panel", "paneel", "Zusatzfenster", "panneau", "panel"]]
+        };
+        for (var index = 0; index < Languages.Length; index++)
+        {
+            var language = Languages[index];
+            var entries = Written(language).ToDictionary(entry => entry.Id, entry => entry.Text);
+            foreach (var (id, required) in words)
+            foreach (var perLanguage in required)
+                Assert.IsTrue(entries[id].Contains(perLanguage[index], StringComparison.OrdinalIgnoreCase), $"{language}/{id} does not say “{perLanguage[index]}”: {entries[id]}");
+            var quarters = Get(language, "UnitQuarterNotes");
+            Assert.IsTrue(entries["HelpFeelExample"].Contains(quarters, StringComparison.OrdinalIgnoreCase), $"{language}/HelpFeelExample does not name the note value it assumes (“{quarters}”): {entries["HelpFeelExample"]}");
         }
     }
 

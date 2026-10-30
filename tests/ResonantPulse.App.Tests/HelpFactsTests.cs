@@ -137,6 +137,36 @@ public sealed class HelpFactsTests
     }
 
     [TestMethod]
+    public void SwingSwingsEighthNotesOnlyWhenTheNoteValueIsAQuarter()
+    {
+        // Subdivision 2 halves the note value: with quarter notes (120 BPM) the pair is two eighth notes, 24000 frames long; with eighth
+        // notes at the same speed (240 BPM) the pair is two sixteenth notes, 12000 frames long.
+        var quarters = Clicks(LiveTestKit.Document(edit: settings => { settings.Subdivision = 2; settings.Swing = 0.67; }), 1, -1, -2);
+        Assert.AreEqual(0.67 * 24000, quarters[1], 1);
+        Assert.AreEqual(24000, quarters[2]);
+        var eighths = Clicks(LiveTestKit.Document(tempo: 240, unit: 0.5, edit: settings => { settings.Subdivision = 2; settings.Swing = 0.67; }), 1, -1, -2);
+        Assert.AreEqual(0.67 * 12000, eighths[1], 1);
+        Assert.AreEqual(12000, eighths[2]);
+    }
+
+    [TestMethod]
+    public void TapToStartNeedsAStoppedMetronomeAndAnOutput()
+    {
+        Assert.AreEqual(TapStartBlock.None, TapStartRules.Block(transportIdle: true, busy: false, hasOutput: true));
+        Assert.AreEqual(TapStartBlock.Playing, TapStartRules.Block(transportIdle: false, busy: false, hasOutput: true));
+        Assert.AreEqual(TapStartBlock.NoOutput, TapStartRules.Block(transportIdle: true, busy: false, hasOutput: false));
+    }
+
+    [TestMethod]
+    public void TheCountInIsTheProjectsOwn()
+    {
+        // "One bar of count-in" is a new project's; a project can have more bars, or none, so the Help says that Start plays the
+        // count-in again after Stop, not that it counts in.
+        Assert.AreEqual(0L, ScheduleCompiler.Compile(LiveTestKit.Document(edit: settings => settings.CountInBars = 0), Rate, 1, true).CountInFrames);
+        Assert.AreEqual(2L * 4 * 24000, ScheduleCompiler.Compile(LiveTestKit.Document(edit: settings => settings.CountInBars = 2), Rate, 1, true).CountInFrames);
+    }
+
+    [TestMethod]
     public void AboutTwoThirdsSwingGivesALongShortPairAndHalfIsEven()
     {
         var even = LiveTestKit.Document(edit: settings => settings.Subdivision = 2);

@@ -519,11 +519,11 @@ public static class Text
             "La première fois, l’application utilise la sortie par défaut de Windows. Pour d’autres haut-parleurs ou un casque, appuyez sur {0} en bas. {1} reste grisé tant qu’aucune sortie n’est choisie.",
             "La primera vez, la aplicación usa la salida predeterminada de Windows. Para otros altavoces o auriculares, pulse {0} abajo. {1} sigue en gris hasta que se elige una salida.");
         Add("HelpStepStart",
-            "Press {0}, or the {1} key. It counts in one bar first, then clicks.",
-            "Druk op {0} of op {1}. Eerst wordt één maat afgeteld, daarna volgen de tikken.",
-            "Drücken Sie {0} oder die {1}. Zuerst wird ein Takt eingezählt, dann folgen die Klicks.",
-            "Appuyez sur {0}, ou sur la touche {1}. Une mesure de décompte précède les clics.",
-            "Pulse {0} o la tecla {1}. Primero se cuenta un compás de entrada y después suenan los clics.");
+            "Press {0}, or the {1} key when no button has the focus. A new project counts in one bar first, then clicks.",
+            "Druk op {0}, of op {1} als geen knop de focus heeft. Een nieuw project telt eerst één maat af, daarna volgen de tikken.",
+            "Drücken Sie {0} oder die {1}, wenn keine Schaltfläche den Fokus hat. Ein neues Projekt zählt zuerst einen Takt ein, dann folgen die Klicks.",
+            "Appuyez sur {0}, ou sur la touche {1} si aucun bouton n’a le focus. Un nouveau projet commence par une mesure de décompte, puis viennent les clics.",
+            "Pulse {0} o la tecla {1} si ningún botón tiene el foco. Un proyecto nuevo cuenta primero un compás de entrada y después suenan los clics.");
         Add("HelpStepTempo",
             "Click the big number, type your tempo and choose {2}. Or press − and + (hold to repeat; with {0} they move by 10), or tap {1} at least twice in time with your beat.",
             "Klik op het grote getal, typ uw tempo en kies {2}. Of druk op − en + (ingedrukt houden herhaalt; met {0} gaat het in stappen van 10), of tik minstens twee keer op {1} in de maat van uw tempo.",
@@ -543,17 +543,17 @@ public static class Text
             "Touchez un temps sous {0} pour changer sa force : {1}, {2}, {3} ou {4}. Le premier temps est d’abord {1}.",
             "Toque un pulso bajo {0} para cambiar su intensidad: {1}, {2}, {3} o {4}. El primer pulso empieza en {1}.");
         Add("HelpTapStartLimits",
-            "Choose 2 to 16 taps in the Tempo panel. It works only while the metronome is stopped. An uneven tap, or a pause of more than four seconds, starts the count again; Stop or Esc cancels it. The metronome starts a moment after your last tap, not exactly on it.",
-            "Kies 2 tot 16 tikken in het paneel Tempo. Het werkt alleen als de metronoom gestopt is. Een tik die niet in de maat valt, of een pauze van meer dan vier seconden, begint het tellen opnieuw; Stoppen of Esc annuleert. De metronoom start een moment na uw laatste tik, niet precies erop.",
-            "Wie oft getippt wird (2 bis 16 Mal), stellen Sie im Tempo-Fenster ein. Es funktioniert nur, solange das Metronom gestoppt ist. Tippen Sie unregelmäßig oder pausieren Sie länger als vier Sekunden, beginnt die Zählung neu; Stoppen oder Esc bricht ab. Das Metronom startet einen Moment nach Ihrem letzten Tippen, nicht genau darauf.",
-            "Choisissez 2 à 16 frappes dans le panneau Tempo. Cela ne marche que lorsque le métronome est arrêté. Une frappe irrégulière, ou une pause de plus de quatre secondes, relance le compte ; Arrêter ou Échap l’annule. Le métronome démarre un instant après votre dernière frappe, pas exactement sur elle.",
-            "Elija de 2 a 16 toques en el panel Tempo. Solo funciona con el metrónomo detenido. Un toque irregular, o una pausa de más de cuatro segundos, reinicia la cuenta; Detener o Esc lo cancela. El metrónomo empieza un instante después de su último toque, no exactamente sobre él.");
+            "Choose 2 to 16 taps in the Tempo panel. It works only while the metronome is stopped and an output is chosen. An uneven tap, or a pause of more than four seconds, starts the count again. Stop cancels it, and so does Esc when no panel is open. The metronome starts a moment after your last tap, not exactly on it.",
+            "Kies 2 tot 16 tikken in het paneel Tempo. Het werkt alleen als de metronoom gestopt is en er een uitvoer is gekozen. Een tik die niet in de maat valt, of een pauze van meer dan vier seconden, begint het tellen opnieuw. Stoppen annuleert het, en Esc ook als geen paneel openstaat. De metronoom start een moment na uw laatste tik, niet precies erop.",
+            "Wie oft getippt wird (2 bis 16 Mal), stellen Sie im Tempo-Fenster ein. Es funktioniert nur, solange das Metronom gestoppt und eine Ausgabe gewählt ist. Tippen Sie unregelmäßig oder pausieren Sie länger als vier Sekunden, beginnt die Zählung neu. Stoppen bricht es ab, Esc ebenfalls, wenn kein Zusatzfenster offen ist. Das Metronom startet einen Moment nach Ihrem letzten Tippen, nicht genau darauf.",
+            "Choisissez 2 à 16 frappes dans le panneau Tempo. Cela ne marche que lorsque le métronome est arrêté et qu’une sortie est choisie. Une frappe irrégulière, ou une pause de plus de quatre secondes, relance le compte. Arrêter l’annule, et Échap aussi quand aucun panneau n’est ouvert. Le métronome démarre un instant après votre dernière frappe, pas exactement sur elle.",
+            "Elija de 2 a 16 toques en el panel Tempo. Solo funciona con el metrónomo detenido y una salida elegida. Un toque irregular, o una pausa de más de cuatro segundos, reinicia la cuenta. Detener lo cancela, y Esc también cuando no hay ningún panel abierto. El metrónomo empieza un instante después de su último toque, no exactamente sobre él.");
         Add("HelpPlaying",
-            "{0} holds your place and {1} carries on from there. {2} goes back to the beginning, so the next {1} counts in again. {3} silences the clicks while the count goes on.",
-            "{0} houdt uw plaats vast en {1} gaat vanaf daar verder. {2} gaat terug naar het begin, dus {1} telt daarna weer af. {3} maakt de tikken stil terwijl het tellen doorgaat.",
-            "{0} hält Ihre Stelle fest, {1} macht dort weiter. {2} geht an den Anfang zurück, danach zählt {1} wieder ein. {3} schaltet die Klicks stumm, während die Zählung weiterläuft.",
-            "{0} garde votre place et {1} reprend à partir de là. {2} revient au début, donc {1} recommence par le décompte. {3} rend les clics muets pendant que le compte continue.",
-            "{0} guarda el punto en que está; {1} sigue desde ahí. {2} vuelve al principio, así que {1} vuelve a empezar con la entrada. {3} apaga los clics mientras la cuenta continúa.");
+            "{0} holds your place and {1} carries on from there. {2} goes back to the beginning, so the next {1} plays the count-in again. {3} silences the clicks while the count goes on.",
+            "{0} houdt uw plaats vast en {1} gaat vanaf daar verder. {2} gaat terug naar het begin, dus bij de volgende {1} hoort u het aftellen opnieuw. {3} maakt de tikken stil terwijl het tellen doorgaat.",
+            "{0} hält Ihre Stelle fest, {1} macht dort weiter. {2} geht an den Anfang zurück, danach spielt {1} das Einzählen wieder ab. {3} schaltet die Klicks stumm, während die Zählung weiterläuft.",
+            "{0} garde votre place et {1} reprend à partir de là. {2} revient au début, donc {1} rejoue le décompte. {3} rend les clics muets pendant que le compte continue.",
+            "{0} guarda el punto en que está; {1} sigue desde ahí. {2} vuelve al principio, así que {1} vuelve a tocar la entrada. {3} apaga los clics mientras la cuenta continúa.");
         Add("HelpLive",
             "Sound and beat strength change at once. Tempo, time signature, note value, subdivision and swing change from the next beat. The count-in, the {2} limits and everything in {3} are used after {0}, then {1}.",
             "Klank en telsterkte veranderen meteen. Tempo, maatsoort, nootwaarde, onderverdeling en swing veranderen vanaf de volgende tel. Het aftellen, de limieten van {2} en alles in {3} gelden na {0} en daarna {1}.",
@@ -567,11 +567,11 @@ public static class Text
             "Un projet avec un programme d’entraînement reprend son tempo et sa mesure au programme : les commandes de tempo et de mesure sont donc désactivées. Modifiez-les dans {0}.",
             "Un proyecto con programa de práctica toma su tempo y su compás del programa, así que los controles de tempo y de compás están desactivados. Cámbielos en {0}.");
         Add("HelpShortcutScope",
-            "Shortcuts work only in this window, and T only on {2}. While you type in a box, {0}, T and F do nothing; {1} + M, {1} + S and {1} + O still work.",
-            "Sneltoetsen werken alleen in dit venster, en T alleen in {2}. Terwijl u in een vak typt, doen {0}, T en F niets; {1} + M, {1} + S en {1} + O werken wel.",
-            "Tastenkürzel gelten nur in diesem Fenster, T nur unter {2}. Beim Schreiben in ein Feld bewirken {0}, T und F nichts; {1} + M, {1} + S und {1} + O funktionieren weiterhin.",
-            "Les raccourcis ne fonctionnent que dans cette fenêtre, et T seulement dans {2}. Quand vous écrivez dans un champ, {0}, T et F ne font rien ; {1} + M, {1} + S et {1} + O fonctionnent toujours.",
-            "Los atajos solo funcionan en esta ventana, y T solo en {2}. Mientras escribe en un cuadro, {0}, T y F no hacen nada; {1} + M, {1} + S y {1} + O siguen funcionando.");
+            "Shortcuts work only in this window, and T only on {2} with no panel open. {0} starts or pauses only when no button has the focus (on a button it presses that button). While you type in a box, {0}, T and F do nothing; {1} + M, {1} + S and {1} + O still work.",
+            "Sneltoetsen werken alleen in dit venster, en T alleen in {2} zonder open paneel. {0} start of pauzeert alleen als geen knop de focus heeft (op een knop drukt het die knop in). Terwijl u in een vak typt, doen {0}, T en F niets; {1} + M, {1} + S en {1} + O werken wel.",
+            "Tastenkürzel gelten nur in diesem Fenster, T nur unter {2} ohne offenes Zusatzfenster. {0} startet oder pausiert nur, wenn keine Schaltfläche den Fokus hat (auf einer Schaltfläche drückt sie diese Schaltfläche). Beim Schreiben in ein Feld bewirken {0}, T und F nichts; {1} + M, {1} + S und {1} + O funktionieren weiterhin.",
+            "Les raccourcis ne fonctionnent que dans cette fenêtre, et T seulement dans {2} sans panneau ouvert. {0} démarre ou met en pause seulement si aucun bouton n’a le focus (sur un bouton, cette touche appuie sur ce bouton). Quand vous écrivez dans un champ, {0}, T et F ne font rien ; {1} + M, {1} + S et {1} + O fonctionnent toujours.",
+            "Los atajos solo funcionan en esta ventana, y T solo en {2} sin ningún panel abierto. {0} inicia o pausa solo si ningún botón tiene el foco (en un botón, pulsa ese botón). Mientras escribe en un cuadro, {0}, T y F no hacen nada; {1} + M, {1} + S y {1} + O siguen funcionando.");
         Add("HelpReference", "Musical reference", "Muzikale uitleg", "Musikalische Grundlagen", "Repères musicaux", "Referencia musical");
         Add("HelpBpmTitle", "BPM and the note value", "BPM en de nootwaarde", "BPM und Notenwert", "BPM et valeur de note", "BPM y figura de la nota");
         Add("HelpBpm",
@@ -601,17 +601,17 @@ public static class Text
             "Ejemplo: con una subdivisión de 1, el 6/8 hace clic seis veces por compás. Para sentirlo en dos, ponga la figura en negra con puntillo en el panel Tempo y escriba un tempo como 80: dos clics por compás.");
         Add("HelpFeelTitle", "Subdivision and swing", "Onderverdeling en swing", "Unterteilung und Swing", "Subdivision et swing", "Subdivisión y swing");
         Add("HelpFeel",
-            "Subdivision splits every beat into smaller clicks: 3 gives three clicks in each beat. Swing delays the second click of each pair: 0.5 is even, and about 0.67 gives the long-short feel of swung eighth notes. Swing needs an even subdivision, such as 2 or 4. Both are under {0}, in {1}.",
-            "Onderverdeling splitst elke tel in kleinere tikken: 3 geeft drie tikken per tel. Swing vertraagt de tweede tik van elk paar: 0,5 is gelijkmatig en ongeveer 0,67 geeft het lang-kort van geswingde achtste noten. Swing werkt alleen met een onderverdeling in een even aantal, zoals 2 of 4. Beide staan onder {0}, bij {1}.",
-            "Die Unterteilung teilt jede Zählzeit in kleinere Klicks: 3 ergibt drei Klicks pro Zählzeit. Swing verzögert den zweiten Klick jedes Paars: 0,5 ist gleichmäßig, etwa 0,67 ergibt das Lang-kurz geswingter Achtel. Swing funktioniert nur mit einer geraden Unterteilung, etwa 2 oder 4. Beides finden Sie unter {0} im Bereich {1}.",
-            "La subdivision découpe chaque temps en clics plus petits : 3 donne trois clics par temps. Le swing retarde le deuxième clic de chaque paire : 0,5 est régulier, et environ 0,67 donne le long-court des croches swinguées. Le swing ne marche qu’avec une subdivision paire, comme 2 ou 4. Les deux se trouvent sous {0}, dans {1}.",
-            "La subdivisión parte cada pulso en clics más pequeños: 3 da tres clics por pulso. El swing retrasa el segundo clic de cada pareja: 0,5 es regular y alrededor de 0,67 da el largo-corto de las corcheas con swing. El swing solo funciona con una subdivisión par, como 2 o 4. Ambos están en {0}, en {1}.");
+            "Subdivision splits every beat into smaller clicks: 3 gives three clicks in each beat. Swing delays the second click of each pair: 0.5 is even, and about 0.67 gives the long-short feel of swing. Swing needs an even subdivision, such as 2 or 4. Both are under {0}, in {1}.",
+            "Onderverdeling splitst elke tel in kleinere tikken: 3 geeft drie tikken per tel. Swing vertraagt de tweede tik van elk paar: 0,5 is gelijkmatig en ongeveer 0,67 geeft het lang-kort van swing. Swing werkt alleen met een onderverdeling in een even aantal, zoals 2 of 4. Beide staan onder {0}, bij {1}.",
+            "Die Unterteilung teilt jede Zählzeit in kleinere Klicks: 3 ergibt drei Klicks pro Zählzeit. Swing verzögert den zweiten Klick jedes Paars: 0,5 ist gleichmäßig, etwa 0,67 ergibt das Lang-kurz des Swings. Swing funktioniert nur mit einer geraden Unterteilung, etwa 2 oder 4. Beides finden Sie unter {0} im Bereich {1}.",
+            "La subdivision découpe chaque temps en clics plus petits : 3 donne trois clics par temps. Le swing retarde le deuxième clic de chaque paire : 0,5 est régulier, et environ 0,67 donne le long-court du swing. Le swing ne marche qu’avec une subdivision paire, comme 2 ou 4. Les deux se trouvent sous {0}, dans {1}.",
+            "La subdivisión parte cada pulso en clics más pequeños: 3 da tres clics por pulso. El swing retrasa el segundo clic de cada pareja: 0,5 es regular y alrededor de 0,67 da el largo-corto del swing. El swing solo funciona con una subdivisión par, como 2 o 4. Ambos están en {0}, en {1}.");
         Add("HelpFeelExample",
-            "Example: in 4/4, Subdivision 2 with Swing 0.67 swings the eighth notes.",
-            "Voorbeeld: in 4/4 laat Onderverdeling 2 met Swing 0,67 de achtste noten swingen.",
-            "Beispiel: Im 4/4-Takt lässt Unterteilung 2 mit Swing 0,67 die Achtelnoten swingen.",
-            "Exemple : en 4/4, une subdivision de 2 avec un swing de 0,67 fait swinguer les croches.",
-            "Ejemplo: en 4/4, una subdivisión de 2 con un swing de 0,67 da swing a las corcheas.");
+            "Example: in 4/4 with quarter notes as the note value, Subdivision 2 with Swing 0.67 swings the eighth notes.",
+            "Voorbeeld: in 4/4 met kwartnoten als nootwaarde laat Onderverdeling 2 met Swing 0,67 de achtste noten swingen.",
+            "Beispiel: Im 4/4-Takt mit Viertelnoten als Notenwert lässt Unterteilung 2 mit Swing 0,67 die Achtelnoten swingen.",
+            "Exemple : en 4/4 avec des noires comme valeur de note, une subdivision de 2 avec un swing de 0,67 fait swinguer les croches.",
+            "Ejemplo: en 4/4 con negras como figura, una subdivisión de 2 con un swing de 0,67 da swing a las corcheas.");
         Add("HelpStrength",
             "{0}, {1}, {2} and {3} set how loud a click is. Tap a beat to change it. A click set to {3} makes no sound but keeps its place in the count. Clicks between beats start as {2}.",
             "{0}, {1}, {2} en {3} bepalen hoe luid een tik klinkt. Tik op een tel om dat te wijzigen. Staat een tik op {3}, dan klinkt hij niet, maar hij behoudt zijn plaats in het tellen. Tikken tussen de tellen beginnen als {2}.",
