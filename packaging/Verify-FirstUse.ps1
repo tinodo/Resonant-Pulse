@@ -815,10 +815,27 @@ function Test-HelpPanel([string]$where, [string]$shot = '', [bool]$shotEnd = $fa
         Wait-Condition { (Get-FocusedAutomationId) -eq 'PlayHelpPanelDone' } "${where}: Tab did not go on to Done (the focus is on '$(Get-FocusedAutomationId)')."
         $keyboard = 'page-down-end-home-and-tab-to-done'
     }
+    # The panel opens at its first line whatever was read before. Every check above ends at the first line (the text is scrolled back
+    # and Home is pressed), so none of them could see a panel that opens where it was left: close it at its last line, open it
+    # again, and require the first step on screen before anything asks for any scrolling.
+    $reopens = 'not-scrollable'
+    if ($scrollable) {
+        (Get-HelpScroll).SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll, 100)
+        Wait-Settled $helpLastLine
+        $null = Invoke-Control 'PlayHelpPanelDone'
+        Wait-Absent 'PlayHelpPanelDone'
+        $null = Open-Panel @('PlayHelp') 'PlayHelpPanelDone'
+        Wait-Settled 'PlayHelpPanelDone'
+        Wait-Settled 'HelpStep1'
+        Test-Visible (Find-Control 'HelpStep1').Current.BoundingRectangle (Find-Control 'PlayHelpPanelScroll').Current.BoundingRectangle "${where}: the first step after the panel was closed at its last line and opened again (it opens at its first line)"
+        $reopenedAt = (Get-HelpScroll).Current.VerticalScrollPercent
+        if ($reopenedAt -gt 1) { throw "${where}: the panel opened again $([Math]::Round($reopenedAt)) percent down its text, not at its first line." }
+        $reopens = 'at-first-line-after-closing-at-the-last'
+    }
     $evidence = @{
         viewportHeight = [Math]::Round($viewport.Height / $scale, 1); step1Width = [Math]::Round($step1.Width / $scale, 1)
         doneWidth = [Math]::Round($done.Width / $scale, 1); doneHeight = [Math]::Round($done.Height / $scale, 1)
-        scrollable = $scrollable; keyboard = $keyboard
+        scrollable = $scrollable; keyboard = $keyboard; reopens = $reopens
     }
     $null = Invoke-Control 'PlayHelpPanelDone'
     Wait-Absent 'PlayHelpPanelDone'

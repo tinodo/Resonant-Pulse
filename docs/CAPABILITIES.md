@@ -98,7 +98,8 @@ other pages; it does not walk through Studio, Train, Stage, Library or Settings.
 engine (HelpFactsTests) and check the order, the length, the labels and the absence of the engine's words in all five languages
 (HelpContentTests). The first-use verifier opens the panel at the first-use size, 800x600, 1000x720, 400x720 and 320x900 and in
 Dutch, and requires the text area, Done and the first step to be whole and inside the window and large enough (Done at least 100
-by 40 DIP, the text area at least 200 DIP high, a step at least 150 DIP wide), the text to scroll to its last line and back, no
+by 40 DIP, the text area at least 200 DIP high, a step at least 150 DIP wide), the text to scroll to its last line and back, the panel to
+open at its first line again after being closed at its last, no
 Apply button, the transport, the dial and the error notice to be as they were once it is closed, and, where keys can be sent
 (a hosted runner), Page Down, End and Home to scroll the text and Tab to go on to Done. The verifier does not read the words: a
 sentence that is wrong but fits the panel passes it, and only the unit tests catch it.
