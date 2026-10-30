@@ -312,6 +312,14 @@ public static class Text
         Add("TempoEditName", "{0} BPM. Click to type an exact tempo", "{0} BPM. Klik om een exact tempo te typen", "{0} BPM. Klicken, um ein genaues Tempo einzugeben", "{0} BPM. Cliquez pour saisir un tempo exact", "{0} BPM. Haga clic para escribir un tempo exacto");
         Add("TempoAnnouncement", "{0} BPM", "{0} BPM", "{0} BPM", "{0} BPM", "{0} BPM");
         Add("TempoEditorHelp", "Type an exact tempo. It is used when you choose Done and, while playing, heard from the next click.", "Typ een exact tempo. Het geldt na Gereed en is tijdens het spelen vanaf de volgende tik te horen.", "Genaues Tempo eingeben. Es gilt nach Fertig und ist beim Spielen ab dem nächsten Klick zu hören.", "Saisissez un tempo exact. Il s’applique avec Terminé et s’entend dès le clic suivant pendant la lecture.", "Escriba un tempo exacto. Se aplica con Listo y se oye desde el siguiente clic durante la reproducción.");
+        // The tempo guide in the Tempo panel, beside its title. TempoGuideValue is for a tempo counted in quarter notes ({0}: the Italian
+        // terms, the same in every language, so they are not strings of this text); TempoGuideConverted says the speed for any other
+        // note ({0}: the speed in quarter notes a minute, {1}: the word for quarter notes, {2}: the terms). The line wraps in a column
+        // of 120 to 200 DIP, so what belongs together has no-break spaces (a number and BPM, and in French the colon after its word,
+        // which French sets off with a space) and never starts or ends a line on its own.
+        Add("TempoGuideValue", "Approximate markings: {0}", "Globale aanduidingen: {0}", "Ungefähre Bezeichnungen: {0}", "Indications approximatives\u00A0: {0}", "Indicaciones aproximadas: {0}");
+        Add("TempoGuideConverted", "Approximate markings at {0}\u00A0BPM in {1}: {2}", "Globale aanduidingen bij {0}\u00A0BPM in {1}: {2}", "Ungefähre Bezeichnungen bei {0}\u00A0BPM in {1}: {2}", "Indications approximatives à {0}\u00A0BPM en {1}\u00A0: {2}", "Indicaciones aproximadas a {0}\u00A0BPM en {1}: {2}");
+        Add("TempoGuideInput", "Enter a tempo from 1 to 1000\u00A0BPM to see its markings.", "Typ een tempo van 1 tot 1000\u00A0BPM om de aanduidingen te zien.", "Tempo von 1 bis 1000\u00A0BPM eingeben, um die Bezeichnungen zu sehen.", "Saisissez un tempo de 1 à 1000\u00A0BPM pour voir les indications.", "Escriba un tempo de 1 a 1000\u00A0BPM para ver las indicaciones.");
         Add("MeterChange", "Change time signature", "Maatsoort wijzigen", "Taktart ändern", "Changer la mesure", "Cambiar compás");
         Add("MeterCustom", "Custom…", "Aangepast…", "Benutzerdefiniert…", "Personnalisé…", "Personalizado…");
         Add("BeatStrengthCaption", "Beat strength · tap a beat to change it", "Telsterkte · tik op een tel om te wijzigen", "Betonung · Zählzeit antippen zum Ändern", "Force des temps · touchez un temps pour la changer", "Intensidad · toque un pulso para cambiarla");

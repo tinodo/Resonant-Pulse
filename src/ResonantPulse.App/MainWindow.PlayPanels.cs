@@ -20,9 +20,12 @@ public sealed partial class MainWindow
     /// Done applies and closes; Cancel (or clicking away) discards. Fields are refilled from the document
     /// every time the panel opens, so a cancelled draft never lingers. A <paramref name="readOnly"/> panel only shows text (Help):
     /// it has nothing to cancel, so it has Done alone, and its scrolling area is a tab stop so that a keyboard can read it.
+    /// <paramref name="titleExtra"/> sits at the right of the title and wraps inside its own column. The panel's height is what its
+    /// fields share with the footer, so what belongs beside the title costs the fields next to nothing (a line of its own would).
     /// </summary>
     private OptionPanel CreateOptionPanel(string titleKey, string id, UIElement content, string? helpKey,
-        Action? populate, Func<Task<bool>>? apply, string doneKey = "CloseOptions", bool readOnly = false)
+        Action? populate, Func<Task<bool>>? apply, string doneKey = "CloseOptions", bool readOnly = false,
+        FrameworkElement? titleExtra = null)
     {
         var title = new TextBlock
         {
@@ -78,7 +81,20 @@ public sealed partial class MainWindow
             Grid.SetRow(element, rows++);
             panel.Children.Add(element);
         }
-        Place(title, GridLength.Auto);
+        FrameworkElement header = title;
+        if (titleExtra is not null)
+        {
+            // The title and what sits beside it are centred on one line (a taller block grows the line, not the title).
+            var line = new Grid { ColumnSpacing = 12 };
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            title.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(titleExtra, 1);
+            line.Children.Add(title);
+            line.Children.Add(titleExtra);
+            header = line;
+        }
+        Place(header, GridLength.Auto);
         if (helpKey is not null) Place(new TextBlock { Text = Text.Get(helpKey), Style = ResonantStyle("CaptionStyle") }, GridLength.Auto);
         Place(scroll, new GridLength(1, GridUnitType.Star));
         // The inline error sits just above the footer; while it is hidden it takes no room.
@@ -216,6 +232,27 @@ public sealed partial class MainWindow
         // used the next time Tap to start is switched on, and it is remembered for the next session.
         var taps = NumberInput("TapStartCountField", "TapInCount", TapStartRules.ClampTaps(_preferences.TapInCount),
             TapStartRules.MinimumTaps, TapStartRules.MaximumTaps);
+        // The tempo guide, beside the panel's title (so it costs the fields below it no height): the approximate Italian markings of the
+        // speed that the panel holds. It follows the number (when the box accepts it: Enter, leaving it, a stepper, Half or Double
+        // tempo) and the note value as they change, before Done. It only reads the two fields: nothing it works out is written.
+        var guide = new TextBlock
+        {
+            Style = ResonantStyle("CaptionStyle"), TextAlignment = TextAlignment.Right,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
+        };
+        Identify(guide, "TempoGuide", "");
+        void ShowGuide()
+        {
+            var unitQuarters = unit.SelectedItem is Choice choice ? double.Parse(choice.Value, CultureInfo.InvariantCulture) : double.NaN;
+            var line = TempoGuide.Describe(tempo.Value, unitQuarters);
+            guide.Text = line;
+            AutomationProperties.SetName(guide, line);
+        }
+        tempo.ValueChanged += (_, _) => ShowGuide();
+        unit.SelectionChanged += (_, _) => ShowGuide();
+        ShowGuide();
+        // A screen reader that reaches the box hears the guide as its description.
+        AutomationProperties.GetDescribedBy(tempo).Add(guide);
         var tempoContent = new StackPanel
         {
             Spacing = 12,
@@ -236,6 +273,7 @@ public sealed partial class MainWindow
                 tempo.Value = openedTempo;
                 SelectChoice(unit, Invariant(openedUnit));
                 taps.Value = TapStartRules.ClampTaps(_preferences.TapInCount);
+                ShowGuide();
             },
             async () =>
             {
@@ -278,7 +316,7 @@ public sealed partial class MainWindow
                     await _workspace.SavePreferencesAsync(_preferences);
                 }
                 return true;
-            });
+            }, titleExtra: guide);
     }
 
     private OptionPanel BuildRhythmPanel()

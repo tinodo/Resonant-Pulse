@@ -74,6 +74,21 @@ is specified in `metronome-design.md` and is not changed here.
   changed in the panel, so changing the number alone never puts the tempo the panel showed when it opened over a newer one
   (the tempo a *Tap to start* has just saved). With a program there is no
   tempo readout to open the panel from, so the number cannot be changed until the program is removed.
+- **Tempo guide (the Tempo panel's title row):** at the right of the title, one line of muted 12 pt text names the approximate
+  Italian markings of the speed the panel holds ("Approximate markings: Moderato / Allegro"). It is a reading, not a control:
+  nothing to click, no state of its own, nothing it works out is written. It sits in the row the title already takes, not in a
+  row of its own: the panel is only as tall as the room between the dial's readout and the bottom of the window, so a line
+  under the note value (the first version) pushed the box for *Taps to start* partly out of view at 400x720, and a row on Play
+  would cost the dial size (the dial's own caption is 18 pt inside a viewbox, too small to read at 400x720 and hidden on Stage).
+  It wraps in its own column when the panel is narrow (two lines at 400x720 and 320x900) and a no-break space keeps a pair of
+  names, and a number with BPM, on one line. The markings are about a speed, so they count quarter notes a minute whatever note
+  value the number counts: a tempo counted in quarter notes only names them (the note value beside the box says what the number
+  counts), any other note value also says the speed in quarter notes ("Approximate markings at 60 BPM in quarter notes: Largo /
+  Larghetto" for 120 counted in eighth notes, the note of 6/8). It follows the number when the box takes it (Enter, leaving the
+  box, a stepper, Half or Double tempo) and the note value as they change, before Done; Cancel discards the draft with the
+  guide. An emptied box, or a tempo the project would refuse, has no marking and the line says which tempos it can name. The
+  Italian terms are the same in every language and are code, not entries of the translated text; only the sentences are
+  translated (docs/design/glossary.md).
 - **Project:** the name (up to 360) and two commands, *Save as file* and *Open file*.
 - **Help:** read-only, so Done alone (there is nothing to cancel). It grows the panel Play already had instead of adding a
   page or a control to Play: the dial keeps its size, and a beginner finds the quick start where they begin. It opens at its
