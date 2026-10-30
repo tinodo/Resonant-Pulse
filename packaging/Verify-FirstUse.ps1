@@ -743,7 +743,7 @@ function Send-HelpKeys([string]$keys) {
     [Windows.Forms.SendKeys]::SendWait($keys)
     Start-Sleep -Milliseconds 300
 }
-function Test-HelpPanel([string]$where) {
+function Test-HelpPanel([string]$where, [string]$shot = '', [bool]$shotEnd = $false) {
     $transportBefore = (Find-Control 'TransportStatus').Current.Name
     $dialBefore = Get-Dial
     $dialRectBefore = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
@@ -782,6 +782,8 @@ function Test-HelpPanel([string]$where) {
     $step1 = (Find-Control 'HelpStep1').Current.BoundingRectangle
     Test-Visible $step1 $viewport "${where}: the first step of the quick start (the panel opens at its first line)"
     Test-NoApplyButtons "${where}"
+    # The panel as a person sees it, kept with the run (a runner takes screenshots; a local run does not).
+    if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
     # The text can be scrolled to its last line, and back.
     $scroll = Get-HelpScroll
     $scrollable = $scroll.Current.VerticallyScrollable
@@ -790,6 +792,7 @@ function Test-HelpPanel([string]$where) {
         Wait-Settled $helpLastLine
     }
     Test-Visible (Find-Control $helpLastLine).Current.BoundingRectangle $viewport "${where}: the last line of the text"
+    if ($shot -and $shotEnd) { $null = Save-PlayScreenshot "$shot-end.png" }
     $scroll = Get-HelpScroll
     if ($scrollable) {
         $scroll.SetScrollPercent([Windows.Automation.ScrollPattern]::NoScroll, 0)
@@ -903,11 +906,11 @@ foreach ($panel in $panels) {
 # Help is read in the sizes that the layout gates use (the first-use size, 800x600, 1000x720) and the two narrowest windows: whole and
 # readable in each, with Done on screen, and opening it never changes what Play shows.
 $helpEvidence = @{}
-$helpEvidence['firstUse'] = Test-HelpPanel 'Help at the first-use size'
+$helpEvidence['firstUse'] = Test-HelpPanel 'Help at the first-use size' 'help-first-use'
 foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 800
-    $helpEvidence["$($size[0])x$($size[1])"] = Test-HelpPanel "Help at $($size[0])x$($size[1])"
+    $helpEvidence["$($size[0])x$($size[1])"] = Test-HelpPanel "Help at $($size[0])x$($size[1])" "help-$($size[0])x$($size[1])" ($size[0] -ne 1000)
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
@@ -1768,10 +1771,10 @@ foreach ($panel in $panels) {
     Wait-Absent $panel.field
 }
 # The Help in Dutch, whose words are longer: the same rules at the first-use size and at 400x720.
-$helpEvidence['dutch'] = Test-HelpPanel 'Dutch Help'
+$helpEvidence['dutch'] = Test-HelpPanel 'Dutch Help' 'help-nl'
 Resize-To 400 720
 Start-Sleep -Milliseconds 800
-$helpEvidence['dutch400x720'] = Test-HelpPanel 'Dutch Help at 400x720'
+$helpEvidence['dutch400x720'] = Test-HelpPanel 'Dutch Help at 400x720' 'help-nl-400x720' $true
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
 # The same for the commands each page shows on its first screen (the rest is reached by scrolling).

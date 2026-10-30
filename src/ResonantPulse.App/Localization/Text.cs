@@ -55,7 +55,6 @@ public static class Text
         Add("Practice bars must be 0..100000.", "Practice bars must be 0..100000.", "Het aantal oefenmaten moet 0..100000 zijn.", "Die Anzahl der Übungstakte muss 0..100000 betragen.", "Le nombre de mesures de pratique doit être de 0 à 100000.", "El número de compases de práctica debe ser de 0 a 100000.");
         Add("StopBoundaryError", "The compiled loop has no matching stop boundary.", "De samengestelde lus bevat geen passende stopgrens.", "Die kompilierte Schleife enthält keine passende Stoppgrenze.", "La boucle compilée ne contient aucune limite d'arrêt correspondante.", "El bucle compilado no contiene un límite de parada correspondiente.");
         Add("Practice duration must be 0..86400 seconds.", "Practice duration must be 0..86400 seconds.", "De oefenduur moet 0..86400 seconden zijn.", "Die Übungsdauer muss 0..86400 Sekunden betragen.", "La durée de pratique doit être de 0 à 86400 secondes.", "La duración de práctica debe ser de 0 a 86400 segundos.");
-        Add("FirstUseHint", "Press Start. Space starts or pauses. Click the big number to type a tempo, nudge it with − and +, or tap TAP in time with the beat.", "Druk op Starten. Spatie start of pauzeert. Klik op het grote getal om een tempo te typen, verfijn met − en +, of tik op TIK in de maat.", "Starten drücken. Leertaste startet oder pausiert. Auf die große Zahl klicken, um ein Tempo einzugeben, mit − und + feinjustieren oder TAP im Takt tippen.", "Appuyez sur Démarrer. Espace démarre ou suspend. Cliquez sur le grand nombre pour saisir un tempo, ajustez avec − et +, ou touchez TAP en rythme.", "Pulse Iniciar. Espacio inicia o pausa. Haga clic en el número grande para escribir un tempo, ajústelo con − y +, o pulse TAP al ritmo.");
         Add("ChooseOutput", "Select an output in Audio to start.", "Kies een uitvoer in Audio om te starten.", "Zum Starten eine Ausgabe unter Audio wählen.", "Pour démarrer, choisissez une sortie dans Audio.", "Elija una salida en Audio para iniciar.");
         Add("AudioOptions", "Audio", "Audio", "Audio", "Audio", "Audio");
         Add("AudioOptionsHelp", "Output device and volume", "Uitvoerapparaat en volume", "Ausgabegerät und Lautstärke", "Périphérique de sortie et volume", "Dispositivo de salida y volumen");
@@ -354,7 +353,6 @@ public static class Text
         Add("UnitSeconds", "seconds", "seconden", "Sekunden", "secondes", "segundos");
         Add("UnitBeats", "beats", "tellen", "Zählzeiten", "temps", "pulsos");
         Add("UnitBars", "bars", "maten", "Takte", "mesures", "compases");
-        Add("HelpBasics", "The basics", "De basis", "Die Grundlagen", "Les bases", "Lo básico");
         Add("HelpWhilePlaying", "While it plays", "Tijdens het spelen", "Während der Wiedergabe", "Pendant la lecture", "Durante la reproducción");
         Add("HelpShortcuts", "Keyboard shortcuts", "Sneltoetsen", "Tastenkürzel", "Raccourcis clavier", "Atajos de teclado");
         Add("ShortcutStart", "Start or pause", "Starten of pauzeren", "Starten oder pausieren", "Démarrer ou mettre en pause", "Iniciar o pausar");
@@ -511,5 +509,120 @@ public static class Text
         Add("UnitTaps", "taps", "tikken", "Mal", "frappes", "toques");
         Add("HelpTapStart", "Switch on Tap to start, then tap TAP, or press T, in the beat you want. After the chosen number of steady taps the metronome starts at that tempo.", "Zet Start met tikken aan en tik dan op TIK, of druk op T, in de gewenste maat. Na het gekozen aantal gelijkmatige tikken start de metronoom op dat tempo.", "Schalten Sie Durch Tippen starten ein und tippen Sie im gewünschten Takt auf TAP oder drücken Sie T. Nach der eingestellten Anzahl gleichmäßigen Tippens startet das Metronom in diesem Tempo.", "Activez Démarrer en tapant, puis tapez TAP, ou appuyez sur T, au rythme voulu. Après le nombre choisi de frappes régulières, le métronome démarre à ce tempo.", "Active Marcar para iniciar y luego pulse TAP, o la tecla T, al ritmo que quiera. Tras el número elegido de toques regulares, el metrónomo empieza con ese tempo.");
         Add("ShortcutTap", "Tap the tempo", "Het tempo tikken", "Tempo tippen", "Taper le tempo", "Marcar el tempo");
+        // The Help panel (HelpContent.cs): a quick start, what plays at once, and a short musical reference. Every control is named
+        // by the string it shows, passed in as a placeholder, so the Help follows the window in each language.
+        Add("HelpQuickStart", "Quick start", "Snel starten", "Schnellstart", "Prise en main", "Inicio rápido");
+        Add("HelpStepOutput",
+            "The first time, the app uses the Windows default output. To use other speakers or headphones, press {0} at the bottom. {1} is grey until an output is chosen.",
+            "De eerste keer gebruikt de app het standaard uitvoerapparaat van Windows. Voor andere luidsprekers of een koptelefoon drukt u onderaan op {0}. {1} blijft grijs zolang er geen uitvoer is gekozen.",
+            "Beim ersten Mal nutzt die App die Windows-Standardausgabe. Für andere Lautsprecher oder Kopfhörer drücken Sie unten auf {0}. {1} bleibt grau, bis eine Ausgabe gewählt ist.",
+            "La première fois, l’application utilise la sortie par défaut de Windows. Pour d’autres haut-parleurs ou un casque, appuyez sur {0} en bas. {1} reste grisé tant qu’aucune sortie n’est choisie.",
+            "La primera vez, la aplicación usa la salida predeterminada de Windows. Para otros altavoces o auriculares, pulse {0} abajo. {1} sigue en gris hasta que se elige una salida.");
+        Add("HelpStepStart",
+            "Press {0}, or the {1} key. It counts in one bar first, then clicks.",
+            "Druk op {0} of op {1}. Eerst wordt één maat afgeteld, daarna volgen de tikken.",
+            "Drücken Sie {0} oder die {1}. Zuerst wird ein Takt eingezählt, dann folgen die Klicks.",
+            "Appuyez sur {0}, ou sur la touche {1}. Une mesure de décompte précède les clics.",
+            "Pulse {0} o la tecla {1}. Primero se cuenta un compás de entrada y después suenan los clics.");
+        Add("HelpStepTempo",
+            "Click the big number, type your tempo and choose {2}. Or press − and + (hold to repeat; with {0} they move by 10), or tap {1} at least twice in time with your beat.",
+            "Klik op het grote getal, typ uw tempo en kies {2}. Of druk op − en + (ingedrukt houden herhaalt; met {0} gaat het in stappen van 10), of tik minstens twee keer op {1} in de maat van uw tempo.",
+            "Klicken Sie auf die große Zahl, geben Sie Ihr Tempo ein und wählen Sie {2}. Oder drücken Sie − und + (gedrückt halten wiederholt; mit {0} in Zehnerschritten) oder tippen Sie mindestens zweimal auf {1} im Takt Ihres Tempos.",
+            "Cliquez sur le grand nombre, saisissez votre tempo et choisissez {2}. Ou appuyez sur − et + (maintenir répète ; avec {0}, par pas de 10), ou tapez au moins deux fois sur {1} en rythme avec votre tempo.",
+            "Haga clic en el número grande, escriba su tempo y elija {2}. O pulse − y + (mantener repite; con {0}, de 10 en 10), o pulse {1} al menos dos veces al ritmo de su tempo.");
+        Add("HelpStepMeter",
+            "Press the time signature below the circle (4/4 to begin with) and choose another, such as 3/4 or 6/8. {0} builds any other one and sets the count-in.",
+            "Druk op de maatsoort onder de cirkel (eerst 4/4) en kies een andere, zoals 3/4 of 6/8. Met {0} stelt u elke andere maatsoort samen en kiest u ook het aftellen.",
+            "Drücken Sie unter dem Kreis auf die Taktart (zunächst 4/4) und wählen Sie eine andere, etwa 3/4 oder 6/8. Mit {0} stellen Sie jede andere Taktart zusammen und legen auch das Einzählen fest.",
+            "Appuyez sur la mesure sous le cercle (4/4 au départ) et choisissez-en une autre, comme 3/4 ou 6/8. {0} permet de composer toute autre mesure et de régler le décompte.",
+            "Pulse el compás bajo el círculo (4/4 al principio) y elija otro, como 3/4 o 6/8. {0} crea cualquier otro compás y ajusta la entrada.");
+        Add("HelpStepStrength",
+            "Tap a beat under {0} to change its strength: {1}, {2}, {3} or {4}. The first beat starts {1}.",
+            "Tik op een tel onder {0} om de sterkte te wijzigen: {1}, {2}, {3} of {4}. De eerste tel is in het begin {1}.",
+            "Tippen Sie unter {0} auf eine Zählzeit, um ihre Betonung zu ändern: {1}, {2}, {3} oder {4}. Die erste Zählzeit ist anfangs {1}.",
+            "Touchez un temps sous {0} pour changer sa force : {1}, {2}, {3} ou {4}. Le premier temps est d’abord {1}.",
+            "Toque un pulso bajo {0} para cambiar su intensidad: {1}, {2}, {3} o {4}. El primer pulso empieza en {1}.");
+        Add("HelpTapStartLimits",
+            "Choose 2 to 16 taps in the Tempo panel. It works only while the metronome is stopped. An uneven tap, or a pause of more than four seconds, starts the count again; Stop or Esc cancels it. The metronome starts a moment after your last tap, not exactly on it.",
+            "Kies 2 tot 16 tikken in het paneel Tempo. Het werkt alleen als de metronoom gestopt is. Een tik die niet in de maat valt, of een pauze van meer dan vier seconden, begint het tellen opnieuw; Stoppen of Esc annuleert. De metronoom start een moment na uw laatste tik, niet precies erop.",
+            "Wie oft getippt wird (2 bis 16 Mal), stellen Sie im Tempo-Fenster ein. Es funktioniert nur, solange das Metronom gestoppt ist. Tippen Sie unregelmäßig oder pausieren Sie länger als vier Sekunden, beginnt die Zählung neu; Stoppen oder Esc bricht ab. Das Metronom startet einen Moment nach Ihrem letzten Tippen, nicht genau darauf.",
+            "Choisissez 2 à 16 frappes dans le panneau Tempo. Cela ne marche que lorsque le métronome est arrêté. Une frappe irrégulière, ou une pause de plus de quatre secondes, relance le compte ; Arrêter ou Échap l’annule. Le métronome démarre un instant après votre dernière frappe, pas exactement sur elle.",
+            "Elija de 2 a 16 toques en el panel Tempo. Solo funciona con el metrónomo detenido. Un toque irregular, o una pausa de más de cuatro segundos, reinicia la cuenta; Detener o Esc lo cancela. El metrónomo empieza un instante después de su último toque, no exactamente sobre él.");
+        Add("HelpPlaying",
+            "{0} holds your place and {1} carries on from there. {2} goes back to the beginning, so the next {1} counts in again. {3} silences the clicks while the count goes on.",
+            "{0} houdt uw plaats vast en {1} gaat vanaf daar verder. {2} gaat terug naar het begin, dus {1} telt daarna weer af. {3} maakt de tikken stil terwijl het tellen doorgaat.",
+            "{0} hält Ihre Stelle fest, {1} macht dort weiter. {2} geht an den Anfang zurück, danach zählt {1} wieder ein. {3} schaltet die Klicks stumm, während die Zählung weiterläuft.",
+            "{0} garde votre place et {1} reprend à partir de là. {2} revient au début, donc {1} recommence par le décompte. {3} rend les clics muets pendant que le compte continue.",
+            "{0} guarda el punto en que está; {1} sigue desde ahí. {2} vuelve al principio, así que {1} vuelve a empezar con la entrada. {3} apaga los clics mientras la cuenta continúa.");
+        Add("HelpLive",
+            "Sound and beat strength change at once. Tempo, time signature, note value, subdivision and swing change from the next beat. The count-in, the {2} limits and everything in {3} are used after {0}, then {1}.",
+            "Klank en telsterkte veranderen meteen. Tempo, maatsoort, nootwaarde, onderverdeling en swing veranderen vanaf de volgende tel. Het aftellen, de limieten van {2} en alles in {3} gelden na {0} en daarna {1}.",
+            "Klang und Betonung ändern sich sofort. Tempo, Taktart, Notenwert, Unterteilung und Swing ändern sich ab der nächsten Zählzeit. Das Einzählen, die Grenzen im {2} und alles im {3} gelten nach {0} und dann {1}.",
+            "Le son et la force des temps changent tout de suite. Le tempo, la mesure, la valeur de note, la subdivision et le swing changent à partir du temps suivant. Le décompte, les limites du {2} et tout ce qui se fait dans {3} s’appliquent après {0}, puis {1}.",
+            "El sonido y la intensidad cambian al instante. El tempo, el compás, la figura, la subdivisión y el swing cambian desde el siguiente pulso. La entrada, los límites del {2} y todo lo de {3} se aplican tras {0} y luego {1}.");
+        Add("HelpProgram",
+            "A project with a practice program takes its tempo and time signature from the program, so the tempo and time signature controls are off. Change them in {0}.",
+            "Een project met een oefenprogramma haalt tempo en maatsoort uit dat programma, dus de bediening voor tempo en maatsoort staat uit. Wijzig ze in {0}.",
+            "Ein Projekt mit Übungsprogramm übernimmt Tempo und Taktart vom Programm, deshalb sind die Bedienelemente für Tempo und Taktart ausgeschaltet. Ändern Sie beides im {0}.",
+            "Un projet avec un programme d’entraînement reprend son tempo et sa mesure au programme : les commandes de tempo et de mesure sont donc désactivées. Modifiez-les dans {0}.",
+            "Un proyecto con programa de práctica toma su tempo y su compás del programa, así que los controles de tempo y de compás están desactivados. Cámbielos en {0}.");
+        Add("HelpShortcutScope",
+            "Shortcuts work only in this window, and T only on {2}. While you type in a box, {0}, T and F do nothing; {1} + M, {1} + S and {1} + O still work.",
+            "Sneltoetsen werken alleen in dit venster, en T alleen in {2}. Terwijl u in een vak typt, doen {0}, T en F niets; {1} + M, {1} + S en {1} + O werken wel.",
+            "Tastenkürzel gelten nur in diesem Fenster, T nur unter {2}. Beim Schreiben in ein Feld bewirken {0}, T und F nichts; {1} + M, {1} + S und {1} + O funktionieren weiterhin.",
+            "Les raccourcis ne fonctionnent que dans cette fenêtre, et T seulement dans {2}. Quand vous écrivez dans un champ, {0}, T et F ne font rien ; {1} + M, {1} + S et {1} + O fonctionnent toujours.",
+            "Los atajos solo funcionan en esta ventana, y T solo en {2}. Mientras escribe en un cuadro, {0}, T y F no hacen nada; {1} + M, {1} + S y {1} + O siguen funcionando.");
+        Add("HelpReference", "Musical reference", "Muzikale uitleg", "Musikalische Grundlagen", "Repères musicaux", "Referencia musical");
+        Add("HelpBpmTitle", "BPM and the note value", "BPM en de nootwaarde", "BPM und Notenwert", "BPM et valeur de note", "BPM y figura de la nota");
+        Add("HelpBpm",
+            "BPM counts one kind of note per minute. With quarter notes, 120 BPM is 120 quarter notes a minute. Choose the note with {0} in the Tempo panel (click the big number).",
+            "BPM telt één soort noot per minuut. Met kwartnoten is 120 BPM gelijk aan 120 kwartnoten per minuut. Kies de noot bij {0} in het paneel Tempo (klik op het grote getal).",
+            "BPM zählt eine Notensorte pro Minute. Mit Viertelnoten sind 120 BPM 120 Viertelnoten pro Minute. Die Note wählen Sie unter {0} im Tempo-Fenster (auf die große Zahl klicken).",
+            "Le BPM compte un seul type de note par minute. Avec des noires, 120 BPM font 120 noires par minute. Choisissez la note avec {0} dans le panneau Tempo (cliquez sur le grand nombre).",
+            "BPM cuenta un tipo de nota por minuto. Con negras, 120 BPM son 120 negras por minuto. Elija la nota en {0}, dentro del panel Tempo (haga clic en el número grande).");
+        Add("HelpBpmExample",
+            "Example: in 6/8, 80 BPM with dotted quarter notes is as fast as 240 BPM with eighth notes.",
+            "Voorbeeld: in 6/8 is 80 BPM met gepunte kwartnoten even snel als 240 BPM met achtste noten.",
+            "Beispiel: Im 6/8-Takt sind 80 BPM mit punktierten Viertelnoten so schnell wie 240 BPM mit Achtelnoten.",
+            "Exemple : en 6/8, 80 BPM en noires pointées vont aussi vite que 240 BPM en croches.",
+            "Ejemplo: en 6/8, 80 BPM con negras con puntillo van tan rápido como 240 BPM con corcheas.");
+        Add("HelpMeterTitle", "Time signature and the click", "Maatsoort en de tik", "Taktart und Klick", "Mesure et clic", "Compás y clic");
+        Add("HelpMeter",
+            "The top number is how many beats a bar has. The bottom number says which note one beat is: 4 is a quarter note, 8 an eighth note. Choosing a time signature gives one click for every written beat.",
+            "Het bovenste getal zegt hoeveel tellen een maat heeft. Het onderste getal zegt welke noot één tel is: 4 is een kwartnoot, 8 een achtste noot. Een maatsoort kiezen geeft één tik per geschreven tel.",
+            "Die obere Zahl sagt, wie viele Zählzeiten ein Takt hat. Die untere Zahl sagt, welche Note eine Zählzeit ist: 4 steht für eine Viertelnote, 8 für eine Achtelnote. Wer eine Taktart wählt, bekommt einen Klick pro notierter Zählzeit.",
+            "Le chiffre du haut dit combien de temps compte une mesure. Le chiffre du bas dit quelle note vaut un temps : 4 pour une noire, 8 pour une croche. Choisir une mesure donne un clic par temps écrit.",
+            "El número de arriba indica cuántos pulsos tiene un compás. El de abajo indica qué nota es un pulso: 4 es una negra, 8 una corchea. Al elegir un compás suena un clic por cada pulso escrito.");
+        Add("HelpMeterExample",
+            "Example: 6/8 clicks six times a bar. To feel it in two instead, set the note value to dotted quarter in the Tempo panel and type a tempo such as 80: two clicks a bar.",
+            "Voorbeeld: 6/8 tikt zes keer per maat. Wilt u het in twee voelen, zet dan de nootwaarde op gepunte kwartnoot in het paneel Tempo en typ een tempo zoals 80: twee tikken per maat.",
+            "Beispiel: 6/8 klickt sechsmal pro Takt. Um es stattdessen in zwei zu fühlen, stellen Sie im Tempo-Fenster den Notenwert auf punktierte Viertelnote und geben ein Tempo wie 80 ein: zwei Klicks pro Takt.",
+            "Exemple : le 6/8 fait six clics par mesure. Pour le sentir à deux temps, réglez la valeur de note sur noire pointée dans le panneau Tempo et saisissez un tempo comme 80 : deux clics par mesure.",
+            "Ejemplo: el 6/8 hace clic seis veces por compás. Para sentirlo en dos, ponga la figura en negra con puntillo en el panel Tempo y escriba un tempo como 80: dos clics por compás.");
+        Add("HelpFeelTitle", "Subdivision and swing", "Onderverdeling en swing", "Unterteilung und Swing", "Subdivision et swing", "Subdivisión y swing");
+        Add("HelpFeel",
+            "Subdivision splits every beat into smaller clicks: 3 gives three clicks in each beat. Swing delays the second click of each pair: 0.5 is even, and about 0.67 gives the long-short feel of swung eighth notes. Swing needs an even subdivision, such as 2 or 4. Both are under {0}, in {1}.",
+            "Onderverdeling splitst elke tel in kleinere tikken: 3 geeft drie tikken per tel. Swing vertraagt de tweede tik van elk paar: 0,5 is gelijkmatig en ongeveer 0,67 geeft het lang-kort van geswingde achtste noten. Swing werkt alleen met een onderverdeling in een even aantal, zoals 2 of 4. Beide staan onder {0}, bij {1}.",
+            "Die Unterteilung teilt jede Zählzeit in kleinere Klicks: 3 ergibt drei Klicks pro Zählzeit. Swing verzögert den zweiten Klick jedes Paars: 0,5 ist gleichmäßig, etwa 0,67 ergibt das Lang-kurz geswingter Achtel. Swing funktioniert nur mit einer geraden Unterteilung, etwa 2 oder 4. Beides finden Sie unter {0} im Bereich {1}.",
+            "La subdivision découpe chaque temps en clics plus petits : 3 donne trois clics par temps. Le swing retarde le deuxième clic de chaque paire : 0,5 est régulier, et environ 0,67 donne le long-court des croches swinguées. Le swing ne marche qu’avec une subdivision paire, comme 2 ou 4. Les deux se trouvent sous {0}, dans {1}.",
+            "La subdivisión parte cada pulso en clics más pequeños: 3 da tres clics por pulso. El swing retrasa el segundo clic de cada pareja: 0,5 es regular y alrededor de 0,67 da el largo-corto de las corcheas con swing. El swing solo funciona con una subdivisión par, como 2 o 4. Ambos están en {0}, en {1}.");
+        Add("HelpFeelExample",
+            "Example: in 4/4, Subdivision 2 with Swing 0.67 swings the eighth notes.",
+            "Voorbeeld: in 4/4 laat Onderverdeling 2 met Swing 0,67 de achtste noten swingen.",
+            "Beispiel: Im 4/4-Takt lässt Unterteilung 2 mit Swing 0,67 die Achtelnoten swingen.",
+            "Exemple : en 4/4, une subdivision de 2 avec un swing de 0,67 fait swinguer les croches.",
+            "Ejemplo: en 4/4, una subdivisión de 2 con un swing de 0,67 da swing a las corcheas.");
+        Add("HelpStrength",
+            "{0}, {1}, {2} and {3} set how loud a click is. Tap a beat to change it. A click set to {3} makes no sound but keeps its place in the count. Clicks between beats start as {2}.",
+            "{0}, {1}, {2} en {3} bepalen hoe luid een tik klinkt. Tik op een tel om dat te wijzigen. Staat een tik op {3}, dan klinkt hij niet, maar hij behoudt zijn plaats in het tellen. Tikken tussen de tellen beginnen als {2}.",
+            "{0}, {1}, {2} und {3} legen fest, wie laut ein Klick ist. Tippen Sie auf eine Zählzeit, um sie zu ändern. Steht ein Klick auf {3}, bleibt er lautlos, behält aber seinen Platz im Zählen. Klicks zwischen den Zählzeiten sind anfangs {2}.",
+            "{0}, {1}, {2} et {3} règlent le volume d’un clic. Touchez un temps pour le changer. Un clic réglé sur {3} ne fait aucun bruit, mais garde sa place dans le compte. Les clics entre les temps sont d’abord {2}.",
+            "{0}, {1}, {2} y {3} fijan lo fuerte que suena un clic. Toque un pulso para cambiarlo. Un clic en {3} no suena, pero conserva su lugar en la cuenta. Los clics entre pulsos empiezan en {2}.");
+        Add("HelpStrengthExample",
+            "Example: make beat 3 of 4/4 {0}, and keep the time yourself through it.",
+            "Voorbeeld: zet tel 3 van 4/4 op {0} en houd zelf de maat vast.",
+            "Beispiel: Stellen Sie Zählzeit 3 im 4/4-Takt auf {0} und halten Sie den Takt dort selbst.",
+            "Exemple : réglez le temps 3 du 4/4 sur {0} et tenez le temps vous-même.",
+            "Ejemplo: ponga el pulso 3 de un 4/4 en {0} y mantenga usted mismo el tiempo.");
     }
 }

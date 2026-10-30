@@ -18,10 +18,11 @@ public sealed partial class MainWindow
     /// <summary>
     /// One consistent panel: title, optional help, scrolling fields, then [Cancel] [Done] side by side.
     /// Done applies and closes; Cancel (or clicking away) discards. Fields are refilled from the document
-    /// every time the panel opens, so a cancelled draft never lingers.
+    /// every time the panel opens, so a cancelled draft never lingers. A <paramref name="readOnly"/> panel only shows text (Help):
+    /// it has nothing to cancel, so it has Done alone, and its scrolling area is a tab stop so that a keyboard can read it.
     /// </summary>
     private OptionPanel CreateOptionPanel(string titleKey, string id, UIElement content, string? helpKey,
-        Action? populate, Func<Task<bool>>? apply, string doneKey = "CloseOptions")
+        Action? populate, Func<Task<bool>>? apply, string doneKey = "CloseOptions", bool readOnly = false)
     {
         var title = new TextBlock
         {
@@ -29,7 +30,17 @@ public sealed partial class MainWindow
             Style = ResonantStyle("BodyStyle")
         };
         var scroll = Scroll(content);
-        scroll.Padding = new Thickness(0, 0, 12, 0);
+        // A read-only panel gets room all round, so the focus ring of its scrolling area never touches the text.
+        scroll.Padding = readOnly ? new Thickness(6, 6, 12, 6) : new Thickness(0, 0, 12, 0);
+        if (readOnly)
+        {
+            // Text has nothing to focus, so without this a keyboard cannot get to the part of it below the fold. The scrolling area is
+            // the one tab stop: the arrow keys, Page Up, Page Down, Home and End read it, and Tab goes on to Done.
+            scroll.IsTabStop = true;
+            scroll.UseSystemFocusVisuals = true;
+            Identify(scroll, id + "Scroll", Text.Get(titleKey));
+            AutomationProperties.SetHeadingLevel(title, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel.Level1);
+        }
         var error = new TextBlock { Style = ResonantStyle("ErrorTextStyle"), Visibility = Visibility.Collapsed };
         Identify(error, id + "Error", Text.Get("Error"));
         // [Cancel] [Done] are one pair: equal cells, each button stretches to its cell, so they are the same size however
@@ -75,12 +86,23 @@ public sealed partial class MainWindow
 
         var flyout = new Flyout { Content = panel };
         var isOpen = false;
+        var startAtTop = false;
         flyout.Opening += (_, _) =>
         {
             SizeOptionsFlyout(flyout, panel, scroll, footer);
             error.Visibility = Visibility.Collapsed;
+            startAtTop = readOnly;
             populate?.Invoke();
         };
+        // Help opens at its first line every time, not where it was left. The reset waits for the scrolling area to load, which
+        // is once each time the panel opens: asking for it in Opening, before that, left the text where it was.
+        if (readOnly)
+            scroll.Loaded += (_, _) =>
+            {
+                if (!startAtTop) return;
+                startAtTop = false;
+                scroll.ChangeView(null, 0, null, true);
+            };
         flyout.Opened += (_, _) => isOpen = true;
         flyout.Closed += (_, _) => isOpen = false;
         if (cancel is not null) cancel.Click += (_, _) => flyout.Hide();
@@ -422,24 +444,108 @@ public sealed partial class MainWindow
         return project;
     }
 
+    /// <summary>
+    /// The Help panel: read-only, on Play (docs/design/pages-design.md). What it says is HelpContent's; this draws it: a heading is a
+    /// heading for a screen reader, the quick start is a numbered list, and an example sits in a quiet box under its entry.
+    /// </summary>
     private OptionPanel BuildHelpPanel()
     {
         var content = new StackPanel { Spacing = 12 };
-        content.Children.Add(SectionHeading("HelpBasics"));
-        content.Children.Add(Copy("FirstUseHint"));
-        content.Children.Add(Copy("HelpTapStart"));
-        content.Children.Add(SectionHeading("HelpWhilePlaying"));
-        content.Children.Add(Copy("LiveSoundHint"));
-        content.Children.Add(SectionHeading("HelpShortcuts"));
+        var steps = new List<HelpEntry>();
+        void FlushSteps()
+        {
+            if (steps.Count == 0) return;
+            content.Children.Add(HelpSteps(steps));
+            steps.Clear();
+        }
+        foreach (var entry in HelpContent.Entries())
+        {
+            if (entry.Kind != HelpKind.Step) FlushSteps();
+            switch (entry.Kind)
+            {
+                case HelpKind.Step:
+                    steps.Add(entry);
+                    break;
+                case HelpKind.Heading:
+                    content.Children.Add(HelpHeading(entry, 16, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel.Level2, content.Children.Count > 0));
+                    break;
+                case HelpKind.Subheading:
+                    content.Children.Add(HelpHeading(entry, 14, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel.Level3, true));
+                    break;
+                case HelpKind.Example:
+                    content.Children.Add(HelpExample(entry));
+                    break;
+                case HelpKind.Shortcuts:
+                    content.Children.Add(HelpShortcuts());
+                    break;
+                default:
+                    var paragraph = Body(entry.Text);
+                    Identify(paragraph, entry.Id, entry.Text);
+                    content.Children.Add(paragraph);
+                    break;
+            }
+        }
+        FlushSteps();
+        return CreateOptionPanel("HelpTab", "PlayHelpPanel", content, null, null, null, readOnly: true);
+    }
+
+    private static TextBlock HelpHeading(HelpEntry entry, double size, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel level, bool spaceAbove)
+    {
+        var heading = new TextBlock
+        {
+            Text = entry.Text, FontSize = size, FontWeight = FontWeights.SemiBold, Style = ResonantStyle("BodyStyle"),
+            // A section is told from the one before by the room above it; the first has none.
+            Margin = new Thickness(0, spaceAbove ? 8 : 0, 0, -4)
+        };
+        Identify(heading, entry.Id, entry.Text);
+        AutomationProperties.SetHeadingLevel(heading, level);
+        return heading;
+    }
+
+    /// <summary>The quick start: a number beside each step, so a step that wraps keeps its text clear of the number.</summary>
+    private static Grid HelpSteps(IReadOnlyList<HelpEntry> steps)
+    {
+        var grid = new Grid { ColumnSpacing = 10, RowSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var index = 0; index < steps.Count; index++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var number = new TextBlock
+            {
+                Text = (index + 1).ToString(Text.Culture), Style = ResonantStyle("StepNumberStyle"), MinWidth = 14,
+                TextAlignment = TextAlignment.Right
+            };
+            // The number is part of the step's own name, so it is not read twice.
+            AutomationProperties.SetAccessibilityView(number, Microsoft.UI.Xaml.Automation.Peers.AccessibilityView.Raw);
+            Grid.SetRow(number, index);
+            grid.Children.Add(number);
+            var text = Body(steps[index].Text);
+            Identify(text, steps[index].Id, $"{index + 1}. {steps[index].Text}");
+            Grid.SetRow(text, index);
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(text);
+        }
+        return grid;
+    }
+
+    private static Border HelpExample(HelpEntry entry)
+    {
+        var text = new TextBlock { Text = entry.Text, FontSize = 13, Style = ResonantStyle("BodyStyle") };
+        Identify(text, entry.Id, entry.Text);
+        return new Border { Style = ResonantStyle("ExampleBoxStyle"), Child = text };
+    }
+
+    private static Grid HelpShortcuts()
+    {
         var ctrl = Text.Get("KeyCtrl");
-        content.Children.Add(Shortcuts(
+        return Shortcuts(
             (Text.Get("KeySpace"), Text.Get("ShortcutStart")),
             ($"{ctrl} + M", Text.Get("ShortcutMute")),
             ($"{ctrl} + S", Text.Get("Save")),
             ($"{ctrl} + O", Text.Get("Open")),
             ("T", Text.Get("ShortcutTap")),
-            ("F", Text.Format("ShortcutHit", Text.Get("Train")))));
-        return CreateOptionPanel("HelpTab", "PlayHelpPanel", content, null, null, null);
+            ("F", Text.Format("ShortcutHit", Text.Get("Train"))));
     }
 
     /// <summary>

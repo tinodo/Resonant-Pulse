@@ -118,6 +118,19 @@
     <Setter Property="Foreground" Value="{ThemeResource PulseBrush}" />
     <Setter Property="FontSize" Value="28" />
   </Style>
+  <!-- Help (docs/design/pages-design.md): the number beside a step of the quick start, and the quiet box that holds an example. -->
+  <Style x:Key="StepNumberStyle" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{ThemeResource PulseBrush}" />
+  </Style>
+  <Style x:Key="ExampleBoxStyle" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource SunkenBrush}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource OutlineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
   <!-- Quiet, bordered surface for settings that show their current value (time signature, sound). -->
   <Style x:Key="ChipButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
     <Setter Property="Background" Value="{ThemeResource RaisedBrush}" />
