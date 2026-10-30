@@ -89,7 +89,9 @@ value, subdivision and swing from the next beat, and the count-in, the Timer lim
 Start; a project with a program takes its tempo and time signature from the program, so their controls are off); the keyboard
 shortcuts and where they work (this window only, T only on Play, Space, T and F do nothing while a box has the focus, Ctrl+M,
 Ctrl+S and Ctrl+O still work); and a musical reference with one example each (80 BPM counted in dotted quarters in 6/8 is as fast
-as 240 BPM in eighths; 6/8 clicks six times a bar, or twice with a dotted-quarter note value; a subdivision of 3 gives three
+as 240 BPM in eighths; with Subdivision 1, a time signature gives one click for every written beat, so 6/8 clicks six times a bar,
+or twice with a dotted-quarter note value (a subdivision is kept when the note value changes, so with Subdivision 3 that is six
+again); a subdivision of 3 gives three
 clicks a beat, swing needs an even subdivision and about 0.67 swings eighth notes; a Silent click makes no sound and keeps its
 place, and the clicks between beats start Soft). Each sentence names a control with the label it has in the language shown,
 inserted from the control's own string, so a renamed control renames the Help; the few names that are written into a sentence

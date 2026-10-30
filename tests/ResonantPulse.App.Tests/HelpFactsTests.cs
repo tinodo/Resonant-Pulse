@@ -85,6 +85,30 @@ public sealed class HelpFactsTests
     }
 
     [TestMethod]
+    public void TheClickCountsOfATimeSignatureHoldWhileSubdivisionIsOne()
+    {
+        // The Help's counts (six clicks in a 6/8 bar, two once the note value is a dotted quarter, one click for every written
+        // beat) are for Subdivision 1. Changing the note value in the Tempo panel keeps a subdivision, and so does choosing a
+        // time signature that has the same click unit as the one before.
+        var settings = new PulseSettings();
+        settings.BeatsPerBar = 6;
+        settings.BeatDenominator = 8;
+        settings.BeatUnitQuarters = 1.5;
+        Assert.AreEqual(2, ClickGrid.Of(settings).Count, "Subdivision 1: two clicks a bar");
+        settings.Subdivision = 3;
+        Assert.AreEqual(6, ClickGrid.Of(settings).Count, "Subdivision 3: each of the two beats is split in three");
+
+        var kept = new PulseSettings { Subdivision = 3 };
+        MeterPresets.ApplyOneClickPerBeat(kept, 3, 4);
+        Assert.AreEqual(3, kept.Subdivision, "4/4 to 3/4 keeps the click unit, so the split stays");
+        Assert.AreEqual(9, ClickGrid.Of(kept).Count, "three beats of three clicks, not one click for every written beat");
+        var ended = new PulseSettings { Subdivision = 3 };
+        MeterPresets.ApplyOneClickPerBeat(ended, 6, 8, [3, 3]);
+        Assert.AreEqual(1, ended.Subdivision, "a new click unit ends the split");
+        Assert.AreEqual(6, ClickGrid.Of(ended).Count);
+    }
+
+    [TestMethod]
     public void TheQuickPicksIncludeTheTimeSignaturesTheHelpNames()
     {
         foreach (var (beats, denominator) in new[] { (3, 4), (6, 8), (4, 4) })

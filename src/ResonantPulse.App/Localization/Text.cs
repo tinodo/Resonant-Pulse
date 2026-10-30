@@ -588,17 +588,17 @@ public static class Text
             "Ejemplo: en 6/8, 80 BPM con negras con puntillo van tan rápido como 240 BPM con corcheas.");
         Add("HelpMeterTitle", "Time signature and the click", "Maatsoort en de tik", "Taktart und Klick", "Mesure et clic", "Compás y clic");
         Add("HelpMeter",
-            "The top number is how many beats a bar has. The bottom number says which note one beat is: 4 is a quarter note, 8 an eighth note. Choosing a time signature gives one click for every written beat.",
-            "Het bovenste getal zegt hoeveel tellen een maat heeft. Het onderste getal zegt welke noot één tel is: 4 is een kwartnoot, 8 een achtste noot. Een maatsoort kiezen geeft één tik per geschreven tel.",
-            "Die obere Zahl sagt, wie viele Zählzeiten ein Takt hat. Die untere Zahl sagt, welche Note eine Zählzeit ist: 4 steht für eine Viertelnote, 8 für eine Achtelnote. Wer eine Taktart wählt, bekommt einen Klick pro notierter Zählzeit.",
-            "Le chiffre du haut dit combien de temps compte une mesure. Le chiffre du bas dit quelle note vaut un temps : 4 pour une noire, 8 pour une croche. Choisir une mesure donne un clic par temps écrit.",
-            "El número de arriba indica cuántos pulsos tiene un compás. El de abajo indica qué nota es un pulso: 4 es una negra, 8 una corchea. Al elegir un compás suena un clic por cada pulso escrito.");
+            "The top number is how many beats a bar has. The bottom number says which note one beat is: 4 is a quarter note, 8 an eighth note. Choosing a time signature gives one click for every written beat, as long as Subdivision is 1.",
+            "Het bovenste getal zegt hoeveel tellen een maat heeft. Het onderste getal zegt welke noot één tel is: 4 is een kwartnoot, 8 een achtste noot. Een maatsoort kiezen geeft één tik per geschreven tel, zolang Onderverdeling 1 is.",
+            "Die obere Zahl sagt, wie viele Zählzeiten ein Takt hat. Die untere Zahl sagt, welche Note eine Zählzeit ist: 4 steht für eine Viertelnote, 8 für eine Achtelnote. Wer eine Taktart wählt, bekommt einen Klick pro notierter Zählzeit, solange die Unterteilung 1 ist.",
+            "Le chiffre du haut dit combien de temps compte une mesure. Le chiffre du bas dit quelle note vaut un temps : 4 pour une noire, 8 pour une croche. Choisir une mesure donne un clic par temps écrit, tant que la subdivision est à 1.",
+            "El número de arriba indica cuántos pulsos tiene un compás. El de abajo indica qué nota es un pulso: 4 es una negra, 8 una corchea. Al elegir un compás suena un clic por cada pulso escrito, mientras la subdivisión sea 1.");
         Add("HelpMeterExample",
-            "Example: 6/8 clicks six times a bar. To feel it in two instead, set the note value to dotted quarter in the Tempo panel and type a tempo such as 80: two clicks a bar.",
-            "Voorbeeld: 6/8 tikt zes keer per maat. Wilt u het in twee voelen, zet dan de nootwaarde op gepunte kwartnoot in het paneel Tempo en typ een tempo zoals 80: twee tikken per maat.",
-            "Beispiel: 6/8 klickt sechsmal pro Takt. Um es stattdessen in zwei zu fühlen, stellen Sie im Tempo-Fenster den Notenwert auf punktierte Viertelnote und geben ein Tempo wie 80 ein: zwei Klicks pro Takt.",
-            "Exemple : le 6/8 fait six clics par mesure. Pour le sentir à deux temps, réglez la valeur de note sur noire pointée dans le panneau Tempo et saisissez un tempo comme 80 : deux clics par mesure.",
-            "Ejemplo: el 6/8 hace clic seis veces por compás. Para sentirlo en dos, ponga la figura en negra con puntillo en el panel Tempo y escriba un tempo como 80: dos clics por compás.");
+            "Example: with Subdivision 1, 6/8 clicks six times a bar. To feel it in two instead, set the note value to dotted quarter in the Tempo panel and type a tempo such as 80: two clicks a bar.",
+            "Voorbeeld: met Onderverdeling 1 tikt 6/8 zes keer per maat. Wilt u het in twee voelen, zet dan de nootwaarde op gepunte kwartnoot in het paneel Tempo en typ een tempo zoals 80: twee tikken per maat.",
+            "Beispiel: Bei Unterteilung 1 klickt 6/8 sechsmal pro Takt. Um es stattdessen in zwei zu fühlen, stellen Sie im Tempo-Fenster den Notenwert auf punktierte Viertelnote und geben ein Tempo wie 80 ein: zwei Klicks pro Takt.",
+            "Exemple : avec une subdivision de 1, le 6/8 fait six clics par mesure. Pour le sentir à deux temps, réglez la valeur de note sur noire pointée dans le panneau Tempo et saisissez un tempo comme 80 : deux clics par mesure.",
+            "Ejemplo: con una subdivisión de 1, el 6/8 hace clic seis veces por compás. Para sentirlo en dos, ponga la figura en negra con puntillo en el panel Tempo y escriba un tempo como 80: dos clics por compás.");
         Add("HelpFeelTitle", "Subdivision and swing", "Onderverdeling en swing", "Unterteilung und Swing", "Subdivision et swing", "Subdivisión y swing");
         Add("HelpFeel",
             "Subdivision splits every beat into smaller clicks: 3 gives three clicks in each beat. Swing delays the second click of each pair: 0.5 is even, and about 0.67 gives the long-short feel of swung eighth notes. Swing needs an even subdivision, such as 2 or 4. Both are under {0}, in {1}.",
