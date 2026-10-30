@@ -61,6 +61,9 @@ match, so a translation cannot be left out or lose one.
 | `HelpBpmTitle` | BPM and the note value | BPM en de nootwaarde | BPM und Notenwert | BPM et valeur de note | BPM y figura de la nota |
 | `HelpMeterTitle` | Time signature and the click | Maatsoort en de tik | Taktart und Klick | Mesure et clic | Compás y clic |
 | `HelpFeelTitle` | Subdivision and swing | Onderverdeling en swing | Unterteilung und Swing | Subdivision et swing | Subdivisión y swing |
+| `TempoGuideValue` | Approximate markings: {0} | Globale aanduidingen: {0} | Ungefähre Bezeichnungen: {0} | Indications approximatives : {0} | Indicaciones aproximadas: {0} |
+| `TempoGuideConverted` | Approximate markings at {0} BPM in {1}: {2} | Globale aanduidingen bij {0} BPM in {1}: {2} | Ungefähre Bezeichnungen bei {0} BPM in {1}: {2} | Indications approximatives à {0} BPM en {1} : {2} | Indicaciones aproximadas a {0} BPM en {1}: {2} |
+| `TempoGuideInput` | Enter a tempo from 1 to 1000 BPM to see its markings. | Typ een tempo van 1 tot 1000 BPM om de aanduidingen te zien. | Tempo von 1 bis 1000 BPM eingeben, um die Bezeichnungen zu sehen. | Saisissez un tempo de 1 à 1000 BPM pour voir les indications. | Escriba un tempo de 1 a 1000 BPM para ver las indicaciones. |
 
 ## Dutch terms to check first
 
@@ -125,3 +128,32 @@ to their labels by a test, which fails if they stop matching.
   **intensidad** for its strength; **figura** for the note that BPM counts (the Tempo
   panel says *Unidad de tempo*); **negra con puntillo** and **corcheas con swing**;
   **entrada** for the count-in. The Help uses *usted*.
+
+## The tempo guide: Italian terms and the sentences around them
+
+Also questions, not findings; none of this has been checked with a native speaker.
+The eleven Italian terms (Larghissimo, Grave, Largo, Larghetto, Adagio, Andante,
+Moderato, Allegro, Vivace, Presto, Prestissimo) are written the same way in every
+language, so they are not entries of `Text.cs`: they are `TempoGuide.Names` in code, and
+a test pins them. The tests that ask every string to exist in five languages and to
+differ from English never see them, which is what an Italian term must not do. Only
+the sentences around them are translated, and the word for "markings" is the choice to
+check first:
+
+- Dutch: **aanduidingen** (*Globale aanduidingen*). *Tempoaanduidingen* and
+  *tempobenamingen* are the compounds that come to mind.
+- German: **Bezeichnungen** (*Ungefähre Bezeichnungen*); *Tempobezeichnungen* is the
+  longer compound.
+- French: **indications** (*Indications approximatives*), as in *indications de
+  tempo*; the sentence for another note value names the note with the app's own word
+  for quarter notes (*à 60 BPM en noires*).
+- Spanish: **indicaciones** (*Indicaciones aproximadas*); *términos de tempo* is the
+  other choice.
+- French sets a colon off with a space, and the app's other French strings use an
+  ordinary one. These sentences use a no-break space, so that a line that wraps never
+  starts with the colon. The line wraps in a column about 120 to 200 DIP wide, so a
+  no-break space also joins each pair of names (*Moderato / Allegro*) and a number with
+  *BPM* in every language.
+- *Approximate* is a condition of every sentence, not a courtesy: the speed that suits a
+  marking varies with the piece, the period and the performer. A test requires the word
+  in all five languages (*Globale*, *Ungefähre*, *approximatives*, *aproximadas*).
