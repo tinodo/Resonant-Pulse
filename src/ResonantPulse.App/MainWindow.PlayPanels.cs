@@ -35,7 +35,8 @@ public sealed partial class MainWindow
         if (readOnly)
         {
             // Text has nothing to focus, so without this a keyboard cannot get to the part of it below the fold. The scrolling area is
-            // the one tab stop: the arrow keys, Page Up, Page Down, Home and End read it, and Tab goes on to Done.
+            // the one tab stop: its scrolling keys read it (the first-use verifier presses Page Down, End and Home), and Tab goes on
+            // to Done.
             scroll.IsTabStop = true;
             scroll.UseSystemFocusVisuals = true;
             Identify(scroll, id + "Scroll", Text.Get(titleKey));
