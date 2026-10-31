@@ -2400,6 +2400,11 @@ Start-Sleep -Milliseconds 800
 $stemExportEvidence['dutch400x720'] = Test-StemExport 'Dutch stem export at 400x720' 'stems-nl-400x720' 'nl' 3
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
+# The checks of each page's first screen below begin with Library: a page that is already the selected one is not built again and keeps the
+# place it was scrolled to (the stems checks scroll Library down to its Export card), so they start from Train, where the timing export
+# checks leave the app on main.
+Select-Destination 'DestinationTrain'
+Wait-Settled 'TimingTolerance'
 # The same for the commands each page shows on its first screen (the rest is reached by scrolling).
 function Test-OnScreen([string]$where, [string]$id) {
     $element = Find-Control $id
