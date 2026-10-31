@@ -1325,6 +1325,10 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     $null = Invoke-Control 'ExportWavStems'
     Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "${where}: the command did not ask for confirmation."
     $messageElement = Find-Control 'ConfirmationMessage'
+    # The question slides and fades in: its rectangles are read once it has stopped moving. The command is off while it is open, because an
+    # export of tracks counts as running from the press to the end (a second press would be ignored, so a command that looks usable misleads).
+    Wait-Settled 'ConfirmationMessage'
+    if ((Find-Control 'ExportWavStems').Current.IsEnabled) { throw "${where}: the command is on while the question is open (it is off from the press to the end of an export)." }
     $question = $messageElement.Current.Name
     $words = $stemQuestion[$language]
     if ($question -notmatch $words.tracks) { throw "${where}: the question does not give the number of tracks and how long each is: '$question'." }
