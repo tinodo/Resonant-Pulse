@@ -2327,13 +2327,21 @@ Assert-NoErrorNotice 'Before the Dutch checks'
 # before any check.
 $timingExportEvidence = @{}
 $timingExportEvidence['firstUse'] = Test-TimingExport 'Timing export at the first-use size' 'timing-first-use' $script:timingExportFinished 'Main beat' $script:timingExportProject
-# The export of the separate tracks once the Studio checks have added two lanes (a plain one and a Euclidean one): three tracks, at the
-# same sizes, and the same question whatever the size.
-$stemExportEvidence['withLanes'] = Test-StemExport 'Stem export with two lanes at the first-use size' 'stems-lanes-first-use' 'en' 3
 foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 800
     $timingExportEvidence["$($size[0])x$($size[1])"] = Test-TimingExport "Timing export at $($size[0])x$($size[1])" "timing-$($size[0])x$($size[1])" $script:timingExportFinished 'Main beat' $script:timingExportProject
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
+# The export of the separate tracks once the Studio checks have added two lanes (a plain one and a Euclidean one): three tracks, at the
+# same sizes, and the same question whatever the size. It has its own run of sizes, with Library as the page throughout: in a narrow window
+# (400x720 and 320x900) the top navigation keeps only the page that is selected and folds the others into its overflow menu, so a check that
+# went to the Train page and back to Library at every size could not find Train by name there.
+$stemExportEvidence['withLanes'] = Test-StemExport 'Stem export with two lanes at the first-use size' 'stems-lanes-first-use' 'en' 3
+foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
     $stemExportEvidence["$($size[0])x$($size[1])"] = Test-StemExport "Stem export at $($size[0])x$($size[1])" "stems-$($size[0])x$($size[1])" 'en' 3
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
@@ -2379,10 +2387,16 @@ Start-Sleep -Milliseconds 800
 # The export in Dutch, whose words are longer, and where the main beat is Hoofdpuls: the same rules at the first-use size and at 400x720.
 # After the local gate's finished check this also shows that the check survived the change of language and is described in Dutch.
 $timingExportEvidence['dutch'] = Test-TimingExport 'Dutch timing export' 'timing-nl' $script:timingExportFinished 'Hoofdpuls' $script:timingExportProject
-$stemExportEvidence['dutch'] = Test-StemExport 'Dutch stem export' 'stems-nl' 'nl' 3
 Resize-To 400 720
 Start-Sleep -Milliseconds 800
 $timingExportEvidence['dutch400x720'] = Test-TimingExport 'Dutch timing export at 400x720' 'timing-nl-400x720' $script:timingExportFinished 'Hoofdpuls' $script:timingExportProject
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
+# The export of the separate tracks in Dutch, whose words are longer: the same rules and the Dutch question, at the first-use size and at
+# 400x720 (Library stays the page while the window narrows, as above).
+$stemExportEvidence['dutch'] = Test-StemExport 'Dutch stem export' 'stems-nl' 'nl' 3
+Resize-To 400 720
+Start-Sleep -Milliseconds 800
 $stemExportEvidence['dutch400x720'] = Test-StemExport 'Dutch stem export at 400x720' 'stems-nl-400x720' 'nl' 3
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
