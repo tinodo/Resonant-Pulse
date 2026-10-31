@@ -995,6 +995,9 @@ function Test-TimingExport([string]$where, [string]$shot = '', [bool]$finished =
     foreach ($id in $timingCommands) { Wait-Settled $id }
     $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
     $one = 1 * $scale
+    # The card keeps 21 DIP of padding at every size. The card cuts off what is wider than its slot, and what it cuts off is not in the
+    # rectangle that UI Automation reports, so a rectangle that reaches into the padding is one that was cut (or pushed to the edge).
+    $padding = 10 * $scale
     $card = (Find-Control 'TimingCard').Current.BoundingRectangle
     $rects = @{}
     foreach ($id in $timingCommands) {
@@ -1004,9 +1007,8 @@ function Test-TimingExport([string]$where, [string]$shot = '', [bool]$finished =
         if ($rects[$id].Width -lt $least[0] * $scale -or $rects[$id].Height -lt $least[1] * $scale) {
             throw "${where}: $id is squeezed to $([Math]::Round($rects[$id].Width / $scale, 1)) x $([Math]::Round($rects[$id].Height / $scale, 1)) DIP (a command of the timing check is at least $($least[0]) x $($least[1]) DIP): $($rects[$id])."
         }
-        # Between the edges of their card: a Stretch element wider than its slot is clipped, not shrunk.
-        if ($rects[$id].Left -lt $card.Left - 2 * $scale -or $rects[$id].Right -gt $card.Right + 2 * $scale) {
-            throw "${where}: $id is clipped sideways ($($rects[$id]) in the card $card)."
+        if ($rects[$id].Left -lt $card.Left + $padding -or $rects[$id].Right -gt $card.Right - $padding) {
+            throw "${where}: $id is clipped sideways or pushed into the edge of its card ($($rects[$id]) in the card $card)."
         }
     }
     # No two commands overlap: each is a whole command of its own, on one row or in a row under the one before.
@@ -1047,7 +1049,7 @@ function Test-TimingExport([string]$where, [string]$shot = '', [bool]$finished =
     if ($hint.Width -lt 150 * $scale -or $hint.Height -lt 14 * $scale) {
         throw "${where}: the hint is squeezed to $([Math]::Round($hint.Width / $scale, 1)) x $([Math]::Round($hint.Height / $scale, 1)) DIP (a line of it is at least 150 DIP wide and 14 high): $hint."
     }
-    if ($hint.Left -lt $card.Left - 2 * $scale -or $hint.Right -gt $card.Right + 2 * $scale) { throw "${where}: the hint is clipped sideways ($hint in the card $card)." }
+    if ($hint.Left -lt $card.Left + $padding -or $hint.Right -gt $card.Right - $padding) { throw "${where}: the hint is clipped sideways or pushed into the edge of its card ($hint in the card $card)." }
     if ($hint.Top -lt $export.Bottom - $one) { throw "${where}: the hint is not under the export ($hint, export $export)." }
     $readyEvidence = 'none'
     $ready = Find-Optional 'TimingCsvReady'
@@ -1062,7 +1064,7 @@ function Test-TimingExport([string]$where, [string]$shot = '', [bool]$finished =
         $line = (Find-Control 'TimingCsvReady').Current.BoundingRectangle
         Test-Visible $line $windowRect "${where}: the line for the export"
         if ($line.Width -lt 150 * $scale -or $line.Height -lt 14 * $scale) { throw "${where}: the line for the export is squeezed to $line." }
-        if ($line.Left -lt $card.Left - 2 * $scale -or $line.Right -gt $card.Right + 2 * $scale) { throw "${where}: the line for the export is clipped sideways ($line in the card $card)." }
+        if ($line.Left -lt $card.Left + $padding -or $line.Right -gt $card.Right - $padding) { throw "${where}: the line for the export is clipped sideways or pushed into the edge of its card ($line in the card $card)." }
         $readyEvidence = "$([Math]::Round($line.Width / $scale, 1)) x $([Math]::Round($line.Height / $scale, 1))"
     } elseif ($null -ne $ready) { throw "${where}: the line for the export is shown although no check has finished: '$($ready.Current.Name)'." }
     Test-NoApplyButtons "${where}: Train"
@@ -1114,7 +1116,9 @@ function Test-TimingExportWithOutput {
     }
     function Assert-Kept([string]$what, [string]$project) {
         if (-not (Get-ExportOn)) { throw "${what}: the finished check can no longer be exported." }
-        $line = Find-Optional 'TimingCsvReady'
+        # A person waits for the line a moment; so does this check, so that a busy machine is not mistaken for a line that is gone.
+        $limit = [DateTime]::UtcNow.AddSeconds(5)
+        do { $line = Find-Optional 'TimingCsvReady'; if ($null -ne $line) { break }; Start-Sleep -Milliseconds 100 } while ([DateTime]::UtcNow -lt $limit)
         if ($null -eq $line) { throw "${what}: no line says what is exported any more." }
         if ($line.Current.Name -notlike "*$project*") { throw "${what}: the line for the export does not name the project '$project': '$($line.Current.Name)'." }
     }
