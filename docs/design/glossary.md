@@ -223,12 +223,13 @@ person gets, *separate tracks*, and the file type in brackets, as *Export result
   software: *Einzelspuren exportieren (ZIP)*, *Exporter les pistes séparées (ZIP)*, *Exportar
   pistas separadas (ZIP)*. The question counts the main beat as a track, so a project with two
   lanes says three. English and Dutch say so with their own word (*Tracks: 3*, *Sporen: 3*, no
-  clash with *lane* and *laag*); German, French and Spanish count **files** (*Dateien: 3*,
-  *Fichiers : 3*, *Archivos: 3*), because *Spuren: 3* beside *jede Spur* would read as three
-  lanes (an independent reader found this). The sentence before the count already says *each
-  lane* and *the main beat*. The labels of the command keep *Einzelspuren*, *pistes séparées*
-  and *pistas separadas*; whether they are as clear as the question's *files* is for a native
-  reader.
+  clash with *lane* and *laag*); German, French and Spanish count the **WAV files** (*WAV-Dateien: 3*,
+  *Fichiers WAV : 3*, *Archivos WAV: 3*), because *Spuren: 3* beside *jede Spur* would read as three
+  lanes (an independent reader found this), and not all the files of the ZIP, because the manifest is
+  one more (the same reader found that *Dateien: 3* left it out). The sentence before the count
+  already says *each lane* and *the main beat*. The labels of the command keep *Einzelspuren*,
+  *pistes séparées* and *pistas separadas*; whether they are as clear as the question's *WAV files*
+  is for a native reader.
 - **ZIP** and **WAV** are not translated (the file types, as **CSV** is not). The articles that
   go with them are the questions: *one ZIP* is *één ZIP* (Dutch, *de*), *eine ZIP-Datei*
   (German, a compound), *un ZIP* (French, masculine) and *un solo ZIP* (Spanish, masculine);
@@ -244,14 +245,14 @@ person gets, *separate tracks*, and the file type in brackets, as *Export result
   the words of the lane's own Mute switch; a silent file is *een stil bestand*, *eine stille
   Datei*, *un fichier silencieux* and *un archivo en silencio*.
 - **Unzipped** is *uitgepakt*, *entpackt*, *décompressés* and *descomprimidos*. French says
-  *décompressés* because *dézippés* is slang; the participle agrees with *ils* (the files, now
+  *décompressés* because *dézippés* is slang; the participle agrees with *ils* (the WAV files, now
   the thing that is counted), and Spanish with *archivos*: worth a native reader's look.
 - **Sizes and lengths** are not translated: the units are KiB, MiB and GiB in every language
   (binary units, 1 MiB is 1,048,576 bytes, so no language's *MB* or *Mo* can mean something
   else), with the language's own decimal separator (*6,2 MiB*) and a no-break space between the
   number and its unit (so that a narrow dialog never ends a line between them; a test fails on an
   ordinary space there), and a length is *m:ss* (*0:34*) with the same digits everywhere.
-- French keeps the no-break space before *?*, *:* and *;* in the question (*ZIP ?*, *Fichiers :*,
+- French keeps the no-break space before *?*, *:* and *;* in the question (*ZIP ?*, *Fichiers WAV :*,
   *{2} ;*), as the tempo guide and the timing hint do, so a narrow dialog never starts a line with
   them; a test fails on an ordinary space there.
 - *This can take a while.* (*Dit kan even duren.*, *Das kann etwas dauern.*, *Cela peut prendre un

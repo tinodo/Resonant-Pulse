@@ -3,8 +3,9 @@
 **Export separate tracks (ZIP)** in the Library page's Export card saves one ZIP archive with a WAV file for the main beat, a WAV
 file for each lane of the project, and a `manifest.json`. All the WAV files start at the same moment and are the same length, so
 they line up when you put them at the same place in music software. This page says exactly what is in the archive and what it
-depends on. The same entries, the same audio and the same manifest are written in every language of the app, on every computer; the bytes
-of the archive itself are the same for one build of the app (see Format).
+depends on. The same entries, the same audio and the same manifest are written in every language of the app. On one computer the bytes of the
+archive itself are the same for one build of the app (see Format); the samples were not compared between computers, and the clicks are computed with
+floating point functions that the runtime does not promise to the last bit across processors and operating systems.
 
 ## What it is, and what it is not
 
@@ -50,9 +51,11 @@ what it says is what is saved:
   does not follow its edits. Whether the rendering can make the audio stutter on a slow machine is not established.
 - **The window is closed** while the file is written: the export stops, the temporary file is removed and a file that was already at the
   destination is as it was. Closing waits for the export to stop for at most 4 seconds, after the up to 4 seconds it already allows for saving
-  the project (on the largest project here it stopped in 0.6 seconds); a close that is refused, because the project could not be saved, leaves
-  the export running; and if the export had not stopped when the 4 seconds passed the window would close without it (the log says so),
-  which was not seen and could leave a temporary file beside the destination.
+  the project (on the largest project here the process exited 0.6 seconds after the close was asked for); a close that is refused, because the
+  project could not be saved, leaves the export running; and if the export had not stopped when the 4 seconds passed the window would close
+  without it (the log says so), which was not seen and could leave a temporary file beside the destination. Closed earlier, while the plan is
+  compiled or the question is open, nothing is written: closing answers an open question No and does not ask one that has not been asked, so the
+  export ends, also when the close is then refused because the project could not be saved (reasoned from the code, not run in the window).
 
 ## Format
 
@@ -89,7 +92,8 @@ what it says is what is saved:
 
 The file is written atomically: to a temporary file next to the destination, then moved over it. If anything goes wrong (the file is open in
 another program, it is read-only, the disk is full, the export is cancelled or the window is closed) the file that was there stays as it was and
-the temporary file is removed. What the page says depends on what went wrong: for a file that is open in another program, read-only or on a full
+the temporary file is removed (when it cannot be removed the error names it, and a window that closes before the export has stopped is the case described
+above). What the page says depends on what went wrong: for a file that is open in another program, read-only or on a full
 disk (an input/output or access error) it says that the tracks could not be saved and that a file that was already there has not been changed; for
 another failure (a destination that is not a local path, a project that cannot be compiled) it shows the app's ordinary error for it; and when the
 window is closed nothing is shown. One export of tracks runs at a time, and the command is off from the press to the end, also while the question
@@ -136,8 +140,9 @@ above only.
 
 ## What has been tried, and what has not
 
-**One run of the real app** (a Debug build of the head with the save dialog bypassed, a throwaway patch that was never committed; a private
-desktop; the app's data in a scratch folder; nothing audible), driven through the window's own automation, and the archive read by Python's
+**Runs of the real app** (four processes of a Debug build of the head with the save dialog bypassed, a throwaway patch that was never committed: the
+six-lane project twice, the largest project once and a project that was playing once; a private
+desktop; the app's data in a scratch folder; nothing audible), driven through the window's own automation, and the archives read by Python's
 `zipfile` and `wave` modules, which share no code with the app:
 
 - The question named 7 tracks, about 0:34 each and about 43.6 MiB unzipped for a project with six lanes; Cancel wrote nothing and left the

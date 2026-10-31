@@ -112,11 +112,13 @@ is specified in `metronome-design.md` and is not changed here.
 - **Export:** one sentence per format; *Length when the project has no program: [16] bars* ("this many bars are
   rendered"); *Export WAV*, *Export MIDI* and *Export separate tracks (ZIP)* as one row of commands (the third wraps under the other
   two where the card is too narrow for three), with a hint under the row that says what the ZIP holds (a WAV file for the main beat
-  and one for each lane, all starting at the same moment, to line up in music software); a failure names the file and the reason.
+  and one for each lane, all starting at the same moment, to line up in music software); a failure of the WAV or the MIDI export
+  names the file and the reason, and one of the tracks says what to check (the location, the free space, another program that has
+  the file open) and that a file that was already there is unchanged, when the file could not be written.
   The tracks command asks first (how many tracks, how long each is, what they take unzipped, where the count-in is and what a muted
   lane gives), because the ZIP can be large, and only then chooses the file; it is off from the press until the end, with a notice
-  while the file is written (*Saving the tracks...*), and closing the window stops it (it waits for that for at most 4 seconds,
-  after the wait for the save). docs/WAV-STEMS.md is the specification.
+  while the file is written (*Saving the tracks...*), and closing the window stops it once the file is being written (it waits for
+  that for at most 4 seconds, after the wait for the save; a question that is open when closing begins is answered No). docs/WAV-STEMS.md is the specification.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,
   program steps). Choosing one asks first ("Replace the current project?") and says the current project stays in the undo
   history.
