@@ -177,16 +177,17 @@ public sealed class StemExportTests
         var plan = ScheduleCompiler.Compile(new PulseDocument { Lanes = [new(), new(), new(), new()] }, 48000, 16, true);
         var summary = StemExport.Summarize(plan);
         Assert.AreEqual(5, summary.Tracks);
-        // The number of files and how long each is, as the person reads them: a number in the wrong place (the length where the count
-        // belongs, or the other way round) is found, which a bare "5" or "4" would not do. German, French and Spanish count files, not
-        // "tracks", because their word for a track is also their word for a lane (docs/design/glossary.md).
+        // The number of WAV files and how long each is, as the person reads them: a number in the wrong place (the length where the count
+        // belongs, or the other way round) is found, which a bare "5" or "4" would not do. German, French and Spanish count WAV files, not
+        // "tracks", because their word for a track is also their word for a lane, and not all the entries of the ZIP, because the manifest is
+        // one more (docs/design/glossary.md).
         var counted = new Dictionary<string, string>
         {
             ["en"] = "Tracks: 5, each about 0:34 long",
             ["nl"] = "Sporen: 5, elk ongeveer 0:34 lang",
-            ["de"] = "Dateien: 5, je etwa 0:34 lang",
-            ["fr"] = "Fichiers\u00A0: 5, d’environ 0:34 chacun",
-            ["es"] = "Archivos: 5, de unos 0:34 cada uno"
+            ["de"] = "WAV-Dateien: 5, je etwa 0:34 lang",
+            ["fr"] = "Fichiers WAV\u00A0: 5, d’environ 0:34 chacun",
+            ["es"] = "Archivos WAV: 5, de unos 0:34 cada uno"
         };
         foreach (var language in Languages)
         {

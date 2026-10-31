@@ -190,7 +190,7 @@ public sealed class StemExportTextTests
                 Assert.IsFalse(french.Contains(mark), $"fr/{key} has a space that can break before '{mark.Trim()}': {french}");
         }
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "ZIP\u00A0?");
-        StringAssert.Contains(Get("fr", "StemExportConfirm"), "Fichiers\u00A0:");
+        StringAssert.Contains(Get("fr", "StemExportConfirm"), "Fichiers WAV\u00A0:");
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "environ {2}\u00A0;");
     }
 
