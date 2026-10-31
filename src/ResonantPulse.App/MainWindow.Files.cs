@@ -323,7 +323,8 @@ public sealed partial class MainWindow
     /// must cost nothing: the plan is compiled on a background thread from a copy of the project as it is now (so what the question
     /// describes is what is saved, whatever is edited meanwhile), the question is asked, and only then is a file chosen and written.
     /// From the press until the end the command is off. Closing the window stops the export and waits for it (see
-    /// <see cref="CloseAfterSavingAsync"/>), so no temporary archive stays beside the destination.
+    /// <see cref="CloseAfterSavingAsync"/>, which waits at most 4 seconds for it, after the wait for the save), so that normally no
+    /// temporary archive stays beside the destination.
     /// </summary>
     private async Task ExportStemsAsync()
     {

@@ -51,4 +51,12 @@ internal sealed class StemExportRun
         catch (ObjectDisposedException) { return true; }
         return await Task.WhenAny(ended.Task, Task.Delay(limit)).ConfigureAwait(true) == ended.Task;
     }
+
+    /// <summary>
+    /// What closing the window does about a run. When the window will go, the run is stopped and waited for (see
+    /// <see cref="CancelAsync"/>). When the close is refused (the project could not be saved, so the window stays) the run is left to
+    /// go on. True when no run is going any more.
+    /// </summary>
+    internal Task<bool> StopForCloseAsync(bool windowWillGo, TimeSpan limit) =>
+        windowWillGo ? CancelAsync(limit) : Task.FromResult(!IsRunning);
 }

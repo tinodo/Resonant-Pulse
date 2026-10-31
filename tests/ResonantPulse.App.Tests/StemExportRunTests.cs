@@ -85,8 +85,45 @@ public sealed class StemExportRunTests
         });
         var ended = run.CancelAsync(TimeSpan.FromSeconds(30));
         await export.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsFalse(ended.IsCompleted, "Closing is not told that the run has ended before the run says so (End).");
         run.End();
         Assert.IsTrue(await ended.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.IsTrue(cleaned, "The run was told to stop and cleaned up before closing went on.");
+    }
+
+    [TestMethod]
+    public async Task ACloseThatIsRefusedLeavesTheRunGoing()
+    {
+        // The window stays when the project could not be saved: the export goes on, and closing is not told it has gone.
+        var run = new StemExportRun();
+        Assert.IsTrue(run.TryBegin(out var token));
+        Assert.IsFalse(await run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(TimeSpan.FromSeconds(5)), "It is still going, and says so at once.");
+        Assert.IsFalse(token.IsCancellationRequested, "A refused close does not stop the export.");
+        Assert.IsTrue(run.IsRunning);
+        run.End();
+        Assert.IsTrue(await run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(TimeSpan.FromSeconds(5)), "Nothing is going: it says so.");
+    }
+
+    [TestMethod]
+    public async Task ACloseThatGoesStopsTheRunAndWaitsForIt()
+    {
+        var run = new StemExportRun();
+        Assert.IsTrue(run.TryBegin(out var token));
+        var closing = run.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+        Assert.IsTrue(token.IsCancellationRequested, "The export is told to stop at once.");
+        await Task.Delay(100);
+        Assert.IsFalse(closing.IsCompleted, "Closing waits for the export to clean up.");
+        run.End();
+        Assert.IsTrue(await closing.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    [TestMethod]
+    public async Task ACloseThatGoesGivesUpWaitingAfterTheLimit()
+    {
+        var run = new StemExportRun();
+        Assert.IsTrue(run.TryBegin(out var token));
+        Assert.IsFalse(await run.StopForCloseAsync(windowWillGo: true, TimeSpan.FromMilliseconds(100)).WaitAsync(TimeSpan.FromSeconds(10)), "The window does not wait for ever.");
+        Assert.IsTrue(token.IsCancellationRequested);
+        run.End();
     }
 }

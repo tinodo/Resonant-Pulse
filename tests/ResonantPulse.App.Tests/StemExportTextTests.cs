@@ -107,8 +107,8 @@ public sealed class StemExportTextTests
             ["en"] = ["main beat", "each lane", "separate WAV files", "one ZIP", "same moment", "count-in", "main file only", "muted lane", "silent file", "Unzipped", "the ZIP can be smaller"],
             ["nl"] = ["hoofdpuls", "elke laag", "losse WAV-bestanden", "één ZIP", "dezelfde start", "aftellen", "alleen in het hoofdbestand", "gedempte laag", "stil bestand", "Uitgepakt", "de ZIP kan kleiner zijn"],
             ["de"] = ["Hauptpuls", "jede Spur", "getrennte WAV-Dateien", "einer ZIP-Datei", "demselben Start", "Einzählen", "nur in der Hauptdatei", "stummgeschaltete Spur", "stille Datei", "Entpackt", "die ZIP-Datei kann kleiner sein"],
-            ["fr"] = ["pulsation principale", "chaque piste", "fichiers WAV séparés", "un seul ZIP", "même instant", "décompte", "seulement dans le fichier principal", "le son est coupé", "fichier silencieux", "Décompressées", "le ZIP peut être plus petit"],
-            ["es"] = ["pulso principal", "cada pista", "archivos WAV separados", "un solo ZIP", "mismo inicio", "cuenta de entrada", "solo en el archivo principal", "pista silenciada", "archivo en silencio", "Descomprimidas", "el ZIP puede ser menor"]
+            ["fr"] = ["pulsation principale", "chaque piste", "fichiers WAV séparés", "un seul ZIP", "même instant", "décompte", "seulement dans le fichier principal", "le son est coupé",             "fichier silencieux", "Décompressés", "le ZIP peut être plus petit"],
+                        ["es"] = ["pulso principal", "cada pista", "archivos WAV separados", "un solo ZIP", "mismo inicio", "cuenta de entrada", "solo en el archivo principal", "pista silenciada", "archivo en silencio", "Descomprimidos", "el ZIP puede ser menor"]
         };
         foreach (var language in Languages)
         {
@@ -190,7 +190,7 @@ public sealed class StemExportTextTests
                 Assert.IsFalse(french.Contains(mark), $"fr/{key} has a space that can break before '{mark.Trim()}': {french}");
         }
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "ZIP\u00A0?");
-        StringAssert.Contains(Get("fr", "StemExportConfirm"), "Pistes\u00A0:");
+        StringAssert.Contains(Get("fr", "StemExportConfirm"), "Fichiers\u00A0:");
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "environ {2}\u00A0;");
     }
 

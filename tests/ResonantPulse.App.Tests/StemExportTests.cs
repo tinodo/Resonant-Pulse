@@ -174,19 +174,32 @@ public sealed class StemExportTests
     [TestMethod]
     public void TheConfirmationNamesTheTracksTheLengthAndTheSizeInEveryLanguage()
     {
-        var plan = ScheduleCompiler.Compile(new PulseDocument { Lanes = [new(), new(), new()] }, 48000, 16, true);
+        var plan = ScheduleCompiler.Compile(new PulseDocument { Lanes = [new(), new(), new(), new()] }, 48000, 16, true);
         var summary = StemExport.Summarize(plan);
-        Assert.AreEqual(4, summary.Tracks);
+        Assert.AreEqual(5, summary.Tracks);
+        // The number of files and how long each is, as the person reads them: a number in the wrong place (the length where the count
+        // belongs, or the other way round) is found, which a bare "5" or "4" would not do. German, French and Spanish count files, not
+        // "tracks", because their word for a track is also their word for a lane (docs/design/glossary.md).
+        var counted = new Dictionary<string, string>
+        {
+            ["en"] = "Tracks: 5, each about 0:34 long",
+            ["nl"] = "Sporen: 5, elk ongeveer 0:34 lang",
+            ["de"] = "Dateien: 5, je etwa 0:34 lang",
+            ["fr"] = "Fichiers\u00A0: 5, d’environ 0:34 chacun",
+            ["es"] = "Archivos: 5, de unos 0:34 cada uno"
+        };
         foreach (var language in Languages)
         {
             var text = InLanguage(language, () => StemExport.ConfirmText(summary));
-            StringAssert.Contains(text, "4", language);
-            StringAssert.Contains(text, "0:34", language);
-            StringAssert.Contains(text, InLanguage(language, () => StemExport.FormatSize(summary.Bytes, Text.Culture)), language);
+            var size = InLanguage(language, () => StemExport.FormatSize(summary.Bytes, Text.Culture));
+            StringAssert.Contains(text, counted[language], language);
+            StringAssert.Contains(text, size, language);
+            Assert.IsTrue(text.IndexOf(counted[language], StringComparison.Ordinal) < text.IndexOf(size, StringComparison.Ordinal),
+                $"{language}: the size comes after the number of tracks and their length");
             StringAssert.Contains(text, "ZIP", language);
             Assert.IsFalse(text.Contains('{') || text.Contains('}'), $"{language}: a placeholder is left in '{text}'");
         }
-        // The size is the one the exporter will write: 4 tracks of 34 seconds at 48,000 Hz.
-        Assert.AreEqual(4 * 34 * 48000L * 4, summary.Bytes);
+        // The size is the one the exporter will write: 5 tracks of 34 seconds at 48,000 Hz.
+        Assert.AreEqual(5 * 34 * 48000L * 4, summary.Bytes);
     }
 }
