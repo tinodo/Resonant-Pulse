@@ -160,8 +160,8 @@ is specified in `metronome-design.md` and is not changed here.
   Fields: *Rhythm to follow*, *Accept presses within* (ms), *Include beats that are not played (silent, muted or
   chance)*; *Start*, *Hit (F)*, *Finish*; the result as short lines. *Export result (CSV)* is the fourth command in the same
   row, after *Finish*: it is on only when a check has finished (not before the first, not while one runs, not after one was
-  ended by a change or an error), and a line under the result says what an export would hold (the project, the rhythm and when
-  the check ended), as the check had them, whatever was edited since. A hint under the commands says what the file is, how
+  ended by a change or an error), and a line under the result says what an export would hold (the project as it was called when
+  the check began, the rhythm and when the check ended), as the check had them, whatever was edited since. A hint under the commands says what the file is, how
   long the result stays and that its column names and numbers are the same in every language (the file is English and
   invariant by design, for the scripts and spreadsheets that read it; docs/TIMING-CSV.md). It is a command of the check, not
   of the page header and not a row of its own: a command that exists only for a finished result belongs with the other commands

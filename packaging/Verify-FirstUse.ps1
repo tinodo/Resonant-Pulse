@@ -1188,6 +1188,30 @@ function Test-TimingExportWithOutput {
     Finish-Check 'The new check'
     Assert-Kept 'After the new check' $project
     $script:timingExportDone.Add('a-new-check-ends-with-a-result-of-its-own')
+    # 6b. The project is renamed while it plays. A rename does not reach the audio, so the revision that plays still holds the name from
+    # when playback last started; a check that begins after the rename goes by the name the person sees.
+    $renamedWhilePlaying = 'Renamed while playing'
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    Wait-Settled 'DocumentName'
+    Set-Text 'DocumentName' $renamedWhilePlaying
+    Invoke-Control 'ProjectOptionsPanelDone'
+    Wait-Absent 'DocumentName'
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
+    Begin-Check 'A check after the project was renamed while it plays'
+    Finish-Check 'The check after the project was renamed while it plays'
+    $lineAfterRename = (Find-Control 'TimingCsvReady').Current.Name
+    if ($lineAfterRename -notlike "*$renamedWhilePlaying*") { throw "The line for the export does not name the project as it is called now ('$renamedWhilePlaying'), only as it was when playback last started: '$lineAfterRename'." }
+    $script:timingExportDone.Add('names-the-project-as-renamed-while-playing')
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    Wait-Settled 'DocumentName'
+    Set-Text 'DocumentName' $project
+    Invoke-Control 'ProjectOptionsPanelDone'
+    Wait-Absent 'DocumentName'
     # 7. A new check took the old result away when it began (nothing shows that while it runs), so a change of playback that ends it
     # leaves nothing to export: not the new result, which never came, and not the old one.
     Begin-Check 'A check that is about to be ended'
@@ -1195,7 +1219,7 @@ function Test-TimingExportWithOutput {
     $null = Wait-Transport 'Stopped'
     Wait-Condition { -not (Get-ExportOn) } 'A check that was ended by Stop can be exported.'
     if ($null -ne (Find-Optional 'TimingCsvReady')) { throw 'A line says what is exported after the check was ended by Stop.' }
-    $script:timingExportDone.Add('off-after-a-change-of-playback-ends-the-check-and-the-old-result-is-gone')
+    $script:timingExportDone.Add('off-after-a-change-of-playback-ends-the-check')
     # 8. One more finished check is left for the Dutch checks.
     Start-PlayingOnTrain
     Begin-Check 'The check that is left behind'

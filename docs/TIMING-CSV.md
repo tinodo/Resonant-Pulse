@@ -22,9 +22,12 @@ The check keeps what it measured: the project's name, the rhythm's name and plac
 unplayed beats counted, the times of the clicks and of the presses, and the analysis. It is a copy, so none of this can change after the
 check ended:
 
-- **The project is edited or renamed**, or another project is opened: the file still names the project and the rhythm as they were when
-  the check ended, and the page's line "Ready to export: ..." says the same (a name of more than 40 characters is cut on that line, with an
-  ellipsis, so that the rhythm and the time always fit; the file holds it whole).
+- **The project is edited or renamed**, or another project is opened: the file still names the project as it was called when the check
+  began and the rhythm as it was in the metronome that played, and the page's line "Ready to export: ..." says the same (a name of more
+  than 40 characters is cut on that line, with an ellipsis, so that the rhythm and the time always fit; the file holds it whole; a name
+  with nothing in it is shown as "(no name)" on the line and is an empty string in the file). A rename while the metronome plays counts:
+  the playing metronome keeps the name it had when it was started, but a check that begins after the rename goes by the new name, and one
+  that began before it by the old name.
 - **The lane that was followed is removed or renamed**: the file keeps its name, and `target_lane` is the place it had in the project that
   was playing (0 is the first lane), which need not be its place in the project now. The main beat is `-1` and is named `Main beat` in the
   file in every language (the page names it in the language in use).
@@ -76,8 +79,14 @@ plus one), cannot be analysed, and then there is no result to export.
 
 ## What has not been tried
 
-- The save dialog is Windows' own and cannot be driven on a hosted runner. The file is held by tests that write it to a folder and read it
+- The save dialog is Windows' own. A hosted runner cannot drive it, and on the private desktop of a developer machine it does not open
+  (*Invalid window handle*, as for every save in the app). The file is held by tests that write it to a folder and read it
   with a reader that knows only this format (every field in quotes, CRLF, a byte order mark), with the .NET library's own CSV reader, and
-  against exact expected bytes.
-- No spreadsheet program has opened a file written by the app. A spreadsheet whose own settings expect a decimal comma may need to be told
-  that these numbers have a point.
+  against exact expected bytes. One run of the real app with the dialog bypassed wrote a file that two independent readers (Python's `csv`
+  module and PowerShell's `Import-Csv`) read as the same records, and whose totals were the ones the page showed.
+- No spreadsheet program has opened a file written by the app, so what follows is from the documentation, not from a run. Excel uses the
+  list separator of the Windows regional settings (Microsoft Learn, *Convert a CSV file into an Excel spreadsheet*), and in the default
+  Dutch, German, French and Spanish settings that is a semicolon (the .NET `TextInfo.ListSeparator` of nl-NL, de-DE, fr-FR and es-ES is
+  `;` on the machine that was used to check). This file separates its fields with a comma in every language, by design, so there a file
+  that is opened by double-clicking may land each record in one cell: import it instead (in Excel, Data, From Text/CSV) and choose the comma
+  as the delimiter. A spreadsheet whose own settings expect a decimal comma may also need to be told that these numbers have a point.

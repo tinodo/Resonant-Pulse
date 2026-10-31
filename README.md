@@ -70,7 +70,10 @@ check only, until you start another one or close the app (it is not a practice
 history), and it says when the keyboard delivered each press, not when anything was
 heard, so it is not a calibration of your keyboard, speakers or Bluetooth device. The
 column names and numbers in the file are English and the same in every language, so
-a script reads every file the same way: see [the file format](docs/TIMING-CSV.md).
+a script reads every file the same way, and its fields are separated by commas: where
+the Windows list separator is a semicolon (the Dutch, German, French and Spanish settings),
+Excel may need the file imported with the comma as the delimiter instead of opened by double-clicking
+(not tried; see [the file format](docs/TIMING-CSV.md)).
 
 Use the pinned .NET SDK on Windows. The owner has authorized local builds and
 tests on the development PC; keep them serialized, silent and isolated. A test

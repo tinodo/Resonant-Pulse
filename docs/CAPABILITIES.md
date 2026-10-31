@@ -147,8 +147,9 @@ analysed: not before the first check, not while a check runs, not after a check 
 while it ran, a new project or the next song in Stage, a change of output, sleep, Tap to start, the audio failing) or by an error. Starting another check takes the
 old result away from that moment, also when the new check never finishes; Stop and another page leave a finished result alone. It keeps one
 check, in memory, until another check starts or the app closes, which is why a CSV history stays on the list of what is not delivered. The
-check keeps a copy of what it measured, so the file names the project and the rhythm as they were when the check ended and holds the times
-and the analysis of that run, whatever is edited, renamed, opened or removed afterwards; a lane that was followed and then removed keeps its
+check keeps a copy of what it measured, so the file names the project as it was called when the check began and the rhythm as it was in the metronome that
+played, and holds the times and the analysis of that run, whatever is edited, renamed, opened or removed afterwards (a rename while the metronome plays counts:
+a check that begins after it goes by the new name); a lane that was followed and then removed keeps its
 name in the file, and its place is the place it had in the project that played. The page says the same before anything is saved ("Ready to
 export: the project, the rhythm, when it ended"). The file is UTF-8 with a byte order mark, CRLF, every field quoted, numbers with a decimal
 point and every digit that is needed to read them back; a value that is not available (the median and the spread when nothing matched, the
@@ -165,10 +166,15 @@ Windows file-integrity job runs its file-sharing cases. The first-use verifier o
 cuts what is wider than its slot, so a rectangle that reaches its edge is one that was cut), at least as large as they are
 (Begin 100 by 40 DIP, Hit 70 by 40, Finish 150 by 40, Export 100 by 40), not overlapping, with Export after Finish, and the hint to be whole,
 at least 150 by 14 DIP, inside the card's padding and below Export; on a run with audio it finishes a check and requires Export to come on, the ready
-line to name the project and the rhythm, a new check, a Stop during a check and a renamed project to behave as above. Each of those checks
-was shown to fail on a build with that one thing broken (docs/DELIVERY.md summarises the defects). Not established: the
-save dialog (it is Windows' own and cannot be driven on a hosted runner, so no gate saves a file through it), that a spreadsheet program
-reads the file (none has opened one), the enabled state on a hosted runner (it has no audio output, so no check can finish there; the
+line to name the project and the rhythm, a new check, a Stop during a check, a project renamed after a check and a project renamed while it plays to behave
+as above. Each of those checks was shown to fail on a build with that one thing broken, except one that cannot fail alone: a new check taking the old
+result away when it starts (ending a check clears the result too, so the gate sees it only when both are missing; docs/DELIVERY.md summarises the
+defects). Not established: the
+save dialog (it is Windows' own: a hosted runner cannot drive it, and on the private desktop of a developer machine it does not open, with
+*Invalid window handle*, so no gate saves a file through it; one run of the real app with the dialog bypassed wrote a file that two
+independent readers parsed and whose numbers were the page's), that a spreadsheet program reads the file (none has opened one; Excel splits
+a file that is opened by double-clicking at the list separator of the Windows regional settings, which is a semicolon in the Dutch, German,
+French and Spanish settings, so there the file has to be imported with the comma as the delimiter: docs/TIMING-CSV.md), the enabled state on a hosted runner (it has no audio output, so no check can finish there; the
 local private-desktop run with silent audio checks it), what a screen reader says (the hint is linked to the command as its description and
 Narrator has not been used), a musician's reading of the Dutch, German, French and Spanish sentences (docs/design/glossary.md lists the
 questions) and Windows text sizes above 100% on the real setting.

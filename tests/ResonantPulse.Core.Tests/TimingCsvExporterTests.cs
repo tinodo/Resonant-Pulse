@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -179,6 +180,7 @@ public sealed class TimingCsvExporterTests
     }
 
     [TestMethod]
+    [DataRow("")]
     [DataRow("=SUM(1,2)")]
     [DataRow("+1+2")]
     [DataRow("-1+2")]
@@ -453,7 +455,7 @@ public sealed class TimingCsvExporterTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task Export_CancelledWhileWritingNeverLeavesAHalfWrittenFile(bool existing)
+    public async Task Export_CancelledOnceItIsWritingNeverLeavesAHalfWrittenFile(bool existing)
     {
         using var temp = new TempDirectory();
         var path = temp.File("midway.csv");
@@ -463,6 +465,14 @@ public sealed class TimingCsvExporterTests
         var session = new TimingSession(context, new double[TimingAnalyzer.MaximumTimestamps], [], 0.1, TimingTestKit.Completed);
         using var cancel = new CancellationTokenSource();
         var export = Task.Run(() => TimingCsvExporter.ExportAsync(path, session, cancel.Token));
+        // Cancel once the temporary file has content, so that the cancellation arrives while the file is being written. Whether it
+        // does depends on the machine: if the export finishes first, the file must be whole, and either way nothing is left over.
+        var waited = Stopwatch.StartNew();
+        while (!export.IsCompleted && !TemporaryFileHasContent(temp.Root))
+        {
+            Assert.IsTrue(waited.Elapsed < TimeSpan.FromSeconds(30), "the export never started writing");
+            await Task.Delay(1);
+        }
         cancel.Cancel();
         var cancelled = false;
         try
@@ -480,6 +490,60 @@ public sealed class TimingCsvExporterTests
         }
         Assert.AreEqual(!cancelled || existing ? 1 : 0, Directory.GetFiles(temp.Root).Length);
         temp.NoTemps();
+    }
+
+    private static bool TemporaryFileHasContent(string folder)
+    {
+        foreach (var file in Directory.GetFiles(folder, "*.tmp"))
+        {
+            try { if (new FileInfo(file).Length > 0) return true; }
+            catch (IOException) { /* the export has just removed it */ }
+        }
+        return false;
+    }
+
+    /// <summary>A destination that cancels the export when it is written to for the <paramref name="cancelOnWrite"/>th time.</summary>
+    private sealed class CancellingStream(CancellationTokenSource source, int cancelOnWrite) : Stream
+    {
+        private int _writes;
+        public long Written { get; private set; }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => Take(count);
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Take(buffer.Length);
+            return ValueTask.CompletedTask;
+        }
+
+        private void Take(int count)
+        {
+            Written += count;
+            if (++_writes == cancelOnWrite) source.Cancel();
+        }
+    }
+
+    [TestMethod]
+    public async Task Write_StopsBetweenRowsOnceItIsCancelledWhileWriting()
+    {
+        // The same file of megabytes: a cancellation in the middle of the writing ends it at the next row, not at the end.
+        var context = TimingTestKit.Context() with { EndFrame = 1234 + 600L * 8000 };
+        var session = new TimingSession(context, new double[TimingAnalyzer.MaximumTimestamps], [], 0.1, TimingTestKit.Completed);
+        using var whole = new MemoryStream();
+        await TimingCsvExporter.WriteAsync(whole, session);
+        using var cancel = new CancellationTokenSource();
+        var destination = new CancellingStream(cancel, cancelOnWrite: 3);
+        await Check.ThrowsAsync<OperationCanceledException>(() => TimingCsvExporter.WriteAsync(destination, session, cancel.Token));
+        Assert.IsTrue(cancel.IsCancellationRequested, "the destination cancelled the export while it was being written");
+        Assert.IsTrue(destination.Written > 0, "something had been written when it was cancelled");
+        Assert.IsTrue(destination.Written < whole.Length / 20, $"{destination.Written} of {whole.Length} bytes were written after the cancellation");
     }
 
     [TestMethod]

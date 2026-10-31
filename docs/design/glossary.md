@@ -67,6 +67,7 @@ match, so a translation cannot be left out or lose one.
 | `ExportTimingCsv` | Export result (CSV) | Resultaat exporteren (CSV) | Ergebnis exportieren (CSV) | Exporter le résultat (CSV) | Exportar resultado (CSV) |
 | `TimingCsvReady` | Ready to export: {0}, rhythm {1}, finished {2}. | Klaar om te exporteren: {0}, ritme {1}, afgerond {2}. | Bereit zum Exportieren: {0}, Rhythmus {1}, beendet {2}. | Prêt à exporter : {0}, rythme {1}, terminé {2}. | Listo para exportar: {0}, ritmo {1}, finalizado {2}. |
 | `TimingCsvUnavailable` | There is no finished check to export. Finish a check first. | Er is geen afgeronde check om te exporteren. Rond eerst een check af. | Es gibt keine beendete Prüfung zum Exportieren. Beenden Sie zuerst eine Prüfung. | Aucun contrôle terminé à exporter. Terminez d’abord un contrôle. | No hay ninguna comprobación terminada que exportar. Termine primero una comprobación. |
+| `TimingNoName` | (no name) | (zonder naam) | (ohne Namen) | (sans nom) | (sin nombre) |
 | `TimingDriftUnavailable` | Drift needs at least four matched presses on clicks at different times. | Drift vraagt minstens vier gekoppelde toetsdrukken op tikken op verschillende momenten. | Drift braucht mindestens vier zugeordnete Tastendrücke auf Klicks zu unterschiedlichen Zeitpunkten. | La dérive nécessite au moins quatre pressions associées à des clics à des moments différents. | La deriva necesita al menos cuatro pulsaciones emparejadas con clics en momentos distintos. |
 | `TimingCsvHint` | Saves the last finished check as a CSV file for a spreadsheet: the totals, then each click and each press. The result stays available until you start another check or close the app. Column names and numbers are the same in every language. | Bewaart de laatst afgeronde check als CSV-bestand voor een spreadsheet: de totalen, daarna elke tik en elke toetsdruk. Het resultaat blijft beschikbaar tot u een nieuwe check start of de app sluit. Kolomnamen en getallen zijn in elke taal hetzelfde. | Speichert die zuletzt beendete Prüfung als CSV-Datei für eine Tabellenkalkulation: die Summen, dann jeden Klick und jeden Tastendruck. Das Ergebnis bleibt verfügbar, bis Sie eine neue Prüfung starten oder die App schließen. Spaltennamen und Zahlen sind in jeder Sprache gleich. | Enregistre le dernier contrôle terminé dans un fichier CSV pour un tableur : les totaux, puis chaque clic et chaque pression. Le résultat reste disponible jusqu’à ce que vous lanciez un nouveau contrôle ou fermiez l’application. Les noms de colonnes et les nombres sont les mêmes dans toutes les langues. | Guarda la última comprobación terminada como archivo CSV para una hoja de cálculo: los totales y después cada clic y cada pulsación. El resultado sigue disponible hasta que inicie otra comprobación o cierre la aplicación. Los nombres de columna y los números son iguales en todos los idiomas. |
 
@@ -195,7 +196,9 @@ sentence that says why a drift was not worked out.
   project, the rhythm (a lane's name or the main beat) and when the check ended, in the
   language's own date and time format. **Ritme** (Dutch), **Rhythmus** (German), **rythme**
   (French) and **ritmo** (Spanish) are the words to check against the lane and main-beat
-  names that the same page already uses.
+  names that the same page already uses. A project or a lane without a name (the app allows
+  an empty name) stands in the line as *(no name)*: *(zonder naam)*, *(ohne Namen)*, *(sans nom)*
+  and *(sin nombre)*; the file keeps it empty.
 - The hint is longer than the app's other hints on purpose: it says what the file is, how
   long the result stays (until another check starts or the app closes: nothing is kept
   from one run of the app to the next) and that the column names are not translated. A

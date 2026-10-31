@@ -201,10 +201,38 @@ public sealed class TimingExportTests
             Assert.IsFalse(line.Any(char.IsControl), $"{language}: a control character is in the line");
             StringAssert.Contains(line, "one  two three four", language);
             StringAssert.Contains(line, "a b", language);
+
+            // A line separator and a paragraph separator are not control characters, and a text block breaks the line at them.
+            var separated = InLanguage(language, () => TimingExport.ReadyText(Session("five\u2028six\u2029seven", target: "c\u2028d", lane: 2)));
+            Assert.IsFalse(separated.Any(character => char.IsControl(character) || character is '\u2028' or '\u2029'), $"{language}: a line break is in the line");
+            StringAssert.Contains(separated, "five six seven", language);
+            StringAssert.Contains(separated, "c d", language);
         }
         // Braces in a name are text, not a placeholder.
         var braces = InLanguage("en", () => TimingExport.ReadyText(Session("{0} {1}", target: "{2}", lane: 1)));
         StringAssert.Contains(braces, "{0} {1}");
         StringAssert.Contains(braces, "{2}");
+    }
+
+    [TestMethod]
+    public void ANameWithNothingToShowIsSaidToHaveNoNameInsteadOfLeavingAGapInTheLine()
+    {
+        foreach (var language in Languages)
+        {
+            var none = InLanguage(language, () => Text.Get("TimingNoName"));
+            // The project and the lane that was checked both have nothing to show: empty, spaces, a tab, line breaks, a no-break space.
+            foreach (var blank in new[] { "", " ", "   ", "\t", "\r\n", "\u2028\u2029", "\u00A0", "\u0085" })
+            {
+                var line = InLanguage(language, () => TimingExport.ReadyText(Session(blank, target: blank, lane: 1)));
+                Assert.AreEqual(2, line.Split(none).Length - 1, $"{language}, name '{blank}': {line}");
+                // The main beat has a name of its own, so only the project is without one.
+                var main = InLanguage(language, () => TimingExport.ReadyText(Session(blank)));
+                Assert.AreEqual(1, main.Split(none).Length - 1, $"{language}, project '{blank}': {main}");
+            }
+            // A name with something in it is shown as it is, spaces at its ends included.
+            var named = InLanguage(language, () => TimingExport.ReadyText(Session(" a ", target: "b", lane: 1)));
+            Assert.IsFalse(named.Contains(none), $"{language}: {named}");
+            StringAssert.Contains(named, " a ", language);
+        }
     }
 }

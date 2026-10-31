@@ -15,7 +15,7 @@ public sealed class TimingExportTextTests
 {
     private static readonly string[] Languages = ["en", "nl", "de", "fr", "es"];
 
-    private static readonly string[] Keys = ["ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable", "TimingDriftUnavailable"];
+    private static readonly string[] Keys = ["ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable", "TimingNoName", "TimingDriftUnavailable"];
 
     private static string Get(string language, string key)
     {
@@ -147,6 +147,8 @@ public sealed class TimingExportTextTests
             Assert.IsTrue(Get(language, "TimingCsvReady").Length <= 60, $"{language}/TimingCsvReady: {Get(language, "TimingCsvReady").Length}");
             Assert.IsTrue(Get(language, "TimingCsvHint").Length <= 320, $"{language}/TimingCsvHint: {Get(language, "TimingCsvHint").Length}");
             Assert.IsTrue(Get(language, "TimingCsvUnavailable").Length <= 100, $"{language}/TimingCsvUnavailable: {Get(language, "TimingCsvUnavailable").Length}");
+            // It stands where a name stands in the line, so it must not be longer than the longest name the line shows (40 characters).
+            Assert.IsTrue(Get(language, "TimingNoName").Length <= 20, $"{language}/TimingNoName: {Get(language, "TimingNoName")}");
             Assert.IsTrue(Get(language, "TimingDriftUnavailable").Length <= 110, $"{language}/TimingDriftUnavailable: {Get(language, "TimingDriftUnavailable").Length}");
         }
         Assert.IsTrue(Get("en", "TimingCsvHint").Length <= 260, $"en/TimingCsvHint: {Get("en", "TimingCsvHint").Length}");

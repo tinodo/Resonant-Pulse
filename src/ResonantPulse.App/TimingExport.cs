@@ -1,3 +1,4 @@
+using System.Globalization;
 using ResonantPulse.App.Localization;
 using ResonantPulse.Core;
 
@@ -58,7 +59,8 @@ internal static class TimingExport
     /// <summary>
     /// The line that says what an export would hold: the project and the rhythm of the finished check and when it ended. The names
     /// are the ones the check had, not the ones the project has now, and the main beat is named in the language in use. A long name
-    /// is cut (the file holds it whole), so that the rhythm and the time always follow it on the line.
+    /// is cut (the file holds it whole), so that the rhythm and the time always follow it on the line, and a name that is empty
+    /// is said to have no name.
     /// </summary>
     internal static string ReadyText(TimingSession session) => Text.Format("TimingCsvReady",
         Shown(session.Context.ProjectName),
@@ -66,15 +68,24 @@ internal static class TimingExport
         session.CompletedAtUtc.ToLocalTime().ToString("g", Text.Culture));
 
     /// <summary>
-    /// A name as the line shows it: on one line (a line break or another control character in it is a space) and of at most
-    /// <see cref="MaximumNameShown"/> characters, the end of a longer one being an ellipsis. Never cut between the halves of a character.
+    /// A name as the line shows it: on one line (a line break, a line or paragraph separator or another control character in it is a
+    /// space) and of at most <see cref="MaximumNameShown"/> characters, the end of a longer one being an ellipsis. Never cut between
+    /// the halves of a character. A name with nothing to show (empty, or only spaces) is the text for no name.
     /// </summary>
     private static string Shown(string name)
     {
-        var line = string.Concat(name.Select(character => char.IsControl(character) ? ' ' : character));
+        var line = string.Concat(name.Select(character => BreaksLine(character) ? ' ' : character));
+        if (string.IsNullOrWhiteSpace(line)) return Text.Get("TimingNoName");
         if (line.Length <= MaximumNameShown) return line;
         var length = MaximumNameShown - 1;
         if (char.IsHighSurrogate(line[length - 1])) length--;
         return line[..length].TrimEnd() + "…";
     }
+
+    /// <summary>
+    /// A control character, or a line or paragraph separator: U+2028 and U+2029 are not control characters, and a text block
+    /// breaks the line at them all the same.
+    /// </summary>
+    private static bool BreaksLine(char character) =>
+        char.IsControl(character) || char.GetUnicodeCategory(character) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
 }

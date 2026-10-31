@@ -15,6 +15,12 @@ public sealed partial class MainWindow
     private long _timingStartTimestamp;
     private long _timingStartFrame;
     private PlaybackRevision? _timingRevision;
+
+    /// <summary>
+    /// The project's name when the check began. A rename is not an edit that reaches the audio, so the playing revision can still
+    /// hold the name from when playback last started: the check goes by the name the person sees.
+    /// </summary>
+    private string _timingProjectName = "";
     private int _timingLane = -1;
     private double _timingTolerance = 0.15;
     private bool _includeSilentTargets = true;
@@ -117,6 +123,7 @@ public sealed partial class MainWindow
             _timingTolerance = Value(tolerance) / 1000;
             _includeSilentTargets = includeSilent.IsOn;
             _timingRevision = snapshot.Revision;
+            _timingProjectName = _document.Name;
             _timingStartFrame = snapshot.ProcessedFrame;
             _timingStartTimestamp = Stopwatch.GetTimestamp();
             _observed.Clear();
@@ -226,8 +233,9 @@ public sealed partial class MainWindow
             revision.EndFrameAbsolute, completedFrame);
         var seconds = (double)(endFrame - _timingStartFrame) / revision.Initial.SampleRate;
         var expected = revision.TargetSeconds(_timingLane, _includeSilentTargets, _timingStartFrame, endFrame);
-        // What was measured is kept as it was: the project and the rhythm of the revision that played, not of the project now.
-        var context = new TimingSessionContext(revision.Document.Name,
+        // What was measured is kept as it was: the project as it was named when the check began and the rhythm of the revision that
+        // played, not the project as it is when the file is written.
+        var context = new TimingSessionContext(_timingProjectName,
             TimingExport.TargetName(_timingLane, _timingLane < 0 ? "" : revision.Document.Lanes[_timingLane].Name),
             _timingLane, revision.Initial.SampleRate, _timingStartFrame, endFrame, _includeSilentTargets);
         var session = new TimingSession(context, expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
