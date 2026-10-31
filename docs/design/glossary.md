@@ -209,3 +209,67 @@ sentence that says why a drift was not worked out.
   en resultaat tonen*); German uses **beendet** and **Beenden**, French **terminé** and
   **Terminer**, Spanish **terminada**/**finalizado**: Spanish uses two words (*Terminar* on
   the command, *finalizado* in the ready line) and a reviewer may prefer one.
+
+## The separate tracks export: terms and the sentences around them
+
+Questions again, not findings; nothing here has been checked with a native speaker. The word
+**stem** is not used anywhere in the interface (it is jargon to someone who has never mixed a
+song, and the language rule of the page design asks for plain words): the command says what a
+person gets, *separate tracks*, and the file type in brackets, as *Export result (CSV)* does.
+
+- **Track** and **lane** are two words in English and in Dutch (a lane is a *laag*, a track
+  is a *spoor*), but in German, French and Spanish the word the app already uses for a lane
+  (*Spur*, *piste*, *pista*, see `Lane` above) is also the usual word for a track in music
+  software: *Einzelspuren exportieren (ZIP)*, *Exporter les pistes séparées (ZIP)*, *Exportar
+  pistas separadas (ZIP)*. The question counts the main beat as a track, so a project with two
+  lanes says three. English and Dutch say so with their own word (*Tracks: 3*, *Sporen: 3*, no
+  clash with *lane* and *laag*); German, French and Spanish count the **WAV files** (*WAV-Dateien: 3*,
+  *Fichiers WAV : 3*, *Archivos WAV: 3*), because *Spuren: 3* beside *jede Spur* would read as three
+  lanes (an independent reader found this), and not all the files of the ZIP, because the manifest is
+  one more (the same reader found that *Dateien: 3* left it out). The sentence before the count
+  already says *each lane* and *the main beat*. The labels of the command keep *Einzelspuren*,
+  *pistes séparées* and *pistas separadas*; whether they are as clear as the question's *WAV files*
+  is for a native reader.
+- **ZIP** and **WAV** are not translated (the file types, as **CSV** is not). The articles that
+  go with them are the questions: *one ZIP* is *één ZIP* (Dutch, *de*), *eine ZIP-Datei*
+  (German, a compound), *un ZIP* (French, masculine) and *un solo ZIP* (Spanish, masculine);
+  *WAV-bestand*, *WAV-Datei*, *fichier WAV* and *archivo WAV* are the file.
+- **Music software** is the phrase the Export card already uses (*other music software*):
+  *muzieksoftware*, *Musiksoftware*, *logiciel de musique* and *software musical*; the hint
+  uses the same words so that one thing has one name on the page.
+- **The count-in** is *het aftellen* (Dutch), *das Einzählen*, *le décompte* and *la cuenta de
+  entrada*, the words of the WAV sentence next to it (*inclusief het aftellen*, *einschließlich
+  Einzählen*, *décompte compris*, *incluida la cuenta de entrada*), not the *aftelmaten* of the
+  Project panel's field. A **muted** lane is *gedempt* (*Dempen*), *stummgeschaltet*
+  (*Stummschalten*), *dont le son est coupé* (*Couper le son*) and *silenciada* (*Silenciar*),
+  the words of the lane's own Mute switch; a silent file is *een stil bestand*, *eine stille
+  Datei*, *un fichier silencieux* and *un archivo en silencio*.
+- **Unzipped** is *uitgepakt*, *entpackt*, *décompressés* and *descomprimidos*. French says
+  *décompressés* because *dézippés* is slang; the participle agrees with *ils* (the WAV files, now
+  the thing that is counted), and Spanish with *archivos*: worth a native reader's look.
+- **Sizes and lengths** are not translated: the units are KiB, MiB and GiB in every language
+  (binary units, 1 MiB is 1,048,576 bytes, so no language's *MB* or *Mo* can mean something
+  else), with the language's own decimal separator (*6,2 MiB*) and a no-break space between the
+  number and its unit (so that a narrow dialog never ends a line between them; a test fails on an
+  ordinary space there), and a length is *m:ss* (*0:34*) with the same digits everywhere.
+- French keeps the no-break space before *?*, *:* and *;* in the question (*ZIP ?*, *Fichiers WAV :*,
+  *{2} ;*), as the tempo guide and the timing hint do, so a narrow dialog never starts a line with
+  them; a test fails on an ordinary space there.
+- *This can take a while.* (*Dit kan even duren.*, *Das kann etwas dauern.*, *Cela peut prendre un
+  moment.*, *Esto puede tardar un poco.*) is added to the question only from 512 MiB unzipped
+  (half a GiB); below it the question does not say it. docs/WAV-STEMS.md has the measured times.
+- The sentence for a track that would be longer than a WAV file can be (4 GiB, about 6 hours)
+  names the **setting that can be changed** with the label that setting has in the language
+  (*Export length*, *Exportlengte*, *Exportlänge*, *Durée d’export*, *Duración de exportación*):
+  a test takes the label from the setting's own string.
+- The sentence for a file that could not be saved says what to check (the location, the free
+  space, another program that has the file open) and that **a file that was already there has
+  not been changed**, which is true because the archive is written next to it and moved over it
+  only when it is whole.
+- The sentence for a **temporary file that could not be removed** either (it is shown only then, in
+  place of the one above) says that the tracks could not be saved, that a temporary file could not
+  be removed, that a file that was already there has not been changed, and which file the person can
+  delete, with the path last so that nothing follows it that could be read as part of the path:
+  *tijdelijk bestand*, *temporäre Datei*, *fichier temporaire* (French keeps the no-break space
+  before the colon) and *archivo temporal*, the words the app's WAV-export sentence about leftover
+  files already uses. German, French and Spanish are drafts like the rest and are in the questions.

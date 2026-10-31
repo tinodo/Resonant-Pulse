@@ -104,4 +104,22 @@ public sealed class RenderPlanTests
         Assert.AreEqual(4d, gap.PositionAtFrame(16000).QuarterPosition);
         Assert.AreEqual(2, gap.Targets.Count); Assert.IsTrue(gap.Targets.All(t => !t.Audible));
     }
+
+    [TestMethod]
+    public void LaneCount_IsTheAuthoredLaneCountEvenForLanesThatNeverSound()
+    {
+        Assert.AreEqual(0, Check.Plan().LaneCount);
+        Assert.AreEqual(1, Check.Plan(Check.LaneDocument()).LaneCount);
+        var d = Check.Document();
+        d.Settings.Accents = [Accent.Silent];
+        d.Lanes = [new() { Muted = true }, new() { Probability = 0 }, new() { Pattern = [Accent.Silent] }, new(), new() { Solo = true }];
+        var plan = Check.Plan(d, 2, 8000, true);
+        Assert.AreEqual(5, plan.LaneCount);
+        Assert.IsTrue(plan.Onsets.All(onset => onset.LaneIndex is < 0 or 4), "Only the soloed lane and the count-in can sound.");
+        d.Lanes = Enumerable.Range(0, 8).Select(_ => new RhythmLane { Muted = true }).ToList();
+        var eight = Check.Plan(d);
+        d.Lanes.Clear();
+        Assert.AreEqual(8, eight.LaneCount, "The count is a fact of the plan: editing the document afterwards does not change it.");
+        Assert.AreEqual(0, eight.Onsets.Count);
+    }
 }

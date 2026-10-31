@@ -84,7 +84,23 @@ public sealed partial class MainWindow : Window
             DispatcherQueue.TryEnqueue(RaiseTextScaleChanged);
         TextSettings.TextScaleFactorChanged += OnTextScaleChanged;
         Closed += (_, _) => TextSettings.TextScaleFactorChanged -= OnTextScaleChanged;
-        _noticeTimer.Tick += (_, _) => { _noticeTimer.Stop(); if (Notice.Severity == InfoBarSeverity.Informational) Notice.IsOpen = false; };
+        _noticeTimer.Tick += (_, _) =>
+        {
+            _noticeTimer.Stop();
+            switch (_stemExport.WhenTransientNoticeFades(Notice.Severity == InfoBarSeverity.Informational))
+            {
+                case FadedNotice.Close: Notice.IsOpen = false; break;
+                // The notice that said the tracks are being saved was replaced by the one that has just faded.
+                case FadedNotice.ShowSaving: ShowSavingNotice(); break;
+            }
+        };
+        // A warning or an error that replaced the notice of an export that is still being written has been dismissed by the person:
+        // the notice comes back. (A notice that is closed by the code, or the informational notices, are handled by the timer.)
+        Notice.Closed += (_, args) =>
+        {
+            if (args.Reason == InfoBarCloseReason.CloseButton && Notice.Severity != InfoBarSeverity.Informational && _stemExport.IsWriting)
+                ShowSavingNotice();
+        };
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);
         var scale = dpi == 0 ? 1 : dpi / 96.0;

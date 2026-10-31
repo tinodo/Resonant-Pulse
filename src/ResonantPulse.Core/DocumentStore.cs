@@ -138,7 +138,7 @@ public static class AtomicFile
         {
             try { if (File.Exists(temp)) File.Delete(temp); }
             catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
-            { throw new IOException($"Operation failed and temporary file cleanup failed: '{temp}'.", new AggregateException(original, cleanup)); }
+            { throw new TemporaryFileCleanupException(temp, $"Operation failed and temporary file cleanup failed: '{temp}'.", new AggregateException(original, cleanup)); }
             throw;
         }
     }
