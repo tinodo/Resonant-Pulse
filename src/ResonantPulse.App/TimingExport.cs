@@ -16,6 +16,12 @@ internal static class TimingExport
     private const int MaximumProjectPart = 90;
 
     /// <summary>
+    /// What a Windows file name cannot hold: these nine characters and every control character. A fixed set, not the running
+    /// system's own list, so that the same project gives the same suggestion on every machine the code is tested on.
+    /// </summary>
+    private static readonly char[] InvalidFileNameCharacters = [.. "<>:\"/\\|?*", .. Enumerable.Range(0, 32).Select(code => (char)code)];
+
+    /// <summary>
     /// The export is offered for a check that has ended and been analysed, and only then: never while one is running (its result
     /// does not exist yet), and not after the check was ended by a change of playback or project or by an error.
     /// </summary>
@@ -27,8 +33,7 @@ internal static class TimingExport
     /// </summary>
     internal static string SuggestedFileName(string projectName)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var kept = projectName.Where(character => !invalid.Contains(character)).Take(MaximumProjectPart).ToArray();
+        var kept = projectName.Where(character => !InvalidFileNameCharacters.Contains(character)).Take(MaximumProjectPart).ToArray();
         // A cut that falls between the two halves of a pair would leave half a character in the name.
         if (kept.Length > 0 && char.IsHighSurrogate(kept[^1])) kept = kept[..^1];
         var name = new string(kept).Trim();

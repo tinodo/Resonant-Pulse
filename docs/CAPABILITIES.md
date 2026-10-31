@@ -144,7 +144,7 @@ box as what describes it (DescribedBy) and is not a live region, so nothing anno
 The timing check on the Train page can save its last completed result as a CSV file. Export result (CSV) is the fourth command in the
 check's row, after Finish, and docs/TIMING-CSV.md describes the file column by column. It is on only when a check has finished and been
 analysed: not before the first check, not while a check runs, not after a check that was ended by a change (Stop, Pause or Start by hand
-while it ran, a new project, a change of output, sleep, Tap to start, the audio failing) or by an error. Starting another check takes the
+while it ran, a new project or the next song in Stage, a change of output, sleep, Tap to start, the audio failing) or by an error. Starting another check takes the
 old result away from that moment, also when the new check never finishes; Stop and another page leave a finished result alone. It keeps one
 check, in memory, until another check starts or the app closes, which is why a CSV history stays on the list of what is not delivered. The
 check keeps a copy of what it measured, so the file names the project and the rhythm as they were when the check ended and holds the times

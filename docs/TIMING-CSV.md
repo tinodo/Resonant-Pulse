@@ -29,7 +29,8 @@ check ended:
   file in every language (the page names it in the language in use).
 - **A new check is started**: the old result is gone from that moment, also if the new check never finishes.
 - **The check is ended by a change** (Stop, Pause or Start by hand, a live change that makes the metronome play something else, a new
-  project, a change of output, sleep, Tap to start, the audio failing): there is no result, and nothing to export.
+  project opened from the library or the next song in Stage, a change of output, sleep, Tap to start, the audio failing) while it runs:
+  there is no result, and nothing to export. These changes do not touch a check that has already finished.
 - **The language is changed**: the result stays, and the page shows it again in the new language. The file does not change with the
   language.
 

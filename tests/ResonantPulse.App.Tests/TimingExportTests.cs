@@ -59,6 +59,8 @@ public sealed class TimingExportTests
         Assert.AreEqual("ab-timing", TimingExport.SuggestedFileName("a/b"));
         Assert.AreEqual("ab-timing", TimingExport.SuggestedFileName("a\\b"));
         Assert.AreEqual("line one two-timing", TimingExport.SuggestedFileName("line one\r\n two"));
+        // The same on every machine: each of the nine characters that Windows refuses is left out, wherever the test runs.
+        Assert.AreEqual("abcdefghij-timing", TimingExport.SuggestedFileName("a<b>c:d\"e/f\\g|h?i*j"));
         // Nothing is left of a name that is only such characters, or of none at all.
         foreach (var name in new[] { "", "   ", "???", "<>:\"/\\|?*", "\0\u0001" })
             Assert.AreEqual("ResonantPulse-timing", TimingExport.SuggestedFileName(name), $"'{name}'");
