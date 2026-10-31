@@ -245,8 +245,9 @@ person gets, *separate tracks*, and the file type in brackets, as *Export result
   agrees with *elles* (the tracks), not with *les fichiers*: worth a native reader's look.
 - **Sizes and lengths** are not translated: the units are KiB, MiB and GiB in every language
   (binary units, 1 MiB is 1,048,576 bytes, so no language's *MB* or *Mo* can mean something
-  else), with the language's own decimal separator (*6,2 MiB*), and a length is *m:ss*
-  (*0:34*) with the same digits everywhere.
+  else), with the language's own decimal separator (*6,2 MiB*) and a no-break space between the
+  number and its unit (so that a narrow dialog never ends a line between them; a test fails on an
+  ordinary space there), and a length is *m:ss* (*0:34*) with the same digits everywhere.
 - French keeps the no-break space before *?*, *:* and *;* in the question (*ZIP ?*, *Pistes :*,
   *{2} ;*), as the tempo guide and the timing hint do, so a narrow dialog never starts a line with
   them; a test fails on an ordinary space there.

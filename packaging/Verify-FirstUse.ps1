@@ -1250,12 +1250,13 @@ function Test-TimingExportWithOutput {
 # The native save dialog cannot be driven on a runner, so the run goes no further than the question (the file itself is read in the
 # end-to-end run that the pull request describes). The numbers of the question are compared with what the project gives: the track count with
 # the lanes the project has, and the size with the length and the track count (4 bytes a frame, 48,000 frames a second); the first call
-# also with the exact numbers of the project that the run starts with.
+# also with the exact numbers of the project that the run starts with. The size is written with a no-break space between the number and
+# its unit (U+00A0: the check below refuses an ordinary space), so that a narrow dialog never ends a line between them.
 $stemCommands = @('ExportWav', 'ExportMidi', 'ExportWavStems')
 $stemCommandMinimum = @{ ExportWav = @(100, 40); ExportMidi = @(100, 40); ExportWavStems = @(150, 40) }
 $stemQuestion = @{
-    en = @{ tracks = 'Tracks: (?<tracks>\d+), each about (?<length>\d+(?::\d{2}){1,2}) long'; size = 'take about (?<size>[\d.,]+) (?<unit>KiB|MiB|GiB)'; thousands = ','; point = '.' }
-    nl = @{ tracks = 'Sporen: (?<tracks>\d+), elk ongeveer (?<length>\d+(?::\d{2}){1,2}) lang'; size = 'nemen ze ongeveer (?<size>[\d.,]+) (?<unit>KiB|MiB|GiB) in'; thousands = '.'; point = ',' }
+    en = @{ tracks = 'Tracks: (?<tracks>\d+), each about (?<length>\d+(?::\d{2}){1,2}) long'; size = 'take about (?<size>[\d.,]+)(?<gap>[ \u00A0])(?<unit>KiB|MiB|GiB)'; thousands = ','; point = '.' }
+    nl = @{ tracks = 'Sporen: (?<tracks>\d+), elk ongeveer (?<length>\d+(?::\d{2}){1,2}) lang'; size = 'nemen ze ongeveer (?<size>[\d.,]+)(?<gap>[ \u00A0])(?<unit>KiB|MiB|GiB) in'; thousands = '.'; point = ',' }
 }
 function Test-StemExport([string]$where, [string]$shot = '', [string]$language = 'en', [int]$tracks = 1, [string]$exactLength = '', [string]$exactSize = '') {
     $transportBefore = (Find-Control 'TransportStatus').Current.Name
@@ -1330,8 +1331,10 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     $trackCount = [int]$Matches['tracks']; $lengthText = $Matches['length']
     if ($question -notmatch $words.size) { throw "${where}: the question does not give what the tracks take unzipped: '$question'." }
     $sizeText = $Matches['size']
-    $sizeNumber = [double]::Parse($sizeText.Replace($words.thousands, '').Replace($words.point, '.'), [Globalization.CultureInfo]::InvariantCulture)
+    $sizeGap = $Matches['gap']
     $sizeUnit = $Matches['unit']
+    if ($sizeGap -ne [string][char]0x00A0) { throw "${where}: the size in the question is separated from its unit by a space that can break a line between them: '$question'." }
+    $sizeNumber = [double]::Parse($sizeText.Replace($words.thousands, '').Replace($words.point, '.'), [Globalization.CultureInfo]::InvariantCulture)
     if ($trackCount -ne $tracks) { throw "${where}: the question says $trackCount tracks, but the project has $($tracks - 1) lanes and so $tracks tracks: '$question'." }
     $lengthParts = @($lengthText -split ':' | ForEach-Object { [int]$_ })
     $lengthSeconds = if ($lengthParts.Count -eq 3) { $lengthParts[0] * 3600 + $lengthParts[1] * 60 + $lengthParts[2] } else { $lengthParts[0] * 60 + $lengthParts[1] }
@@ -1363,7 +1366,8 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
         $buttons[$button[1]] = "$([Math]::Round($rect.Width / $scale, 1)) x $([Math]::Round($rect.Height / $scale, 1))"
     }
     if ($shot) { $null = Save-PlayScreenshot "$shot-question.png" }
-    # Cancel closes the question; nothing is saved, nothing plays, no error appears, and the command is on again.
+    # Cancel closes the question. What a runner can see of "nothing happened": the question is gone, no error appears, the command is on
+    # again and the status line reads as before (no file can be checked, because nothing here drives the save dialog).
     Invoke-DialogButton 'CloseButton' "${where}: the question went away before Cancel could be pressed."
     Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } "${where}: Cancel did not close the question."
     Wait-Condition { (Find-Control 'ExportWavStems').Current.IsEnabled } "${where}: the command stayed off after Cancel."

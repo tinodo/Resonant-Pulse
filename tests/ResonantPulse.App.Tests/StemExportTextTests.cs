@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ResonantPulse.App.Localization;
 
@@ -27,6 +28,24 @@ public sealed class StemExportTextTests
         {
             Text.Select(language);
             return Text.Get(key);
+        }
+        finally
+        {
+            Text.Select(previousLanguage);
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+    }
+
+    private static string ConfirmIn(string language, StemExport.Summary summary)
+    {
+        var previousLanguage = Text.Language;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            Text.Select(language);
+            return StemExport.ConfirmText(summary);
         }
         finally
         {
@@ -121,7 +140,7 @@ public sealed class StemExportTextTests
         {
             var sentence = string.Format(CultureInfo.InvariantCulture, Get(language, "StemExportTooLong"), Get(language, "ExportBars"));
             StringAssert.Contains(sentence, Get(language, "ExportBars"), language);
-            StringAssert.Contains(sentence, "4 GiB", language);
+            StringAssert.Contains(sentence, "4\u00A0GiB", language);
             Assert.IsFalse(sentence.Contains('{'), language);
         }
     }
@@ -173,6 +192,27 @@ public sealed class StemExportTextTests
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "ZIP\u00A0?");
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "Pistes\u00A0:");
         StringAssert.Contains(Get("fr", "StemExportConfirm"), "environ {2}\u00A0;");
+    }
+
+    [TestMethod]
+    public void ANumberAndItsUnitAreJoinedByANoBreakSpaceSoThatNoLineEndsBetweenThem()
+    {
+        // A narrow dialog wraps a line at every ordinary space: "18.7" at the end of one line and "MiB" at the start of the next reads
+        // as two things (the hosted picture of the question at 1000x720 did exactly that before).
+        foreach (var language in Languages)
+        {
+            var sentences = new List<(string Where, string Text)>
+            {
+                ($"{language}/StemExportTooLong", string.Format(CultureInfo.InvariantCulture, Get(language, "StemExportTooLong"), Get(language, "ExportBars")))
+            };
+            foreach (var bytes in new[] { 512L, 6_528_000L, 3_500_000_000L })
+                sentences.Add(($"{language}/StemExportConfirm for {bytes} bytes", ConfirmIn(language, new StemExport.Summary(4, TimeSpan.FromSeconds(34), bytes))));
+            foreach (var (where, text) in sentences)
+            {
+                Assert.IsFalse(Regex.IsMatch(text, "[0-9] (KiB|MiB|GiB)"), $"{where}: a number is separated from its unit by a space that can break: {text}");
+                Assert.IsTrue(Regex.IsMatch(text, "[0-9]\u00A0(KiB|MiB|GiB)"), $"{where}: no number is joined to its unit: {text}");
+            }
+        }
     }
 
     [TestMethod]

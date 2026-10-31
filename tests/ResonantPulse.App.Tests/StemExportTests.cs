@@ -31,30 +31,30 @@ public sealed class StemExportTests
     }
 
     [TestMethod]
-    [DataRow(512L, "1 KiB")]
-    [DataRow(19_200L, "19 KiB")]
-    [DataRow(60_000L, "59 KiB")]
-    [DataRow(104_857L, "102 KiB")]
-    [DataRow(104_858L, "0.1 MiB")]
-    [DataRow(1_048_576L, "1.0 MiB")]
-    [DataRow(6_528_000L, "6.2 MiB")]
-    [DataRow(1_072_000_000L, "1,022.3 MiB")]
+    [DataRow(512L, "1\u00A0KiB")]
+    [DataRow(19_200L, "19\u00A0KiB")]
+    [DataRow(60_000L, "59\u00A0KiB")]
+    [DataRow(104_857L, "102\u00A0KiB")]
+    [DataRow(104_858L, "0.1\u00A0MiB")]
+    [DataRow(1_048_576L, "1.0\u00A0MiB")]
+    [DataRow(6_528_000L, "6.2\u00A0MiB")]
+    [DataRow(1_072_000_000L, "1,022.3\u00A0MiB")]
     // 1,023.95 MiB is 1,073,689,395.2 bytes: one byte below it still reads in MiB, one above it already reads as 1.0 GiB, so a size
-    // is never written as "1,024.0 MiB".
-    [DataRow(1_073_689_395L, "1,023.9 MiB")]
-    [DataRow(1_073_689_396L, "1.0 GiB")]
-    [DataRow(1_073_741_824L, "1.0 GiB")]
-    [DataRow(3_500_000_000L, "3.3 GiB")]
-    [DataRow(38_654_705_664L, "36.0 GiB")]
+    // is never written as "1,024.0 MiB". A no-break space joins the number and the unit, so that no line ends between them.
+    [DataRow(1_073_689_395L, "1,023.9\u00A0MiB")]
+    [DataRow(1_073_689_396L, "1.0\u00A0GiB")]
+    [DataRow(1_073_741_824L, "1.0\u00A0GiB")]
+    [DataRow(3_500_000_000L, "3.3\u00A0GiB")]
+    [DataRow(38_654_705_664L, "36.0\u00A0GiB")]
     public void TheSizeIsInTheLargestUnitThatKeepsItAboveOne(long bytes, string expected) =>
         Assert.AreEqual(expected, StemExport.FormatSize(bytes, CultureInfo.GetCultureInfo("en")));
 
     [TestMethod]
     public void TheSizeFollowsTheLanguageForItsDecimalSeparatorAndKeepsTheUnitSymbols()
     {
-        foreach (var (language, expected) in new[] { ("en", "6.2 MiB"), ("nl", "6,2 MiB"), ("de", "6,2 MiB"), ("fr", "6,2 MiB"), ("es", "6,2 MiB") })
+        foreach (var (language, expected) in new[] { ("en", "6.2\u00A0MiB"), ("nl", "6,2\u00A0MiB"), ("de", "6,2\u00A0MiB"), ("fr", "6,2\u00A0MiB"), ("es", "6,2\u00A0MiB") })
             Assert.AreEqual(expected, InLanguage(language, () => StemExport.FormatSize(6_528_000, Text.Culture)), language);
-        Assert.AreEqual("1.022,3 MiB", StemExport.FormatSize(1_072_000_000, CultureInfo.GetCultureInfo("nl")));
+        Assert.AreEqual("1.022,3\u00A0MiB", StemExport.FormatSize(1_072_000_000, CultureInfo.GetCultureInfo("nl")));
     }
 
     [TestMethod]
@@ -120,7 +120,7 @@ public sealed class StemExportTests
         Assert.AreEqual(34, summary.Length.TotalSeconds, "16 bars of 2 seconds and the count-in bar");
         Assert.AreEqual(6_528_000L, summary.Bytes);
         Assert.AreEqual("0:34", StemExport.FormatLength(summary.Length));
-        Assert.AreEqual("6.2 MiB", StemExport.FormatSize(summary.Bytes, CultureInfo.GetCultureInfo("en")));
+        Assert.AreEqual("6.2\u00A0MiB", StemExport.FormatSize(summary.Bytes, CultureInfo.GetCultureInfo("en")));
 
         var document = new PulseDocument { Lanes = [new(), new(), new()] };
         document.Settings.CountInBars = 0;
@@ -145,7 +145,7 @@ public sealed class StemExportTests
             var error = Assert.ThrowsExactly<UserMessageException>(() => InLanguage(language, () => StemExport.Summarize(plan)));
             var expected = InLanguage(language, () => Text.Format("StemExportTooLong", Text.Get("ExportBars")));
             Assert.AreEqual(expected, error.Message, language);
-            StringAssert.Contains(error.Message, "4 GiB", language);
+            StringAssert.Contains(error.Message, "4\u00A0GiB", language);
             Assert.IsFalse(error.Message.Contains('{'), language);
             // The sentence names the setting that can be changed, with the label that setting has in this language.
             StringAssert.Contains(error.Message, InLanguage(language, () => Text.Get("ExportBars")), language);
