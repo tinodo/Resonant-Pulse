@@ -167,8 +167,26 @@ desktop; the app's data in a scratch folder; nothing audible), driven through th
   moved on afterwards. This says nothing about how it sounded, which nobody heard, or about a slow machine, where the rendering could make the
   audio stutter.
 
+**Four more runs of the real app after Copilot's first review**, two on the head before the answer and two on the head with it (Debug builds
+with the save dialog bypassed, as above, and with a throwaway delay in the compile that was read from an environment variable; none of it was
+committed), on the same private desktop, driven the same way:
+
+- *The saving notice.* On the largest project, while the archive was written (the command off, the temporary file in the folder and the page saying
+  *Saving the tracks.*), Save to library put *Saved locally* in the one notice bar. On the head before the answer the bar was empty 7.5 seconds
+  later, with the export still being written; on the head with the answer *Saving the tracks.* was back 7.5 seconds after Save to library and was
+  still there at 9.5. Closing the window then stopped the export, the process ended 0.5 seconds (before) and 0.9 seconds (after) later,
+  and the folder was empty.
+- *A refused close while the plan is compiled.* The compile was delayed by 16 seconds, the app's settings file was locked by the driver so that a
+  change of the export length could not be written (the app showed its access error), the tracks command was pressed and the window was asked to
+  close: the close was refused (the process went on and the error stayed). When the compile ended, the head before the answer asked its question,
+  23.1 seconds after the close, although the window had been asked to close; the head with the answer asked nothing, and the command was on again
+  24.5 seconds after the close. Nothing was written in either run. The lock was then released, and a second close ended the process in 0.4 and
+  0.5 seconds.
+
 **Not tried:** the Windows save dialog (it does not open on a private desktop, so the run bypassed it; the gates cannot save a file through
-it either); opening an archive in any music software or sampler; listening to any track; archives that need ZIP64 (a track longer than
+it either); in a real window, a close while the question or the save dialog is open (an open question is answered No by the close, which is
+reasoned from the code) and a close that is refused after the file is being written (held by the unit tests of the run guard only); opening an
+archive in any music software or sampler; listening to any track; archives that need ZIP64 (a track longer than
 4 GiB is refused, so only a project with a program of nearly 6 hours, or compressed data above 4 GiB, could need it; the tests' strict reader
 accepts no ZIP64 structure, so such an archive would be refused by it, and none was made); projects longer than 1,024 bars; a slow machine;
 Narrator; Windows text sizes above 100%; the Contrast themes; a musician's reading of the Dutch, German, French and Spanish texts
