@@ -54,6 +54,16 @@ internal static class StemExport
     }
 
     /// <summary>
+    /// What the page says when writing the archive failed with an input/output or access error. The file that was there is as it was
+    /// (the export is atomic), and the page says what to check. When the temporary file could not be removed either, it says which
+    /// file stays beside the destination, so that the person can delete it.
+    /// </summary>
+    internal static string NotSavedText(Exception error) =>
+        error is TemporaryFileCleanupException leftover
+            ? Text.Format("StemExportLeftover", leftover.TemporaryPath)
+            : Text.Get("StemExportNotSaved");
+
+    /// <summary>
     /// A size in the largest unit that keeps it above 1 (KiB, MiB or GiB: binary units, 1 MiB is 1,048,576 bytes, written the same in
     /// every language so that no language's MB or Mo can mean something else), with one decimal from MiB up. The unit changes where the
     /// written number would otherwise be off: from 0.1 MiB up (below it the number would read 0.0 or 0.1) and from 1,023.95 MiB up

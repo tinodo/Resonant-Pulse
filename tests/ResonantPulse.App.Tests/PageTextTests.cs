@@ -56,7 +56,7 @@ public sealed class PageTextTests
         "HelpReference", "HelpBpmTitle", "HelpBpm", "HelpBpmExample", "HelpMeterTitle", "HelpMeter", "HelpMeterExample",
         "HelpFeelTitle", "HelpFeel", "HelpFeelExample", "HelpStrength", "HelpStrengthExample",
         "TempoGuideValue", "TempoGuideConverted", "TempoGuideInput",
-        "ExportStems", "StemExportHint", "StemExportConfirm", "StemExportSaving", "StemExportSlow", "StemExportNotSaved", "StemExportTooLong"
+        "ExportStems", "StemExportHint", "StemExportConfirm", "StemExportSaving", "StemExportSlow", "StemExportNotSaved", "StemExportLeftover", "StemExportTooLong"
     ];
 
     /// <summary>Internal words that mean nothing to a musician (docs/design/pages-design.md, copy rules).</summary>

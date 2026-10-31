@@ -126,4 +126,116 @@ public sealed class StemExportRunTests
         Assert.IsTrue(token.IsCancellationRequested);
         run.End();
     }
+
+    [TestMethod]
+    public async Task ACloseThatIsRefusedBeforeTheArchiveIsWrittenVoidsTheQuestionButDoesNotCancelTheRun()
+    {
+        var run = new StemExportRun();
+        Assert.IsFalse(run.PreparationInvalidated, "With no run there is nothing to void.");
+        Assert.IsTrue(run.TryBegin(out var token));
+        Assert.IsFalse(run.PreparationInvalidated, "A new run starts with its preparation valid.");
+        Assert.IsFalse(await run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(TimeSpan.FromSeconds(5)), "The run is still there.");
+        Assert.IsTrue(run.PreparationInvalidated, "The plan that was being compiled is not asked about afterwards.");
+        Assert.IsFalse(token.IsCancellationRequested, "The run is not cancelled: it ends by itself, when it looks at the flag, and the window stays usable.");
+        Assert.IsFalse(run.IsWriting);
+        Assert.IsTrue(run.IsRunning);
+        run.End();
+        Assert.IsFalse(run.PreparationInvalidated, "The flag ends with the run it was set for.");
+    }
+
+    [TestMethod]
+    public async Task ACloseThatIsRefusedWhileTheArchiveIsWrittenLeavesTheRunAloneSoThatItsPreparationStaysValid()
+    {
+        var run = new StemExportRun();
+        Assert.IsTrue(run.TryBegin(out var token));
+        run.BeginWriting();
+        Assert.IsFalse(await run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.IsFalse(run.PreparationInvalidated, "An export that is being written is not the preparation a refused close voids.");
+        Assert.IsFalse(token.IsCancellationRequested, "It is not cancelled either: the person was told nothing that would make them expect it.");
+        Assert.IsTrue(run.IsWriting);
+        run.End();
+    }
+
+    [TestMethod]
+    public void TheFlagOfOneRunDoesNotReachTheNext()
+    {
+        var run = new StemExportRun();
+        Assert.IsTrue(run.TryBegin(out _));
+        _ = run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30));
+        Assert.IsTrue(run.PreparationInvalidated);
+        run.End();
+        Assert.IsTrue(run.TryBegin(out _));
+        Assert.IsFalse(run.PreparationInvalidated, "A run begun after the close was refused asks its question.");
+        run.End();
+        // A refused close with no run going leaves nothing behind for the run that follows.
+        _ = run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30));
+        Assert.IsFalse(run.PreparationInvalidated);
+        Assert.IsTrue(run.TryBegin(out _));
+        Assert.IsFalse(run.PreparationInvalidated);
+        run.End();
+    }
+
+    [TestMethod]
+    public void ARunIsWritingFromTheMomentItBeginsWritingUntilItEnds()
+    {
+        var run = new StemExportRun();
+        Assert.IsFalse(run.IsWriting);
+        run.BeginWriting();
+        Assert.IsFalse(run.IsWriting, "With no run going nothing is being written, and nothing is remembered for the next run.");
+        Assert.IsTrue(run.TryBegin(out _));
+        Assert.IsFalse(run.IsWriting, "The question, the choice of the file and the compiling come before the writing.");
+        Assert.IsTrue(run.IsRunning);
+        run.BeginWriting();
+        Assert.IsTrue(run.IsWriting);
+        run.End();
+        Assert.IsFalse(run.IsWriting);
+        Assert.IsTrue(run.TryBegin(out _));
+        Assert.IsFalse(run.IsWriting, "A new run is not writing yet.");
+        run.End();
+    }
+
+    [TestMethod]
+    public async Task APlanThatIsStillBeingCompiledWhenACloseIsRefusedIsNotAskedAboutAfterwards()
+    {
+        // The order the Library page follows (MainWindow.Files.cs, ExportStemsAsync): begin, compile, look at the flag, ask, write, end.
+        // The compile is held here until the close has been refused, which is how the page can be at that point when the person closes.
+        foreach (var refused in new[] { true, false })
+        {
+            var run = new StemExportRun();
+            var compiled = new TaskCompletionSource();
+            var asked = false;
+            Assert.IsTrue(run.TryBegin(out _));
+            var page = Task.Run(async () =>
+            {
+                try
+                {
+                    await compiled.Task;
+                    if (run.PreparationInvalidated) return;
+                    asked = true;
+                    run.BeginWriting();
+                }
+                finally { run.End(); }
+            });
+            if (refused) Assert.IsFalse(await run.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(TimeSpan.FromSeconds(5)));
+            compiled.SetResult();
+            await page.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.AreEqual(!refused, asked, refused ? "The question was asked after the close had been refused." : "Without a close the question is asked.");
+            Assert.IsFalse(run.IsRunning, "The run has ended, so the command is on again.");
+        }
+    }
+
+    [TestMethod]
+    public void WhenTheTimeOfATransientNoticeRunsOutTheNoticeOfAnArchiveThatIsBeingWrittenComesBack()
+    {
+        var run = new StemExportRun();
+        Assert.AreEqual(FadedNotice.Close, run.WhenTransientNoticeFades(informational: true), "No run: the notice that ran out closes, as it always did.");
+        Assert.AreEqual(FadedNotice.Keep, run.WhenTransientNoticeFades(informational: false), "A warning or an error stays until it is dismissed.");
+        Assert.IsTrue(run.TryBegin(out _));
+        Assert.AreEqual(FadedNotice.Close, run.WhenTransientNoticeFades(informational: true), "Before the writing there is no notice that says so.");
+        run.BeginWriting();
+        Assert.AreEqual(FadedNotice.ShowSaving, run.WhenTransientNoticeFades(informational: true), "Saved (from Save to library) replaced it, and it comes back.");
+        Assert.AreEqual(FadedNotice.Keep, run.WhenTransientNoticeFades(informational: false), "An error is never replaced by it.");
+        run.End();
+        Assert.AreEqual(FadedNotice.Close, run.WhenTransientNoticeFades(informational: true), "The export has ended: nothing comes back.");
+    }
 }

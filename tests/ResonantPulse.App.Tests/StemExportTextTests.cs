@@ -17,7 +17,7 @@ public sealed class StemExportTextTests
 {
     private static readonly string[] Languages = ["en", "nl", "de", "fr", "es"];
 
-    private static readonly string[] Keys = ["ExportStems", "StemExportHint", "StemExportConfirm", "StemExportSaving", "StemExportSlow", "StemExportNotSaved", "StemExportTooLong"];
+    private static readonly string[] Keys = ["ExportStems", "StemExportHint", "StemExportConfirm", "StemExportSaving", "StemExportSlow", "StemExportNotSaved", "StemExportLeftover", "StemExportTooLong"];
 
     private static string Get(string language, string key)
     {
@@ -72,6 +72,10 @@ public sealed class StemExportTextTests
             Assert.IsTrue(question.IndexOf("{0}", StringComparison.Ordinal) < question.IndexOf("{1}", StringComparison.Ordinal), language);
             Assert.IsTrue(question.IndexOf("{1}", StringComparison.Ordinal) < question.IndexOf("{2}", StringComparison.Ordinal), language);
             StringAssert.Contains(Get(language, "StemExportTooLong"), "{0}", language);
+            // The path of the temporary file that stays comes last, with nothing after it that could be read as part of the path.
+            var leftover = Get(language, "StemExportLeftover");
+            Assert.IsTrue(leftover.EndsWith("{0}", StringComparison.Ordinal), $"{language}: the path is the last thing in the sentence: '{leftover}'");
+            Assert.AreEqual(leftover.IndexOf("{0}", StringComparison.Ordinal), leftover.LastIndexOf("{0}", StringComparison.Ordinal), language);
         }
     }
 
@@ -157,11 +161,19 @@ public sealed class StemExportTextTests
         {
             ["en"] = "free space", ["nl"] = "vrije ruimte", ["de"] = "freien Platz", ["fr"] = "espace libre", ["es"] = "espacio libre"
         };
+        var temporaryFile = new Dictionary<string, string>
+        {
+            ["en"] = "temporary file", ["nl"] = "tijdelijk bestand", ["de"] = "temporäre Datei", ["fr"] = "fichier temporaire", ["es"] = "archivo temporal"
+        };
         foreach (var language in Languages)
         {
             var sentence = Get(language, "StemExportNotSaved");
             StringAssert.Contains(sentence, unchanged[language], language);
             StringAssert.Contains(sentence, spaceAndOpen[language], language);
+            // The sentence for a temporary file that could not be removed says the same about the file that was there, and which kind of file stays.
+            var leftover = Get(language, "StemExportLeftover");
+            StringAssert.Contains(leftover, unchanged[language], language);
+            StringAssert.Contains(leftover, temporaryFile[language], language);
         }
     }
 
@@ -228,6 +240,7 @@ public sealed class StemExportTextTests
             Assert.IsTrue(Get(language, "StemExportSaving").Length <= 36, $"{language}/StemExportSaving: {Get(language, "StemExportSaving")}");
             Assert.IsTrue(Get(language, "StemExportSlow").Length <= 40, $"{language}/StemExportSlow: {Get(language, "StemExportSlow")}");
             Assert.IsTrue(Get(language, "StemExportNotSaved").Length <= 260, $"{language}/StemExportNotSaved: {Get(language, "StemExportNotSaved").Length}");
+            Assert.IsTrue(Get(language, "StemExportLeftover").Length <= 300, $"{language}/StemExportLeftover: {Get(language, "StemExportLeftover").Length}");
             Assert.IsTrue(Get(language, "StemExportTooLong").Length <= 220, $"{language}/StemExportTooLong: {Get(language, "StemExportTooLong").Length}");
         }
         Assert.IsTrue(Get("en", "StemExportHint").Length <= 160, $"en/StemExportHint: {Get("en", "StemExportHint").Length}");

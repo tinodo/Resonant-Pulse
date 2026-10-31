@@ -84,7 +84,16 @@ public sealed partial class MainWindow : Window
             DispatcherQueue.TryEnqueue(RaiseTextScaleChanged);
         TextSettings.TextScaleFactorChanged += OnTextScaleChanged;
         Closed += (_, _) => TextSettings.TextScaleFactorChanged -= OnTextScaleChanged;
-        _noticeTimer.Tick += (_, _) => { _noticeTimer.Stop(); if (Notice.Severity == InfoBarSeverity.Informational) Notice.IsOpen = false; };
+        _noticeTimer.Tick += (_, _) =>
+        {
+            _noticeTimer.Stop();
+            switch (_stemExport.WhenTransientNoticeFades(Notice.Severity == InfoBarSeverity.Informational))
+            {
+                case FadedNotice.Close: Notice.IsOpen = false; break;
+                // The notice that said the tracks are being saved was replaced by the one that has just faded.
+                case FadedNotice.ShowSaving: ShowOngoingNotice("StemExportSaving"); break;
+            }
+        };
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);
         var scale = dpi == 0 ? 1 : dpi / 96.0;

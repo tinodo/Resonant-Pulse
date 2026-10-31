@@ -203,4 +203,26 @@ public sealed class StemExportTests
         // The size is the one the exporter will write: 5 tracks of 34 seconds at 48,000 Hz.
         Assert.AreEqual(5 * 34 * 48000L * 4, summary.Bytes);
     }
+
+    [TestMethod]
+    public void ATemporaryFileThatStaysIsNamedAndEveryOtherFailureGetsTheGeneralSentence()
+    {
+        const string leftover = @"C:\Music\Projects\.Take 1-tracks.zip.0123456789abcdef0123456789abcdef.tmp";
+        var cleanupFailed = new TemporaryFileCleanupException(leftover, $"Operation failed and temporary file cleanup failed: '{leftover}'.",
+            new AggregateException(new IOException("There is not enough space on the disk."), new UnauthorizedAccessException("Access to the path is denied.")));
+        foreach (var language in Languages)
+        {
+            var general = InLanguage(language, () => Text.Get("StemExportNotSaved"));
+            // A full disk, a file that is open elsewhere and a denied access need no file named: nothing is left behind.
+            Assert.AreEqual(general, InLanguage(language, () => StemExport.NotSavedText(new IOException("There is not enough space on the disk."))), language);
+            Assert.AreEqual(general, InLanguage(language, () => StemExport.NotSavedText(new UnauthorizedAccessException())), language);
+            Assert.AreEqual(general, InLanguage(language, () => StemExport.NotSavedText(new FileNotFoundException())), language);
+
+            var text = InLanguage(language, () => StemExport.NotSavedText(cleanupFailed));
+            Assert.AreEqual(InLanguage(language, () => Text.Format("StemExportLeftover", leftover)), text, language);
+            StringAssert.Contains(text, leftover, language);
+            Assert.AreNotEqual(general, text, language);
+            Assert.IsFalse(text.Contains("{0}"), $"{language}: the path was not put in: {text}");
+        }
+    }
 }

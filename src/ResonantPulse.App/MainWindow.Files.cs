@@ -340,17 +340,21 @@ public sealed partial class MainWindow
                 var plan = ScheduleCompiler.Compile(snapshot, 48000, bars, true);
                 return (Plan: plan, Summary: StemExport.Summarize(plan));
             }, token);
+            // A close that was refused while the plan was being compiled: the person was closing the window, so the question is not asked now.
+            if (_stemExport.PreparationInvalidated) return;
             if (!await ConfirmAsync(StemExport.ConfirmText(prepared.Summary))) return;
             var path = await PickSavePathAsync(".zip", Text.Get("ExportStems"), StemExport.SuggestedFileName(snapshot.Name));
             if (path is null) return;
             token.ThrowIfCancellationRequested();
+            _stemExport.BeginWriting();
             ShowOngoingNotice("StemExportSaving");
             try { await Task.Run(() => WaveStemExporter.ExportAsync(path, prepared.Plan, names, token), token); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-                // The file that was there is as it was (the export is atomic); the person is told so, and the cause is in the log.
+                // The file that was there is as it was (the export is atomic); the person is told so, and the cause is in the log. When the
+                // temporary file could not be removed either, the person is told which file stays.
                 Diagnostics.Write("Saving the tracks", error);
-                throw new UserMessageException(Text.Get("StemExportNotSaved"));
+                throw new UserMessageException(StemExport.NotSavedText(error));
             }
             ShowNotice("Saved");
         }
