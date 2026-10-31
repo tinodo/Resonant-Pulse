@@ -47,7 +47,8 @@ public static class WaveStemExporter
     /// <summary>
     /// Writes the archive atomically: to a temporary file next to <paramref name="path"/>, then moved over it. Whatever goes wrong
     /// (a file that is open elsewhere, a full disk, a cancelled export), the file that was there stays as it was and the temporary
-    /// file is removed. The arguments are checked before anything is written. One export runs at a time; others wait their turn.
+    /// file is removed; when it cannot be removed either, the exception is a <see cref="TemporaryFileCleanupException"/> that names it.
+    /// The arguments are checked before anything is written. One export runs at a time; others wait their turn.
     /// <paramref name="laneNames"/> holds the name of every authored lane in lane order (the plan keeps only their number); they
     /// are written into the manifest and nowhere else.
     /// </summary>

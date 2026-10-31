@@ -442,6 +442,62 @@ public sealed class WaveStemExporterTests
     }
 
     [TestMethod]
+    public async Task Export_AWriterFailureWhoseTemporaryFileIsRemovedSurfacesAsItWasAndLeavesNothingBehind()
+    {
+        // The typed cleanup failure is for a temporary file that stays; every other failure is what it was before it existed.
+        using var temp = new TempDirectory();
+        string path = temp.File("easy.zip");
+        await File.WriteAllTextAsync(path, "retained");
+        var failure = await Check.ThrowsAsync<IOException>(() => AtomicFile.WriteAsync(path, (stream, _) =>
+            throw new IOException("There is not enough space on the disk."), CancellationToken.None));
+        Assert.IsNotInstanceOfType<TemporaryFileCleanupException>(failure);
+        Assert.AreEqual("There is not enough space on the disk.", failure.Message);
+        Assert.AreEqual("retained", await File.ReadAllTextAsync(path));
+        Assert.AreEqual(1, Directory.GetFiles(temp.Root).Length);
+        temp.NoTemps();
+    }
+
+    [TestMethod]
+    public async Task Export_AFailureWhoseTemporaryFileCannotBeRemovedNamesThatFileAndKeepsBothCauses()
+    {
+        // AtomicFile is what the export writes through; the test is in this class because this class is in the Windows file-integrity
+        // job (a read-only temporary file is what makes the removal fail, and only Windows refuses to delete one).
+        if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Requires the Windows read-only attribute to block deleting the temporary file.");
+        using var temp = new TempDirectory();
+        string path = temp.File("kept.zip");
+        await File.WriteAllTextAsync(path, "retained");
+        string? temporary = null;
+        try
+        {
+            var failure = await Check.ThrowsAsync<TemporaryFileCleanupException>(() => AtomicFile.WriteAsync(path, (stream, _) =>
+            {
+                temporary = stream.Name;
+                File.SetAttributes(temporary, FileAttributes.ReadOnly);
+                throw new IOException("There is not enough space on the disk.");
+            }, CancellationToken.None));
+            Assert.IsNotNull(temporary);
+            Assert.AreEqual(temporary, failure.TemporaryPath, "The exception names the file that stays.");
+            StringAssert.Contains(failure.Message, temporary, "The message names it too, as it did before the exception had a type.");
+            var causes = Assert.IsInstanceOfType<AggregateException>(failure.InnerException).InnerExceptions;
+            Assert.AreEqual(2, causes.Count);
+            Assert.AreEqual("There is not enough space on the disk.", causes[0].Message, "The first cause is what went wrong with the writing.");
+            Assert.IsInstanceOfType<UnauthorizedAccessException>(causes[1], "The second cause is what went wrong with the removal.");
+            Assert.AreEqual("retained", await File.ReadAllTextAsync(path), "The file that was there is as it was.");
+            Assert.IsTrue(File.Exists(temporary), "The temporary file stays, which is what the exception says.");
+            Assert.AreEqual(2, Directory.GetFiles(temp.Root).Length);
+        }
+        finally
+        {
+            if (temporary is not null && File.Exists(temporary))
+            {
+                File.SetAttributes(temporary, FileAttributes.Normal);
+                File.Delete(temporary);
+            }
+        }
+        temp.NoTemps();
+    }
+
+    [TestMethod]
     public async Task Export_EntryNamesAreTheFixedNamesWhateverTheLaneNamesAre()
     {
         string[][] nameSets =
