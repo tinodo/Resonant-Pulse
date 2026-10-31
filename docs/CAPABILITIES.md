@@ -161,10 +161,12 @@ keyboard (or Hit) delivered each press to the app and where the app's audio stre
 display, speaker and Bluetooth delays are not corrected for and nothing is recorded, so it is not a calibration. The unit tests hold the
 writer to exact bytes, to a reader that knows only this format, to the .NET library's own CSV reader and to a decoder for the names, and the
 Windows file-integrity job runs its file-sharing cases. The first-use verifier opens the page at the first-use size, 800x600, 1000x720,
-400x720 and 320x900 and in Dutch and requires the four commands to be whole, inside the window and the card, at least as large as they are
+400x720 and 320x900 and in Dutch and requires the four commands to be whole, inside the window and at least 10 DIP inside their card (the card
+cuts what is wider than its slot, so a rectangle that reaches its edge is one that was cut), at least as large as they are
 (Begin 100 by 40 DIP, Hit 70 by 40, Finish 150 by 40, Export 100 by 40), not overlapping, with Export after Finish, and the hint to be whole,
-at least 150 by 14 DIP, inside the card and below Export; on a run with audio it finishes a check and requires Export to come on, the ready
-line to name the project and the rhythm, a new check, a Stop during a check and a renamed project to behave as above. Not established: the
+at least 150 by 14 DIP, inside the card's padding and below Export; on a run with audio it finishes a check and requires Export to come on, the ready
+line to name the project and the rhythm, a new check, a Stop during a check and a renamed project to behave as above. Each of those checks
+was shown to fail on a build with that one thing broken (docs/DELIVERY.md summarises the defects). Not established: the
 save dialog (it is Windows' own and cannot be driven on a hosted runner, so no gate saves a file through it), that a spreadsheet program
 reads the file (none has opened one), the enabled state on a hosted runner (it has no audio output, so no check can finish there; the
 local private-desktop run with silent audio checks it), what a screen reader says (the hint is linked to the command as its description and
