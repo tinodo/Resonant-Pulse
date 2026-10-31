@@ -49,10 +49,10 @@ what it says is what is saved:
 - **The metronome plays** meanwhile (as it may while a WAV is exported): the export reads only its copy. It does not change what plays and
   does not follow its edits. Whether the rendering can make the audio stutter on a slow machine is not established.
 - **The window is closed** while the file is written: the export stops, the temporary file is removed and a file that was already at the
-  destination is as it was. Closing waits for the export to stop for at most 4 seconds, the time it already allows for saving the project
-  (on the largest project here it stopped in 0.6 seconds); a close that is refused, because the project could not be saved, leaves the export
-  running; and if the export had not stopped when the 4 seconds passed the window would close without it, which was not seen and could leave
-  a temporary file beside the destination.
+  destination is as it was. Closing waits for the export to stop for at most 4 seconds, after the up to 4 seconds it already allows for saving
+  the project (on the largest project here it stopped in 0.6 seconds); a close that is refused, because the project could not be saved, leaves
+  the export running; and if the export had not stopped when the 4 seconds passed the window would close without it, which was not seen and
+  could leave a temporary file beside the destination.
 
 ## Format
 
@@ -88,9 +88,13 @@ what it says is what is saved:
 ## Writing it
 
 The file is written atomically: to a temporary file next to the destination, then moved over it. If anything goes wrong (the file is open in
-another program, it is read-only, the disk is full, the export is cancelled or the window is closed) the file that was there stays as it was, the
-temporary file is removed, and the page says that the tracks could not be saved and that a file that was already there has not been changed. One
-export of tracks runs at a time, and the command is off while one does; a notice says that the tracks are being saved. A track longer than a WAV file
+another program, it is read-only, the disk is full, the export is cancelled or the window is closed) the file that was there stays as it was and
+the temporary file is removed. What the page says depends on what went wrong: for a file that is open in another program, read-only or on a full
+disk (an input/output or access error) it says that the tracks could not be saved and that a file that was already there has not been changed; for
+another failure (a destination that is not a local path, a project that cannot be compiled) it shows the app's ordinary error for it; and when the
+window is closed nothing is shown. One export of tracks runs at a time, and the command is off from the press to the end, also while the question
+is open and the plan is compiled; a notice says that the tracks are being saved only while the file is written (after the save dialog), not
+before. A track longer than a WAV file
 can be (4 GiB, about 6 hours at 48,000 Hz) is refused in words, naming the setting that can be changed, before a file is chosen. Everything about the
 file is checked before anything is written.
 
