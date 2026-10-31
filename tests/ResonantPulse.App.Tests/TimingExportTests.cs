@@ -165,6 +165,34 @@ public sealed class TimingExportTests
     }
 
     [TestMethod]
+    public void TheReadyLineShortensALongNameSoThatTheRhythmAndTheTimeAreAlwaysThere()
+    {
+        var longName = new string('x', 200);
+        foreach (var language in Languages)
+        {
+            var line = InLanguage(language, () => TimingExport.ReadyText(Session(longName, target: longName, lane: 3)));
+            var when = InLanguage(language, () => Done.ToLocalTime().ToString("g", Text.Culture));
+            // The end of the line is what a narrow window cuts off, and the time is the part that cannot be spared.
+            Assert.IsTrue(line.EndsWith(when + ".", StringComparison.Ordinal), $"{language}: {line}");
+            StringAssert.Contains(line, new string('x', TimingExport.MaximumNameShown - 1) + "…", language);
+            Assert.IsFalse(line.Contains(new string('x', TimingExport.MaximumNameShown)), $"{language}: a name is not cut");
+            Assert.IsTrue(line.Length <= 2 * TimingExport.MaximumNameShown + 70, $"{language}: {line.Length} characters");
+        }
+        // A name of exactly the limit is shown whole; one more character and the end is an ellipsis.
+        var whole = TimingExport.ReadyText(Session(new string('a', TimingExport.MaximumNameShown)));
+        StringAssert.Contains(whole, new string('a', TimingExport.MaximumNameShown));
+        Assert.IsFalse(whole.Contains('…'));
+        var cut = TimingExport.ReadyText(Session(new string('a', TimingExport.MaximumNameShown + 1)));
+        StringAssert.Contains(cut, new string('a', TimingExport.MaximumNameShown - 1) + "…");
+        // The cut never falls between the halves of a character, and no space is left in front of the ellipsis.
+        var pair = TimingExport.ReadyText(Session(new string('b', TimingExport.MaximumNameShown - 2) + "\U0001F941\U0001F941"));
+        StringAssert.Contains(pair, new string('b', TimingExport.MaximumNameShown - 2) + "…");
+        Assert.IsFalse(pair.Any(char.IsLowSurrogate) || pair.Any(char.IsHighSurrogate), pair);
+        var spaced = TimingExport.ReadyText(Session(new string('c', TimingExport.MaximumNameShown - 3) + "    dddd"));
+        StringAssert.Contains(spaced, new string('c', TimingExport.MaximumNameShown - 3) + "…");
+    }
+
+    [TestMethod]
     public void TheReadyLineIsOneLineWhateverIsInTheNames()
     {
         foreach (var language in Languages)

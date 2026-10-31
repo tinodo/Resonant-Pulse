@@ -23,7 +23,8 @@ unplayed beats counted, the times of the clicks and of the presses, and the anal
 check ended:
 
 - **The project is edited or renamed**, or another project is opened: the file still names the project and the rhythm as they were when
-  the check ended, and the page's line "Ready to export: ..." says the same.
+  the check ended, and the page's line "Ready to export: ..." says the same (a name of more than 40 characters is cut on that line, with an
+  ellipsis, so that the rhythm and the time always fit; the file holds it whole).
 - **The lane that was followed is removed or renamed**: the file keeps its name, and `target_lane` is the place it had in the project that
   was playing (0 is the first lane), which need not be its place in the project now. The main beat is `-1` and is named `Main beat` in the
   file in every language (the page names it in the language in use).

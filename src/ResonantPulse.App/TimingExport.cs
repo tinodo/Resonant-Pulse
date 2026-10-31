@@ -15,6 +15,9 @@ internal static class TimingExport
     /// <summary>The part of the suggested name that comes from the project, so that the whole stays within what a name box shows.</summary>
     private const int MaximumProjectPart = 90;
 
+    /// <summary>The most characters of a project or rhythm name that the line saying what is exported shows.</summary>
+    internal const int MaximumNameShown = 40;
+
     /// <summary>
     /// What a Windows file name cannot hold: these nine characters and every control character. A fixed set, not the running
     /// system's own list, so that the same project gives the same suggestion on every machine the code is tested on.
@@ -54,14 +57,24 @@ internal static class TimingExport
 
     /// <summary>
     /// The line that says what an export would hold: the project and the rhythm of the finished check and when it ended. The names
-    /// are the ones the check had, not the ones the project has now, and the main beat is named in the language in use.
+    /// are the ones the check had, not the ones the project has now, and the main beat is named in the language in use. A long name
+    /// is cut (the file holds it whole), so that the rhythm and the time always follow it on the line.
     /// </summary>
     internal static string ReadyText(TimingSession session) => Text.Format("TimingCsvReady",
-        OneLine(session.Context.ProjectName),
-        OneLine(session.Context.LaneIndex < 0 ? Text.Get("MainTarget") : session.Context.TargetName),
+        Shown(session.Context.ProjectName),
+        Shown(session.Context.LaneIndex < 0 ? Text.Get("MainTarget") : session.Context.TargetName),
         session.CompletedAtUtc.ToLocalTime().ToString("g", Text.Culture));
 
-    /// <summary>A name as one line of text: a line break or another control character in it is a space.</summary>
-    private static string OneLine(string name) =>
-        string.Concat(name.Select(character => char.IsControl(character) ? ' ' : character));
+    /// <summary>
+    /// A name as the line shows it: on one line (a line break or another control character in it is a space) and of at most
+    /// <see cref="MaximumNameShown"/> characters, the end of a longer one being an ellipsis. Never cut between the halves of a character.
+    /// </summary>
+    private static string Shown(string name)
+    {
+        var line = string.Concat(name.Select(character => char.IsControl(character) ? ' ' : character));
+        if (line.Length <= MaximumNameShown) return line;
+        var length = MaximumNameShown - 1;
+        if (char.IsHighSurrogate(line[length - 1])) length--;
+        return line[..length].TrimEnd() + "…";
+    }
 }

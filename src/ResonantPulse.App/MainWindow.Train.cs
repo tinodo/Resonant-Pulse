@@ -148,8 +148,6 @@ public sealed partial class MainWindow
         if (_lastTimingSession is { } finished && !_isTimingArmed)
         {
             var ready = Body(TimingExport.ReadyText(finished));
-            ready.MaxLines = 2;
-            ready.TextTrimming = TextTrimming.CharacterEllipsis;
             Identify(ready, "TimingCsvReady", ready.Text);
             content.Children.Add(ready);
         }
