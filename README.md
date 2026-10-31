@@ -60,7 +60,15 @@ wide as what they hold, plain-language text and no Apply button, because a chang
 takes effect as you make it. **Reduce motion** in Settings makes the marker on the
 circle jump from beat to beat instead of gliding and hides the scrolling tape of
 upcoming clicks. The export length is in Library, next to the export buttons: it
-is the number of bars written to a WAV or MIDI file when the project has no program.
+is the number of bars written to a WAV file, a MIDI file or the tracks of a ZIP when the project has no program.
+
+In Library, **Export separate tracks (ZIP)** saves the project as one ZIP with a WAV file for the main beat, one for each
+lane and a manifest. All the files start at the same moment and are equally long, so they line up when you put them at the
+same place in music software. It asks first how many tracks it will save, how long each is and how much room they take
+unzipped, and only then for the file. The count-in is in the main file only, and a lane that is muted, or left out by another
+lane's Solo, still has its file, silent. The files added together are not guaranteed to give the exported WAV back: each one is
+rounded to 16 bits and held at full scale on its own. Closing the window while it saves stops it and leaves no half-written
+file. The archive is described in [docs/WAV-STEMS.md](docs/WAV-STEMS.md).
 
 On Train, the timing check compares when each key press (F, or the Hit button)
 reached the app with when each click was due. When a check has finished, **Export

@@ -90,8 +90,65 @@ file is checked before anything is written.
 
 ## What it costs
 
-@@MEASURED: table of the sizes, times and memory (Release build), the manifest at the largest size, and the question's 512 MiB line.
+Measured in the Release build on one development PC (Windows, an 8-core Intel Core i9-10885H, shared with other programs that kept the
+processor between 18 and 48% busy when the runs began and ended), by a throwaway test that is not in the repository: it compiles the
+project, calls `WaveStemExporter.ExportAsync` into a scratch folder and reads the peak working set of the test process (about 55 MB
+before the export starts, the test host's own). Each project was run three times, in separate processes; the ranges are what that machine
+did, not a promise for another one.
 
-## What has not been tried
+| Project | Files | Audio unzipped | Compile | Write | ZIP | `manifest.json` (in the ZIP) | Peak memory |
+|---|---|---|---|---|---|---|---|
+| 16 bars, no lane (the first project) | 1 | 6.2 MiB | 91 to 126 ms | 159 to 242 ms | 0.34 MiB | 11,748 bytes (1,212) | 60 to 61 MB |
+| 16 bars, 3 lanes | 4 | 24.9 MiB | 95 to 187 ms | 322 to 622 ms | 1.69 MiB | 46,908 bytes (2,539) | 61 to 62 MB |
+| 1,024 bars, 8 lanes of 14 to 16 clicks to a 4-quarter cycle (125,956 clicks) | 9 | 3,378.3 MiB (3.3 GiB) | 0.5 to 1.2 s | 31.6 to 39.0 s | 140.18 MiB | 19,119,390 bytes (489,278) | 100 to 101 MB |
+| 1,024 bars, 8 lanes of 118 to 120 clicks to a 4-quarter cycle (977,924 clicks) | 9 | 3,378.3 MiB (3.3 GiB) | 4.1 to 4.5 s | 54.7 to 62.1 s | 212.51 MiB | 148,631,331 bytes (3,932,497) | 331 to 334 MB |
 
-@@MEASURED: the end-to-end run and what it showed; what was not tried (save dialog, music software, ZIP64, listening, text sizes).
+1,024 bars is the most the Export length box takes and 8 the most lanes a project has, so the last two rows are the largest project the box
+allows; a project with a program can be longer (a track of up to 4 GiB, about 6 hours, is accepted) and was not measured. For the two large
+projects the write took 9.6 to 11.8 and 16.6 to 18.8 seconds for each GiB of audio. The question adds "This can take a while." from 512 MiB
+unzipped; by proportion that size takes about 5 to 9 seconds here, which was not measured on its own. The plan is compiled before the
+question, off the interface's thread, with the command off and nothing else on screen: the compile column is that wait. The densest
+project's manifest is 149 MB of text, 3.9 MB in the ZIP. The peak memory above is for compiling and writing a project of that size.
+
+The ZIP's compression is Deflate at the default level. Compared in the same build, three runs of the two small projects (the median of the
+three writes; one run of each level in the third set was several times slower while the PC was busy, which the median leaves out):
+
+| Level | 16 bars, no lane: ZIP, write | 16 bars, 3 lanes: ZIP, write |
+|---|---|---|
+| Optimal (used) | 0.34 MiB, 183 ms | 1.69 MiB, 468 ms |
+| Fastest | 0.46 MiB (36% larger), 219 ms | 2.26 MiB (34% larger), 544 ms |
+| Smallest size | 0.27 MiB (20% smaller), 316 ms | 1.43 MiB (15% smaller), 886 ms |
+| No compression | 6.24 MiB, 300 ms | 24.95 MiB, 1,073 ms |
+
+No other level was faster in the median, and the largest project made a ZIP of 252.66 MiB at the fastest level against 140.18 MiB at the
+default (one run, so no time is given for it). The smallest size takes longer for 15 to 20% less. This was measured on the machine described
+above only.
+
+## What has been tried, and what has not
+
+**One run of the real app** (a Debug build of the head with the save dialog bypassed, a throwaway patch that was never committed; a private
+desktop; the app's data in a scratch folder; nothing audible), driven through the window's own automation, and the archive read by Python's
+`zipfile` and `wave` modules, which share no code with the app:
+
+- The question named 7 tracks, about 0:34 each and about 43.6 MiB unzipped for a project with six lanes; Cancel wrote nothing and left the
+  command on; Continue wrote a ZIP of 1,578,043 bytes and the page said "Saved locally"; a second export replaced the file with identical bytes
+  and the bytes were identical across two runs of the app. The reader found the entries in order (`main.wav`, `lane-01.wav` to `lane-06.wav`,
+  `manifest.json`), every CRC correct, every entry dated 1 January 1980, 33 checks and none failing. Among them: the click counts of the
+  manifest against the files; a lane called `../../outside.wav` is still `lane-02.wav` and nothing was written outside the folder; the
+  muted lane, the lane with a chance of 0 and the lane without a sound have no audible click and are silent files of the same length,
+  while the lane with no name has its own 64 clicks; each track's first sound comes one frame after its first click; the lane files are
+  silent for the whole count-in (96,000 frames); and the seven files added together differ from the mixed WAV of the same project by at
+  most 1 step (the bound for 7 files is 4), the mix being nowhere near full scale.
+- The largest project (1,024 bars, 8 lanes): the question named 9 tracks of about 34:10 and 3.3 GiB, with the line that saving can take a
+  while. While it wrote, the folder held the temporary file next to the destination, the command was off and the page said the tracks were
+  being saved. Closing the window then made the process exit 0.6 seconds later and left the folder empty: no archive, no temporary file.
+- A silent project that was playing: the question named 3 tracks; the export wrote the ZIP; the transport still read Playing and the position
+  moved on afterwards. This says nothing about how it sounded, which nobody heard, or about a slow machine, where the rendering could make the
+  audio stutter.
+
+**Not tried:** the Windows save dialog (it does not open on a private desktop, so the run bypassed it; the gates cannot save a file through
+it either); opening an archive in any music software or sampler; listening to any track; archives that need ZIP64 (a track longer than
+4 GiB is refused, so only a project with a program of nearly 6 hours, or compressed data above 4 GiB, could need it; the tests' strict reader
+accepts no ZIP64 structure, so such an archive would be refused by it, and none was made); projects longer than 1,024 bars; a slow machine;
+Narrator; Windows text sizes above 100%; the Contrast themes; a musician's reading of the Dutch, German, French and Spanish texts
+(docs/design/glossary.md lists the questions).

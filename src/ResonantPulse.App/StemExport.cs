@@ -41,8 +41,8 @@ internal static class StemExport
 
     /// <summary>
     /// From this many unzipped bytes on, the question also says that saving can take a while: the time is mostly rendering and
-    /// conversion, about 20 to 40 seconds for each GiB on the machine where it was measured (docs/WAV-STEMS.md), so a few seconds
-    /// below this size and the better part of a minute above it.
+    /// conversion, about 10 to 19 seconds for each GiB (Release build) on the machine where it was measured (docs/WAV-STEMS.md), so a
+    /// few seconds below this size and longer above it.
     /// </summary>
     internal const long SlowBytes = 512L * 1024 * 1024;
 

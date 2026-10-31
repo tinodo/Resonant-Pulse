@@ -180,6 +180,36 @@ local private-desktop run with silent audio checks it), what a screen reader say
 Narrator has not been used), a musician's reading of the Dutch, German, French and Spanish sentences (docs/design/glossary.md lists the
 questions) and Windows text sizes above 100% on the real setting.
 
+The Library page can save the project as separate tracks. Export separate tracks (ZIP) is the third command of the Export card, after Export
+WAV and Export MIDI, with a line under the row that says what it saves; docs/WAV-STEMS.md describes the archive entry by entry. Pressing it
+compiles the project off the interface's thread, asks (how many tracks, how long each is, how much room they take unzipped, that the count-in is
+in the main file only and that a muted lane is a silent file, and from 512 MiB unzipped that it can take a while) and only after Continue opens
+the save dialog; Cancel writes nothing and leaves the command on. From the press to the end the command is off and a notice says that the tracks
+are being saved; closing the window stops the export and removes the temporary file, and a file that was already at the destination stays as it
+was. The archive holds `main.wav` (the main beat, the clicks that split a beat and the count-in), `lane-01.wav` to `lane-NN.wav` (one for each
+lane, silent during the count-in, named by number and never by the lane's name) and `manifest.json`; every WAV file starts at frame 0 and is as
+long as the mixed WAV would be, and a lane that is muted, left out by another lane's Solo, with a chance of 0 or without a click still has its
+file, silent. The WAV files are written by the code that writes the mixed WAV, whose own files did not change (a throwaway test hashed the files of
+ten projects and their manifests before and after the change: identical). The files are not a mix: each has the master gain and its own peak limit,
+so added together they are within (*k* + 1) / 2 steps of the mixed WAV for *k* files, rounded down, where nothing clips, and can be further away where
+the mix would clip. The unit tests read the archive with the .NET library and with a strict reader of their own that checks every CRC-32 and accepts no
+gap, no extra field and no ZIP64 structure; they hold the entry names to be the fixed ones whatever the lanes are called, the files to the mixed WAV's
+bytes (with no lane) and to an independently compiled isolation of each lane (with chances and gaps), the dates and bytes to be the same on every export,
+the file that was there to survive a locked destination (on Windows), a cancel before or while it writes and two exports at once, and a sink that runs out
+of room to fail the export instead of ending it quietly. The first-use
+verifier opens the Library page at the first-use size, 800x600, 1000x720, 400x720 and 320x900 and in Dutch and requires the three commands to be whole,
+inside the window and at least 10 DIP inside their card, at least as large as they are (Export WAV and Export MIDI 100 by 40 DIP, the new command
+150 by 40), not overlapping and in the order WAV, MIDI, tracks, and the hint to be whole, at least 150 by 14 DIP, under all three and to say what a ZIP
+holds; it then presses the command, requires the question to give the number of tracks, their length and their size (checked against numbers it works out
+on its own: 0:34 and 6.2 MiB for the first project, three tracks for a project with two lanes), its buttons to be at least 100 by 32 DIP (they are the
+system dialog's, which is 32 DIP high) and Cancel to close it with the command on and nothing else changed. Each of those checks was shown to fail on a
+build with that one thing broken (docs/DELIVERY.md summarises). Not established: the save dialog (it does not open on the private desktop of a
+developer machine, so no gate saves a file through it; one run of the real app with the dialog bypassed wrote archives that Python's `zipfile` and `wave`
+modules read), that any music software opens an archive (none has), how any track sounds (nobody has listened), archives that need ZIP64 and projects of
+more than 1,024 bars (not tried), whether the rendering makes the audio stutter on a slow machine when the metronome plays during an export, what a screen
+reader says, Windows text sizes above 100% on the real setting, the Contrast themes, and a musician's reading of the Dutch, German, French and Spanish
+sentences (docs/design/glossary.md lists the questions).
+
 Live edits prepare immutable replacement revisions off the audio callback.
 Sound and beat-strength changes switch at the next audio quantum on the same
 musical clock (also during a finite program) and preserve prior attack tails.

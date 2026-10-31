@@ -16,8 +16,8 @@ public static class WaveStemExporter
     private static readonly SemaphoreSlim Exports = new(1, 1);
 
     /// <summary>
-    /// The compression of every entry. Deflate at the default level: measured on the machine of the change, the other levels were no
-    /// faster (the time is the rendering and the 16-bit conversion, not the compression) and the ZIP was larger, and the smallest size
+    /// The compression of every entry: Deflate at the default level. Measured on the machine of the change (Release build, three runs of
+    /// two small projects): no other level was faster in the median, the fastest level made the ZIP 34 to 36% larger and the smallest size
     /// took longer for 15 to 20% less (docs/WAV-STEMS.md has the numbers).
     /// </summary>
     private const CompressionLevel Level = CompressionLevel.Optimal;
