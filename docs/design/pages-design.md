@@ -118,8 +118,8 @@ is specified in `metronome-design.md` and is not changed here.
   be removed either, it says so and names the file that stays, so that it can be deleted.
   The tracks command asks first (how many tracks, how long each is, what they take unzipped, where the count-in is and what a muted
   lane gives), because the ZIP can be large, and only then chooses the file; it is off from the press until the end, with a notice
-  while the file is written (*Saving the tracks...*; it comes back when a transient notice that replaced it, *Saved*, has faded, and no
-  warning or error is replaced by it), and closing the window stops it once the file is being written (it waits for
+  while the file is written (*Saving the tracks...*; it comes back when a transient notice that replaced it, *Saved*, has faded; it does not
+  replace a warning or an error that is open, and comes back when the person dismisses one that hid it), and closing the window stops it once the file is being written (it waits for
   that for at most 4 seconds, after the wait for the save; a question that is open when closing begins is answered No, and a plan that is
   still being compiled when a close is refused is not asked about afterwards). docs/WAV-STEMS.md is the specification.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,

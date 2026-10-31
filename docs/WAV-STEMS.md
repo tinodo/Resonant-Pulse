@@ -104,7 +104,9 @@ another failure (a destination that is not a local path, a project that cannot b
 window is closed nothing is shown. One export of tracks runs at a time, and the command is off from the press to the end, also while the question
 is open and the plan is compiled; a notice says that the tracks are being saved only while the file is written (after the save dialog), not
 before. If another notice replaces it while the file is written (Saved, from Save to library, fades after 6 seconds), it comes back when that
-one has faded; a warning or an error stays until it is dismissed and is never replaced by it. A track longer than a WAV file
+one has faded. It does not replace a warning or an error that is open when the file begins to be written (a failure that still needs
+attention; the command stays off meanwhile), and when the person dismisses a warning or an error while the file is still being written it comes
+back. A track longer than a WAV file
 can be (4 GiB, about 6 hours at 48,000 Hz) is refused in words, naming the setting that can be changed, before a file is chosen. Everything about the
 file is checked before anything is written.
 
@@ -167,9 +169,9 @@ desktop; the app's data in a scratch folder; nothing audible), driven through th
   moved on afterwards. This says nothing about how it sounded, which nobody heard, or about a slow machine, where the rendering could make the
   audio stutter.
 
-**Four more runs of the real app after Copilot's first review**, two on the head before the answer and two on the head with it (Debug builds
-with the save dialog bypassed, as above, and with a throwaway delay in the compile that was read from an environment variable; none of it was
-committed), on the same private desktop, driven the same way:
+**Six more runs of the real app after Copilot's reviews**, each a pair, one on the head that was reviewed and one on the head that answered it
+(Debug builds with the save dialog bypassed, as above, and for the first two a throwaway delay in the compile that was read from an environment
+variable; none of it was committed), on the same private desktop, driven the same way:
 
 - *The saving notice.* On the largest project, while the archive was written (the command off, the temporary file in the folder and the page saying
   *Saving the tracks.*), Save to library put *Saved locally* in the one notice bar. On the head before the answer the bar was empty 7.5 seconds
@@ -182,6 +184,12 @@ committed), on the same private desktop, driven the same way:
   23.1 seconds after the close, although the window had been asked to close; the head with the answer asked nothing, and the command was on again
   24.5 seconds after the close. Nothing was written in either run. The lock was then released, and a second close ended the process in 0.4 and
   0.5 seconds.
+- *An error that is open when the writing begins* (the second review). The settings file was locked while the export length was changed, so that
+  the app showed its access error, and then released; the tracks command was pressed on the largest project and Continue chosen. When the file
+  was being written the head that was reviewed showed *Saving the tracks.* in place of the error (which is the finding); the head with the answer
+  still showed the error, 3 seconds later as well. The notice bar was then dismissed with its close button: the reviewed head showed nothing, the
+  head with the answer showed *Saving the tracks.* again, 2 and 4 seconds later too. Closing the window ended the process in 0.4 and 0.5 seconds
+  with the folder empty.
 
 **Not tried:** the Windows save dialog (it does not open on a private desktop, so the run bypassed it; the gates cannot save a file through
 it either); in a real window, a close while the question or the save dialog is open (an open question is answered No by the close, which is
