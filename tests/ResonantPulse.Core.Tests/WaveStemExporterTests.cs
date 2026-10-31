@@ -240,27 +240,37 @@ public sealed class WaveStemExporterTests
     }
 
     [TestMethod]
-    public async Task Export_AGainOfZeroGivesSilentFilesThatStillListTheClicksTheScheduleLetsThrough()
+    [DataRow("master gain")]
+    [DataRow("lane volume")]
+    [DataRow("event gain")]
+    public async Task Export_AGainOfZeroGivesSilentFilesThatStillListTheClicksTheScheduleLetsThrough(string zero)
     {
         // AudibleOnsetCount and AudibleOnsets are what the schedule lets into a file: not muted, not left out by Solo, not dropped by a chance
-        // or a gap. The schedule does not look at a gain, so a click whose gain is 0 (here the master gain) is listed and the file is silent;
-        // docs/WAV-STEMS.md says so.
+        // or a gap. The schedule does not look at a gain, so a click whose gain is 0 (the master gain, the lane's volume or the event's gain)
+        // is listed and its file is silent; docs/WAV-STEMS.md says so. With the master gain at 0 every file is silent, with the lane's
+        // volume or its event's gain at 0 only the lane's file is.
         using var temp = new TempDirectory();
         var document = Check.Document();
-        document.Settings.MasterGain = 0;
-        document.Lanes = [new() { Name = "One", Pulses = 4 }];
+        var lane = new RhythmLane { Name = "One", Pulses = 4 };
+        if (zero == "master gain") document.Settings.MasterGain = 0;
+        if (zero == "lane volume") lane.Volume = 0;
+        if (zero == "event gain")
+        {
+            lane = new RhythmLane { Name = "One", CycleQuarters = 4, Events = [new() { PositionQuarters = Rational.Zero, Gain = 0 }] };
+        }
+        document.Lanes = [lane];
         var plan = Check.Plan(document, 2, 8000, false);
         int mainClicks = plan.Onsets.Count(onset => onset.LaneIndex < 0), laneClicks = plan.Onsets.Count(onset => onset.LaneIndex == 0);
-        Assert.IsTrue(mainClicks > 0 && laneClicks > 0, "The schedule has clicks for both tracks.");
+        Assert.IsTrue(mainClicks > 0 && laneClicks > 0, $"{zero}: the schedule has clicks for both tracks.");
         await WaveStemExporter.ExportAsync(temp.File("zero.zip"), plan, ["One"]);
         var archive = await StemArchive.ReadAsync(temp.File("zero.zip"));
-        Assert.IsTrue(archive.Wave("main.wav").IsSilent());
-        Assert.IsTrue(archive.Wave("lane-01.wav").IsSilent());
+        Assert.AreEqual(zero == "master gain", archive.Wave("main.wav").IsSilent(), $"{zero}: the main file");
+        Assert.IsTrue(archive.Wave("lane-01.wav").IsSilent(), $"{zero}: the lane's file");
         using var manifest = archive.Manifest();
         var tracks = manifest.RootElement.GetProperty("Tracks");
-        Assert.AreEqual(mainClicks, tracks[0].GetProperty("AudibleOnsetCount").GetInt32());
-        Assert.AreEqual(laneClicks, tracks[1].GetProperty("AudibleOnsetCount").GetInt32());
-        Assert.AreEqual(plan.Onsets.Count, manifest.RootElement.GetProperty("AudibleOnsets").GetArrayLength());
+        Assert.AreEqual(mainClicks, tracks[0].GetProperty("AudibleOnsetCount").GetInt32(), zero);
+        Assert.AreEqual(laneClicks, tracks[1].GetProperty("AudibleOnsetCount").GetInt32(), zero);
+        Assert.AreEqual(plan.Onsets.Count, manifest.RootElement.GetProperty("AudibleOnsets").GetArrayLength(), zero);
         temp.NoTemps();
     }
 
