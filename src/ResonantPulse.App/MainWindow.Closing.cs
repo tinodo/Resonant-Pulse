@@ -63,6 +63,9 @@ public sealed partial class MainWindow
             var finished = await Task.WhenAny(flush, Task.Delay(CloseSaveLimit));
             timedOut = finished != flush;
             saved = !timedOut && await flush;
+            // An export of separate tracks that is being written is stopped and waited for (at most the same limit), so that no
+            // temporary archive is left beside its destination. Only when the window will go: a close that is refused leaves it running.
+            if (saved || _closeAttemptFailed) await _stemExport.CancelAsync(CloseSaveLimit);
         }
         catch (Exception exception) { Diagnostics.Write("Saving before the window closed", exception); }
         finally

@@ -40,6 +40,8 @@
     <Compile Include="../../src/ResonantPulse.App/DocumentPublication.cs" Link="App/DocumentPublication.cs" />
     <Compile Include="../../src/ResonantPulse.App/TimingRunRules.cs" Link="App/TimingRunRules.cs" />
     <Compile Include="../../src/ResonantPulse.App/TimingExport.cs" Link="App/TimingExport.cs" />
+    <Compile Include="../../src/ResonantPulse.App/StemExport.cs" Link="App/StemExport.cs" />
+    <Compile Include="../../src/ResonantPulse.App/StemExportRun.cs" Link="App/StemExportRun.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoCurveState.cs" Link="App/TempoCurveState.cs" />
     <Compile Include="../../src/ResonantPulse.App/TrainProgramView.cs" Link="App/TrainProgramView.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/AudioOutputSelection.cs" Link="App/Audio/AudioOutputSelection.cs" />

@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using ResonantPulse.App.Localization;
 using ResonantPulse.App.Storage;
@@ -12,6 +13,12 @@ public sealed partial class MainWindow
     private TextBlock? _libraryStatus;
     private TextBlock? _libraryNoMatch;
     private UIElement? _libraryEmpty;
+
+    /// <summary>The export of separate tracks that is going, if any: while it is, its command is off, and closing the window stops it.</summary>
+    private readonly StemExportRun _stemExport = new();
+
+    /// <summary>The command of the Library page that is on screen (the page is built again each time it is opened).</summary>
+    private Button? _stemsButton;
 
     /// <summary>True once the library has been read successfully. Until then (looking, or unable to) it is not "empty".</summary>
     private bool _libraryScanned;
@@ -62,6 +69,15 @@ public sealed partial class MainWindow
             _preferences.ExportBars = Integer(value);
             await _workspace.SavePreferencesAsync(_preferences);
         });
+        // The tracks command is the third of the row, and wraps to a row of its own where the card is too narrow for three. Its
+        // hint is the line under the commands, as the timing check's is. It is off while an export of tracks is going (this page may
+        // have been built again meanwhile), so a second one cannot begin.
+        var stems = ActionButton("ExportStems", "ExportWavStems", ExportStemsAsync, "\uE896");
+        stems.IsEnabled = !_stemExport.IsRunning;
+        _stemsButton = stems;
+        var stemsHint = Note("StemExportHint");
+        Identify(stemsHint, "StemExportHint", stemsHint.Text);
+        AutomationProperties.GetDescribedBy(stems).Add(stemsHint);
         var export = Card("ExportTitle", new StackPanel
         {
             Spacing = 12,
@@ -69,7 +85,8 @@ public sealed partial class MainWindow
             {
                 Note("ExportNotice"), Field(exportBars, "UnitBars"), Note("ExportBarsHelp"),
                 CommandRow(ActionButton("ExportWave", "ExportWav", () => ExportAsync(false), "\uE896"),
-                    ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true), "\uE8D6"))
+                    ActionButton("ExportMidi", "ExportMidi", () => ExportAsync(true), "\uE8D6"), stems),
+                stemsHint
             }
         }, id: "ExportCard");
 
@@ -299,5 +316,66 @@ public sealed partial class MainWindow
             ShowNotice("Saved");
         }
         finally { RefreshSnapshot(); }
+    }
+
+    /// <summary>
+    /// Saves the project as separate tracks in one ZIP. The question comes first, because it says what the tracks take and cancelling
+    /// must cost nothing: the plan is compiled on a background thread from a copy of the project as it is now (so what the question
+    /// describes is what is saved, whatever is edited meanwhile), the question is asked, and only then is a file chosen and written.
+    /// From the press until the end the command is off. Closing the window stops the export and waits for it (see
+    /// <see cref="CloseAfterSavingAsync"/>), so no temporary archive stays beside the destination.
+    /// </summary>
+    private async Task ExportStemsAsync()
+    {
+        if (!_stemExport.TryBegin(out var token)) return;
+        RefreshStemsButton();
+        try
+        {
+            var snapshot = LocalWorkspace.Clone(_document);
+            var bars = _preferences.ExportBars;
+            var names = snapshot.Lanes.Select(lane => lane.Name).ToArray();
+            var prepared = await Task.Run(() =>
+            {
+                var plan = ScheduleCompiler.Compile(snapshot, 48000, bars, true);
+                return (Plan: plan, Summary: StemExport.Summarize(plan));
+            }, token);
+            if (!await ConfirmAsync(StemExport.ConfirmText(prepared.Summary))) return;
+            var path = await PickSavePathAsync(".zip", Text.Get("ExportStems"), StemExport.SuggestedFileName(snapshot.Name));
+            if (path is null) return;
+            token.ThrowIfCancellationRequested();
+            ShowOngoingNotice("StemExportSaving");
+            try { await Task.Run(() => WaveStemExporter.ExportAsync(path, prepared.Plan, names, token), token); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                // The file that was there is as it was (the export is atomic); the person is told so, and the cause is in the log.
+                Diagnostics.Write("Saving the tracks", error);
+                throw new UserMessageException(Text.Get("StemExportNotSaved"));
+            }
+            ShowNotice("Saved");
+        }
+        finally
+        {
+            _stemExport.End();
+            if (!_isClosed)
+            {
+                RefreshStemsButton();
+                RefreshSnapshot();
+            }
+        }
+    }
+
+    private void RefreshStemsButton()
+    {
+        if (_stemsButton is not null) _stemsButton.IsEnabled = !_stemExport.IsRunning;
+    }
+
+    /// <summary>A notice that stays until something replaces it (it says what is going on, so it does not fade like "Saved").</summary>
+    private void ShowOngoingNotice(string key)
+    {
+        _noticeTimer.Stop();
+        Notice.Severity = InfoBarSeverity.Informational;
+        Notice.Title = Text.Get(key);
+        Notice.Message = "";
+        Notice.IsOpen = true;
     }
 }
