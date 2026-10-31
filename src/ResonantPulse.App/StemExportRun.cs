@@ -95,6 +95,13 @@ internal sealed class StemExportRun
     /// </summary>
     internal FadedNotice WhenTransientNoticeFades(bool informational) =>
         !informational ? FadedNotice.Keep : IsWriting ? FadedNotice.ShowSaving : FadedNotice.Close;
+
+    /// <summary>
+    /// Whether the notice that says the tracks are being saved may take the place of what the notice bar shows now. It may not replace
+    /// a warning or an error that is open: that is a failure that still needs attention. It takes the bar when it is free or shows an
+    /// informational notice, and it comes back when a warning or an error that hid it is dismissed (see the page's notice bar).
+    /// </summary>
+    internal static bool SavingNoticeMayReplace(bool noticeIsOpen, bool noticeIsInformational) => !noticeIsOpen || noticeIsInformational;
 }
 
 /// <summary>What the page does with its notice when the time of a transient one has run out (<see cref="StemExportRun.WhenTransientNoticeFades"/>).</summary>

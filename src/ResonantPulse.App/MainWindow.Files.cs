@@ -347,7 +347,7 @@ public sealed partial class MainWindow
             if (path is null) return;
             token.ThrowIfCancellationRequested();
             _stemExport.BeginWriting();
-            ShowOngoingNotice("StemExportSaving");
+            ShowSavingNotice();
             try { await Task.Run(() => WaveStemExporter.ExportAsync(path, prepared.Plan, names, token), token); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
@@ -382,5 +382,16 @@ public sealed partial class MainWindow
         Notice.Title = Text.Get(key);
         Notice.Message = "";
         Notice.IsOpen = true;
+    }
+
+    /// <summary>
+    /// The notice that says the tracks are being saved. It does not replace a warning or an error that is open (a failure that still
+    /// needs attention); it comes back when the person dismisses that one (see the notice bar's Closed handler) and when a transient
+    /// notice that replaced it has faded (see the notice timer's Tick handler).
+    /// </summary>
+    private void ShowSavingNotice()
+    {
+        if (StemExportRun.SavingNoticeMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational))
+            ShowOngoingNotice("StemExportSaving");
     }
 }

@@ -238,4 +238,14 @@ public sealed class StemExportRunTests
         run.End();
         Assert.AreEqual(FadedNotice.Close, run.WhenTransientNoticeFades(informational: true), "The export has ended: nothing comes back.");
     }
+
+    [TestMethod]
+    public void TheNoticeOfAnArchiveThatIsBeingWrittenNeverReplacesAWarningOrAnErrorThatIsOpen()
+    {
+        Assert.IsTrue(StemExportRun.SavingNoticeMayReplace(noticeIsOpen: false, noticeIsInformational: false), "A closed bar is free, whatever it showed last.");
+        Assert.IsTrue(StemExportRun.SavingNoticeMayReplace(noticeIsOpen: false, noticeIsInformational: true));
+        Assert.IsTrue(StemExportRun.SavingNoticeMayReplace(noticeIsOpen: true, noticeIsInformational: true), "An informational notice (Saved, a restored session) gives way to it.");
+        Assert.IsFalse(StemExportRun.SavingNoticeMayReplace(noticeIsOpen: true, noticeIsInformational: false),
+            "A warning (a library that could not be read in full) or an error (a setting that could not be saved) that is open stays: it is a failure that still needs attention.");
+    }
 }
