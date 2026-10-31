@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using ResonantPulse.App.Audio;
 using ResonantPulse.App.Controls;
@@ -25,6 +26,13 @@ public sealed partial class MainWindow
     private Button? _timingFinish;
     private readonly List<double> _observed = [];
     private string _lastTimingReport = "";
+
+    /// <summary>
+    /// The one finished check that can be exported: kept as it was measured (the project may change after it), until another check
+    /// starts, the run that is going is ended by a change of playback or project, or an error ends one.
+    /// </summary>
+    private TimingSession? _lastTimingSession;
+    private Button? _timingExport;
     private readonly TempoCurveState _tempoCurveState = new();
 
     private TrainProgramView _trainProgramView;
@@ -113,15 +121,19 @@ public sealed partial class MainWindow
             _timingStartTimestamp = Stopwatch.GetTimestamp();
             _observed.Clear();
             _lastTimingReport = "";
+            _lastTimingSession = null;
             SetTimingArmed(true);
             BuildPage();
             ShowNotice("TimingArmed");
         }, "\uE768", ButtonKind.Primary);
         _timingHit = ActionButton("Hit", "KeyboardAttack", RecordAttack, "\uE815");
         _timingFinish = ActionButton("FinishTiming", "FinishKeyboardTiming", FinishTiming, "\uE73E");
+        _timingExport = ActionButton("ExportTimingCsv", "ExportTimingCsv", ExportTimingCsvAsync, "\uE896");
         RefreshTimingControlState();
         _timingStatus = Body(_isTimingArmed ? Text.Get("TimingArmed") : _lastTimingReport);
-        var timing = Card("TimingLab", new StackPanel
+        // Once a check has finished, a line says what an export would hold: the project and the rhythm as the check had them, and
+        // when it ended. The hint under it says what the file is, and is there before that too, as what the command is for.
+        var content = new StackPanel
         {
             Spacing = 12,
             Children =
@@ -129,11 +141,25 @@ public sealed partial class MainWindow
                 Note("TimingLimits"),
                 FieldRow(Field(target), Field(tolerance, "UnitMs")),
                 SettingRow("IncludeSilentTargets", "IncludeSilentHelp", includeSilent),
-                CommandRow(_timingBegin, _timingHit, _timingFinish),
-                _timingStatus,
-                Note("TimingBudget")
+                CommandRow(_timingBegin, _timingHit, _timingFinish, _timingExport),
+                _timingStatus
             }
-        }, id: "TimingCard");
+        };
+        if (_lastTimingSession is { } finished && !_isTimingArmed)
+        {
+            var ready = Body(TimingExport.ReadyText(finished));
+            ready.MaxLines = 2;
+            ready.TextTrimming = TextTrimming.CharacterEllipsis;
+            Identify(ready, "TimingCsvReady", ready.Text);
+            content.Children.Add(ready);
+        }
+        var hint = Note("TimingCsvHint");
+        Identify(hint, "TimingCsvHint", hint.Text);
+        // A screen reader that reaches the command hears what it saves, also while the command is off.
+        AutomationProperties.GetDescribedBy(_timingExport).Add(hint);
+        content.Children.Add(hint);
+        content.Children.Add(Note("TimingBudget"));
+        var timing = Card("TimingLab", content, id: "TimingCard");
         return PageScaffold("Train", "TrainPurpose", null, TwoPane(program, live, 380), timing);
     }
 
@@ -183,6 +209,9 @@ public sealed partial class MainWindow
         {
             SetTimingArmed(false);
             _lastTimingReport = "";
+            // An error ends the check: there is nothing finished to export.
+            _lastTimingSession = null;
+            RefreshTimingControlState();
             if (_timingStatus is not null) _timingStatus.Text = "";
             ShowError(exception);
         }
@@ -199,14 +228,14 @@ public sealed partial class MainWindow
             revision.EndFrameAbsolute, completedFrame);
         var seconds = (double)(endFrame - _timingStartFrame) / revision.Initial.SampleRate;
         var expected = revision.TargetSeconds(_timingLane, _includeSilentTargets, _timingStartFrame, endFrame);
-        var report = TimingAnalyzer.Analyze(expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
-        _lastTimingReport = report.Matched == 0
-            ? Text.Format("TimingNoMatches", report.Missed, report.Extra)
-            : Text.Format("TimingReport", report.Matched, report.Missed, report.Extra,
-                report.MedianOffsetMilliseconds, report.SpreadMilliseconds, report.Coverage) +
-              "\n" + (report.Matched >= 4
-                  ? Text.Format("TimingAdditional", report.DriftMillisecondsPerSecond, report.AmbiguousExpected)
-                  : Text.Get("TimingDriftUnavailable"));
+        // What was measured is kept as it was: the project and the rhythm of the revision that played, not of the project now.
+        var context = new TimingSessionContext(revision.Document.Name,
+            TimingExport.TargetName(_timingLane, _timingLane < 0 ? "" : revision.Document.Lanes[_timingLane].Name),
+            _timingLane, revision.Initial.SampleRate, _timingStartFrame, endFrame, _includeSilentTargets);
+        var session = new TimingSession(context, expected, _observed.Where(time => time < seconds).ToArray(), _timingTolerance);
+        _lastTimingSession = session;
+        _lastTimingReport = TimingExport.ReportText(session.Report);
+        RefreshTimingControlState();
         if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
         if (_view == "Train") BuildPage();
     }
@@ -217,7 +246,9 @@ public sealed partial class MainWindow
         SetTimingArmed(false);
         _timingRevision = null;
         _observed.Clear();
+        _lastTimingSession = null;
         _lastTimingReport = Text.Get("TimingInvalidated");
+        RefreshTimingControlState();
         if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
     }
 
@@ -252,6 +283,19 @@ public sealed partial class MainWindow
         if (_timingBegin is not null) _timingBegin.IsEnabled = !_isTimingArmed;
         if (_timingHit is not null) _timingHit.IsEnabled = _isTimingArmed;
         if (_timingFinish is not null) _timingFinish.IsEnabled = _isTimingArmed;
+        // The result of a finished check can be exported, and nothing else can: not while a check runs, not after one was ended.
+        if (_timingExport is not null) _timingExport.IsEnabled = TimingExport.CanExport(_isTimingArmed, _lastTimingSession);
+    }
+
+    private async Task ExportTimingCsvAsync()
+    {
+        var session = _lastTimingSession;
+        if (!TimingExport.CanExport(_isTimingArmed, session))
+            throw new InvalidOperationException(Text.Get("TimingCsvUnavailable"));
+        var path = await PickSavePathAsync(".csv", Text.Get("ExportTimingCsv"), TimingExport.SuggestedFileName(session!.Context.ProjectName));
+        if (path is null) return;
+        await Task.Run(() => TimingCsvExporter.ExportAsync(path, session));
+        ShowNotice("Saved");
     }
 
     /// <summary>A program step: its name, then tempo, length, meter and how the tempo changes, in one short line.</summary>

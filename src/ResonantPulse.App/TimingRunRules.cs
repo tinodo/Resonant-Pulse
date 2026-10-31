@@ -1,3 +1,5 @@
+using ResonantPulse.Core;
+
 namespace ResonantPulse.App;
 
 internal enum TimingRunUpdate { None, Continue, Finish, Invalidate }
@@ -24,7 +26,7 @@ internal static class TimingRunRules
     internal static long EndFrame(long startFrame, double elapsedSeconds, int sampleRate,
         long? finiteEndFrame, long? completedFrame)
     {
-        var end = startFrame + (long)(Math.Clamp(elapsedSeconds, 0, 600) * sampleRate);
+        var end = startFrame + (long)(Math.Clamp(elapsedSeconds, 0, TimingSession.MaximumDurationSeconds) * sampleRate);
         if (finiteEndFrame is { } finite) end = Math.Min(end, finite);
         if (completedFrame is { } completed) end = Math.Min(end, completed);
         return Math.Max(startFrame, end);

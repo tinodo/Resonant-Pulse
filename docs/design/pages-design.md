@@ -158,7 +158,16 @@ is specified in `metronome-design.md` and is not changed here.
 - **Timing check** (was "Timing Lab"): states plainly what it does: it compares the moment each key press or Hit
   arrives with the moment each click was scheduled; it does not hear your instrument and does not measure speaker delay.
   Fields: *Rhythm to follow*, *Accept presses within* (ms), *Include beats that are not played (silent, muted or
-  chance)*; *Start*, *Hit (F)*, *Finish*; the result as short lines.
+  chance)*; *Start*, *Hit (F)*, *Finish*; the result as short lines. *Export result (CSV)* is the fourth command in the same
+  row, after *Finish*: it is on only when a check has finished (not before the first, not while one runs, not after one was
+  ended by a change or an error), and a line under the result says what an export would hold (the project, the rhythm and when
+  the check ended), as the check had them, whatever was edited since. A hint under the commands says what the file is, how
+  long the result stays and that its column names and numbers are the same in every language (the file is English and
+  invariant by design, for the scripts and spreadsheets that read it; docs/TIMING-CSV.md). It is a command of the check, not
+  of the page header and not a row of its own: a command that exists only for a finished result belongs with the other commands
+  of the check (the Train page's own rule is commands that are on only when they make sense), it has an icon and a label and is
+  not accented (the card's one accent is *Start*), and it costs the page no extra row where the row has room. It sits below the
+  first screen with the whole card, so no primary control gave up its place.
 
 ### Studio
 - Header: one sentence ("Editing “name”. Changes are saved as you make them. Press Stop, then Start, to hear them.");

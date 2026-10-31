@@ -68,7 +68,34 @@ can be added without changing these application-facing types.
   IReadOnlyList<double> observedSeconds, double toleranceSeconds = 0.15)`
   returns a `TimingReport` with `int Matched`, `int Missed`, `int Extra`,
   `double MedianOffsetMilliseconds`, `double SpreadMilliseconds`,
-  `double Coverage`.
+  `double Coverage`, `int AmbiguousExpected`, `double DriftMillisecondsPerSecond`,
+  `bool HasDriftEstimate` and the `Matches` with their original indices. Drift is a
+  measurement only when `HasDriftEstimate` is true (at least four matches, the first and
+  the last half of them centred on different moments, and a result that fits in a
+  number); otherwise `DriftMillisecondsPerSecond` is 0 and means nothing, which is not a
+  measured drift of 0. More than `TimingAnalyzer.MaximumTimestamps` (100,000) expected or
+  observed timestamps, or more than `MaximumAlignmentCells` (4,000,000) comparison cells,
+  are refused with an explanation.
+- `TimingSession` is the immutable snapshot of one completed keyboard timing run:
+  `new TimingSession(TimingSessionContext context, IReadOnlyList<double> expectedSeconds,
+  IReadOnlyList<double> observedSeconds, double toleranceSeconds, DateTimeOffset?
+  completedAtUtc = null)`. The context holds the project name, the target's name
+  (`TimingSession.MainBeatName`, "Main beat", for the main beat), the lane index (-1 for
+  the main beat), the sample rate, the first and last frame of the run and whether
+  clicks that are not played were followed. It copies its inputs, validates every one of
+  them (names of at most 256 well-formed UTF-16 characters, a lane of -1 to 7, a sample
+  rate of 8,000 to 192,000 Hz, ordered frames, at most 600 seconds, finite timestamps
+  from 0 up to the end of the run, the analyzer's budgets) and keeps the `TimingReport`
+  that `TimingAnalyzer.Analyze` made of them. Nothing in it can change afterwards.
+- `TimingCsvExporter.ExportAsync(string path, TimingSession session,
+  CancellationToken cancellationToken = default)` writes the session as a CSV file
+  through `AtomicFile.WriteAsync` (a temporary file next to the destination, then a
+  move: a locked, read-only or full destination keeps its old content); `WriteAsync(Stream,
+  ...)` writes the same bytes without the atomic move. The format is schema version 1,
+  fixed and invariant: UTF-8 with a byte order mark, CRLF, every field quoted, eight
+  columns, numbers with a decimal point and every digit needed to read them back, a value
+  that is not available as an empty field, and the project's and the target's names as
+  JSON strings. docs/TIMING-CSV.md is the specification.
 - `TapTempoEstimator.Tap(double timestampSeconds)` returns `double?` BPM;
   `Reset()` clears history. The optional `RejectEarlyOutliers` property (init-only,
   default `false`) applies the same interval gate after one interval instead of

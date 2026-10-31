@@ -35,7 +35,7 @@ public sealed class PageTextTests
         "UnitMs", "IncludeSilentHelp", "TempoChartAxis", "Target", "MainTarget", "IncludeSilentTargets", "Tolerance",
         "Program", "ProgramEmpty", "BeginTiming", "FinishTiming", "Hit", "TimingBudget", "TimingDriftUnavailable", "TimingNoMatches",
         "TimingAdditional", "TimingLab", "TimingLimits", "TimingArmed", "TimingReport", "TimingRequiresPlayback", "TimingPendingEdits",
-        "TimingTargetChanged", "TimingInvalidated",
+        "TimingTargetChanged", "TimingInvalidated", "ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable",
         "StudioPurpose", "StudioLocked", "StudioEmptyTitle", "StudioEmptyBody", "LanePlain", "LaneThreeInFour", "LaneThreeInThree",
         "LaneEuclidean", "LaneField", "LaneBeatName", "LaneGroupRhythm", "LaneGroupVariation", "LanePulses", "LaneCycle", "LaneOffset",
         "UnitQuarterNotes", "LaneRhythmHelp", "LaneExactNote", "CustomPositions", "LanePan", "LaneSoundCaption", "PanLeft", "PanRight", "PanCenter",
