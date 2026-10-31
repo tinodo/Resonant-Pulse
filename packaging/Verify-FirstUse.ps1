@@ -1337,7 +1337,8 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     $sizeText = $Matches['size']
     $sizeGap = $Matches['gap']
     $sizeUnit = $Matches['unit']
-    if ($sizeGap -ne [string][char]0x00A0) { throw "${where}: the size in the question is separated from its unit by a space that can break a line between them: '$question'." }
+    # Compared by code point: PowerShell's -ne treats a no-break space and an ordinary space as equal (culture-aware comparison).
+    if ($sizeGap.Length -ne 1 -or [int][char]$sizeGap -ne 0x00A0) { throw "${where}: the size in the question is separated from its unit by a space that can break a line between them: '$question'." }
     $sizeNumber = [double]::Parse($sizeText.Replace($words.thousands, '').Replace($words.point, '.'), [Globalization.CultureInfo]::InvariantCulture)
     if ($trackCount -ne $tracks) { throw "${where}: the question says $trackCount tracks, but the project has $($tracks - 1) lanes and so $tracks tracks: '$question'." }
     $lengthParts = @($lengthText -split ':' | ForEach-Object { [int]$_ })
