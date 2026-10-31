@@ -19,7 +19,8 @@ public sealed partial class MainWindow
         {
             _preferences.Language = Selected(language);
             Text.Select(_preferences.Language);
-            _lastTimingReport = "";
+            // The result is shown again in the new language: a finished check is not lost because the words around it changed.
+            _lastTimingReport = _lastTimingSession is { } finished ? TimingExport.ReportText(finished.Report) : "";
             RebuildNavigation();
             Navigation.SelectedItem = Navigation.SettingsItem;
             LocalizeTransport();

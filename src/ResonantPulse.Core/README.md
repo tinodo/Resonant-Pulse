@@ -35,6 +35,10 @@ The budgets below are explicit defensive limits, **not achieved benchmarks**.
 - `DocumentStore.SaveAsync/LoadAsync` implement local schema-one JSON.
 - `TapTempoEstimator.Tap/Reset` estimate selected-unit taps/minute.
 - `TimingAnalyzer.Analyze` performs one-to-one chronological matching.
+- `TimingSession` is the immutable record of one completed keyboard timing check (names, lane, sample rate, frames, the expected and
+  observed times, the tolerance, when it ended), validated when it is built; `TimingCsvExporter.ExportAsync/WriteAsync` write it as the
+  fixed CSV format described in `docs/TIMING-CSV.md` (atomically for a file; names as JSON strings; a value that is not available is
+  empty, never 0).
 
 `PulseDocument`, settings, lanes, events, program steps and songs are mutable
 editing/JSON models. Do not mutate them concurrently with compilation or saving;
@@ -229,8 +233,12 @@ offset with deterministic tie handling. Sorted copies retain original indices.
 Each attack participates once. Spread is scaled median absolute deviation;
 drift is the difference of first-/last-half median offsets divided by median
 time separation. `AmbiguousExpected` counts targets with multiple candidate
-observations, not calibrated confidence. Zero-match median/spread/drift and
+observations, not calibrated confidence. Zero-match median/spread and
 empty-target coverage are zero placeholders; check `Matched` before display.
+Drift is a placeholder 0 unless `HasDriftEstimate` is true (at least four
+matches, the first and the last half of them centred on different moments, and a
+result that fits in a number): show or export a drift only then, because a
+measured drift of 0 and no drift at all are different things.
 Matching is limited to four million DP cells; analyze longer runs in explicit
 sections. No microphone detection, input calibration, authoritative physical
 early/late claim, or adaptive mastery scoring is implied.

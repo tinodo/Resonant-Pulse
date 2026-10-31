@@ -305,6 +305,7 @@ public sealed partial class MainWindow : Window
         _timingBegin = null;
         _timingHit = null;
         _timingFinish = null;
+        _timingExport = null;
         _tempoCurve = null;
         _libraryList = null;
         _search = null;

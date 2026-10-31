@@ -62,6 +62,19 @@ circle jump from beat to beat instead of gliding and hides the scrolling tape of
 upcoming clicks. The export length is in Library, next to the export buttons: it
 is the number of bars written to a WAV or MIDI file when the project has no program.
 
+On Train, the timing check compares when each key press (F, or the Hit button)
+reached the app with when each click was due. When a check has finished, **Export
+result (CSV)**, the last command of the check, saves that one result as a file for a
+spreadsheet: the totals, then each click and each press. It holds the last finished
+check only, until you start another one or close the app (it is not a practice
+history), and it says when the keyboard delivered each press, not when anything was
+heard, so it is not a calibration of your keyboard, speakers or Bluetooth device. The
+column names and numbers in the file are English and the same in every language, so
+a script reads every file the same way, and its fields are separated by commas: where
+the Windows list separator is a semicolon (the Dutch, German, French and Spanish settings),
+Excel may need the file imported with the comma as the delimiter instead of opened by double-clicking
+(not tried; see [the file format](docs/TIMING-CSV.md)).
+
 Use the pinned .NET SDK on Windows. The owner has authorized local builds and
 tests on the development PC; keep them serialized, silent and isolated. A test
 instance must set `RESONANT_PULSE_HOME` to a scratch folder so real projects and

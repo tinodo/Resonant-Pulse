@@ -16,19 +16,32 @@ public sealed record TimingReport
     public double Coverage { get; init; }
     public int AmbiguousExpected { get; init; }
     public double DriftMillisecondsPerSecond { get; init; }
+
+    /// <summary>
+    /// True when <see cref="DriftMillisecondsPerSecond"/> is a measurement: there are at least four matches, the first and the last
+    /// half of them are centred on different moments, and the result fits in a number. When it is false the drift is 0 and means
+    /// nothing, which is not the same as a measured drift of 0.
+    /// </summary>
+    public bool HasDriftEstimate { get; init; }
     public IReadOnlyList<TimingMatch> Matches { get; init; } = Array.Empty<TimingMatch>();
 }
 
 /// <summary>Chronological one-to-one matching: maximize matches within tolerance, then minimize total absolute offset.</summary>
 public static class TimingAnalyzer
 {
+    /// <summary>The most expected or observed timestamps one analysis takes.</summary>
+    public const int MaximumTimestamps = 100_000;
+
+    /// <summary>The most comparison cells one analysis takes: (expected + 1) x (observed + 1).</summary>
+    public const long MaximumAlignmentCells = 4_000_000;
+
     public static TimingReport Analyze(IReadOnlyList<double> expectedSeconds, IReadOnlyList<double> observedSeconds,
         double toleranceSeconds = 0.15)
     {
         ArgumentNullException.ThrowIfNull(expectedSeconds); ArgumentNullException.ThrowIfNull(observedSeconds);
         DocumentValidator.FiniteRange(toleranceSeconds, 0, 10, "Timing tolerance seconds");
         int n = expectedSeconds.Count, m = observedSeconds.Count;
-        DocumentValidator.Require(n <= 100_000 && m <= 100_000 && (long)(n + 1) * (m + 1) <= 4_000_000,
+        DocumentValidator.Require(n <= MaximumTimestamps && m <= MaximumTimestamps && (long)(n + 1) * (m + 1) <= MaximumAlignmentCells,
             "Timing alignment exceeds four million comparison cells. Analyze shorter, nonoverlapping sections.");
         var expected = Ordered(expectedSeconds); var observed = Ordered(observedSeconds);
         int stride = m + 1;
@@ -79,19 +92,25 @@ public static class TimingAnalyzer
             if (right - left > 1) ambiguous++;
         }
         double drift = 0;
+        var hasDriftEstimate = false;
         if (matches.Count >= 4)
         {
             int half = matches.Count / 2;
             var first = matches.Take(half).ToArray(); var last = matches.Skip(matches.Count - half).ToArray();
             double delta = Median(last.Select(p => p.ExpectedSeconds).ToArray()) - Median(first.Select(p => p.ExpectedSeconds).ToArray());
             if (delta > 0)
-                drift = (Median(last.Select(p => p.OffsetMilliseconds).ToArray()) - Median(first.Select(p => p.OffsetMilliseconds).ToArray())) / delta;
+            {
+                var estimate = (Median(last.Select(p => p.OffsetMilliseconds).ToArray()) - Median(first.Select(p => p.OffsetMilliseconds).ToArray())) / delta;
+                // Targets only a hair apart can make the change per second too large for a number: that is no estimate, not infinity.
+                if (double.IsFinite(estimate)) { drift = estimate; hasDriftEstimate = true; }
+            }
         }
         return new()
         {
             Matched = matches.Count, Missed = n - matches.Count, Extra = m - matches.Count,
             MedianOffsetMilliseconds = median, SpreadMilliseconds = spread, Coverage = n == 0 ? 0 : (double)matches.Count / n,
-            AmbiguousExpected = ambiguous, DriftMillisecondsPerSecond = drift, Matches = matches.AsReadOnly()
+            AmbiguousExpected = ambiguous, DriftMillisecondsPerSecond = drift, HasDriftEstimate = hasDriftEstimate,
+            Matches = matches.AsReadOnly()
         };
     }
     private static bool Better(int aCount, double aCost, int bCount, double bCost) => aCount > bCount || (aCount == bCount && aCost < bCost);

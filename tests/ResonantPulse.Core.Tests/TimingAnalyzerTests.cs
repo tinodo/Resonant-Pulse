@@ -23,6 +23,7 @@ public sealed class TimingAnalyzerTests
             Assert.AreEqual(pair.Item3 == 0 ? 0d : 1d, r.Coverage);
             Assert.AreEqual(0d, r.MedianOffsetMilliseconds); Assert.AreEqual(0d, r.SpreadMilliseconds);
             Assert.AreEqual(0d, r.DriftMillisecondsPerSecond);
+            Assert.IsFalse(r.HasDriftEstimate);
         }
         Assert.AreEqual(0.5, TimingAnalyzer.Analyze(new[] { 1d, 2d }, new[] { 1d }).Coverage);
     }
@@ -41,6 +42,49 @@ public sealed class TimingAnalyzerTests
         Assert.AreEqual(10d, drift.DriftMillisecondsPerSecond, 1e-9);
         Assert.AreEqual(15d, drift.MedianOffsetMilliseconds, 1e-9);
         Assert.AreEqual(4, drift.Matched);
+        Assert.IsTrue(drift.HasDriftEstimate);
+    }
+
+    [TestMethod]
+    public void Analyze_DriftIsAnEstimateOnlyForFourMatchesAtDifferentMoments()
+    {
+        // Fewer than four matches, however they are spread: no estimate, and a drift of zero.
+        for (var count = 0; count < 4; count++)
+        {
+            var times = Enumerable.Range(0, count).Select(i => (double)i).ToArray();
+            var few = TimingAnalyzer.Analyze(times, times.Select(time => time + 0.01).ToArray());
+            Assert.AreEqual(count, few.Matched);
+            Assert.IsFalse(few.HasDriftEstimate, $"{count} matches");
+            Assert.AreEqual(0d, few.DriftMillisecondsPerSecond);
+        }
+        // Four matches at one moment: nothing changes over time for the drift to be measured against.
+        var coincident = TimingAnalyzer.Analyze([1, 1, 1, 1], [1, 1, 1, 1], 0);
+        Assert.AreEqual(4, coincident.Matched);
+        Assert.IsFalse(coincident.HasDriftEstimate);
+        Assert.AreEqual(0d, coincident.DriftMillisecondsPerSecond);
+        // The same when the two halves of the matches are centred on one moment although the matches are not all at it.
+        var centred = TimingAnalyzer.Analyze([0, 5, 5, 5, 5, 10], [0, 5, 5, 5, 5, 10], 0);
+        Assert.AreEqual(6, centred.Matched);
+        Assert.IsFalse(centred.HasDriftEstimate);
+        // Four matches whose offsets do not change: the drift is measured, and it is zero.
+        var steady = TimingAnalyzer.Analyze([0, 1, 2, 3], [0, 1, 2, 3], 0);
+        Assert.IsTrue(steady.HasDriftEstimate);
+        Assert.AreEqual(0d, steady.DriftMillisecondsPerSecond);
+        // Unmatched presses and clicks do not make four matches.
+        var unmatched = TimingAnalyzer.Analyze([0, 1, 2, 3, 4, 5], [0, 1, 2, 3.5, 9], 0.1);
+        Assert.AreEqual(3, unmatched.Matched);
+        Assert.IsFalse(unmatched.HasDriftEstimate);
+    }
+
+    [TestMethod]
+    public void Analyze_ADriftTooLargeForANumberIsNoEstimateAndNotInfinity()
+    {
+        // The four targets are about 1e-320 seconds apart, so the change in offset per second overflows a double.
+        var overflow = TimingAnalyzer.Analyze([0, 1e-320, 2e-320, 3e-320], [1, 1.01, 1.02, 1.03], 2);
+        Assert.AreEqual(4, overflow.Matched);
+        Assert.IsFalse(overflow.HasDriftEstimate);
+        Assert.AreEqual(0d, overflow.DriftMillisecondsPerSecond);
+        Assert.IsTrue(double.IsFinite(overflow.MedianOffsetMilliseconds) && double.IsFinite(overflow.SpreadMilliseconds));
     }
 
     [TestMethod]

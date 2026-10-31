@@ -64,6 +64,12 @@ match, so a translation cannot be left out or lose one.
 | `TempoGuideValue` | Approximate markings: {0} | Globale aanduidingen: {0} | Ungefähre Bezeichnungen: {0} | Indications approximatives : {0} | Indicaciones aproximadas: {0} |
 | `TempoGuideConverted` | Approximate markings at {0} BPM in {1}: {2} | Globale aanduidingen bij {0} BPM in {1}: {2} | Ungefähre Bezeichnungen bei {0} BPM in {1}: {2} | Indications approximatives à {0} BPM en {1} : {2} | Indicaciones aproximadas a {0} BPM en {1}: {2} |
 | `TempoGuideInput` | Enter a tempo from 1 to 1000 BPM to see its markings. | Typ een tempo van 1 tot 1000 BPM om de aanduidingen te zien. | Tempo von 1 bis 1000 BPM eingeben, um die Bezeichnungen zu sehen. | Saisissez un tempo de 1 à 1000 BPM pour voir les indications. | Escriba un tempo de 1 a 1000 BPM para ver las indicaciones. |
+| `ExportTimingCsv` | Export result (CSV) | Resultaat exporteren (CSV) | Ergebnis exportieren (CSV) | Exporter le résultat (CSV) | Exportar resultado (CSV) |
+| `TimingCsvReady` | Ready to export: {0}, rhythm {1}, finished {2}. | Klaar om te exporteren: {0}, ritme {1}, afgerond {2}. | Bereit zum Exportieren: {0}, Rhythmus {1}, beendet {2}. | Prêt à exporter : {0}, rythme {1}, terminé {2}. | Listo para exportar: {0}, ritmo {1}, finalizado {2}. |
+| `TimingCsvUnavailable` | There is no finished check to export. Finish a check first. | Er is geen afgeronde check om te exporteren. Rond eerst een check af. | Es gibt keine beendete Prüfung zum Exportieren. Beenden Sie zuerst eine Prüfung. | Aucun contrôle terminé à exporter. Terminez d’abord un contrôle. | No hay ninguna comprobación terminada que exportar. Termine primero una comprobación. |
+| `TimingNoName` | (no name) | (zonder naam) | (ohne Namen) | (sans nom) | (sin nombre) |
+| `TimingDriftUnavailable` | Drift needs at least four matched presses on clicks at different times. | Drift vraagt minstens vier gekoppelde toetsdrukken op tikken op verschillende momenten. | Drift braucht mindestens vier zugeordnete Tastendrücke auf Klicks zu unterschiedlichen Zeitpunkten. | La dérive nécessite au moins quatre pressions associées à des clics à des moments différents. | La deriva necesita al menos cuatro pulsaciones emparejadas con clics en momentos distintos. |
+| `TimingCsvHint` | Saves the last finished check as a CSV file for a spreadsheet: the totals, then each click and each press. The result stays available until you start another check or close the app. Column names and numbers are the same in every language. | Bewaart de laatst afgeronde check als CSV-bestand voor een spreadsheet: de totalen, daarna elke tik en elke toetsdruk. Het resultaat blijft beschikbaar tot u een nieuwe check start of de app sluit. Kolomnamen en getallen zijn in elke taal hetzelfde. | Speichert die zuletzt beendete Prüfung als CSV-Datei für eine Tabellenkalkulation: die Summen, dann jeden Klick und jeden Tastendruck. Das Ergebnis bleibt verfügbar, bis Sie eine neue Prüfung starten oder die App schließen. Spaltennamen und Zahlen sind in jeder Sprache gleich. | Enregistre le dernier contrôle terminé dans un fichier CSV pour un tableur : les totaux, puis chaque clic et chaque pression. Le résultat reste disponible jusqu’à ce que vous lanciez un nouveau contrôle ou fermiez l’application. Les noms de colonnes et les nombres sont les mêmes dans toutes les langues. | Guarda la última comprobación terminada como archivo CSV para una hoja de cálculo: los totales y después cada clic y cada pulsación. El resultado sigue disponible hasta que inicie otra comprobación o cierre la aplicación. Los nombres de columna y los números son iguales en todos los idiomas. |
 
 ## Dutch terms to check first
 
@@ -157,3 +163,49 @@ check first:
 - *Approximate* is a condition of every sentence, not a courtesy: the speed that suits a
   marking varies with the piece, the period and the performer. A test requires the word
   in all five languages (*Globale*, *Ungefähre*, *approximatives*, *aproximadas*).
+
+## The timing export: terms and the sentences around them
+
+Also questions, not findings; none of this has been checked with a native speaker. The
+timing check already called itself a *check* (*Check starten*, *Prüfung starten*, *Démarrer
+le contrôle*, *Iniciar comprobación*); the export keeps that word and adds three kinds of
+text: the command and its hint, the line that says what an export would hold, and the
+sentence that says why a drift was not worked out.
+
+- The words that are **not** translated, on purpose: the file itself. Its column names
+  (`record_type`, `observed_seconds`, ...), its row names, its descriptions and the name of
+  the main beat in it (`Main beat`) are English and the same in every language, because a
+  script or a spreadsheet formula must read every file the same way. They are not entries
+  of `Text.cs`, so the tests that ask for five languages never see them; the hint says so
+  (*Kolomnamen en getallen zijn in elke taal hetzelfde*, *Spaltennamen und Zahlen sind in
+  jeder Sprache gleich*, *Les noms de colonnes et les nombres sont les mêmes dans toutes
+  les langues*, *Los nombres de columna y los números son iguales en todos los idiomas*).
+  The page names the main beat in the language in use (*Hoofdpuls*, *Hauptpuls*, *Pulsation
+  principale*, *Pulso principal*); the file does not.
+- **CSV** is not translated. The Dutch hint says **spreadsheet** (the usual loanword, and
+  the word the Dutch Windows apps use); German says **Tabellenkalkulation**, French
+  **tableur** and Spanish **hoja de cálculo**.
+- A **key press** is *toetsdruk* (Dutch), *Tastendruck* (German), *pression* (French) and
+  *pulsación* (Spanish): the app's earlier timing text said *toetsdrukken* and
+  *Tastendrücke* already. French *pression* and the click's *clic* are the pair to check.
+- **Drift** is *drift* in Dutch (a loanword; *afwijking in het tempo* is the other choice),
+  *Drift* in German, *dérive* in French and *deriva* in Spanish. The sentence now says what
+  drift needs (at least four matched presses on clicks at different times) instead of
+  "unavailable", because a blank drift in the file and on the page is not a drift of 0.
+- *Ready to export: {0}, rhythm {1}, finished {2}* names three things, in this order: the
+  project, the rhythm (a lane's name or the main beat) and when the check ended, in the
+  language's own date and time format. **Ritme** (Dutch), **Rhythmus** (German), **rythme**
+  (French) and **ritmo** (Spanish) are the words to check against the lane and main-beat
+  names that the same page already uses. A project or a lane without a name (the app allows
+  an empty name) stands in the line as *(no name)*: *(zonder naam)*, *(ohne Namen)*, *(sans nom)*
+  and *(sin nombre)*; the file keeps it empty.
+- In French the colon has a no-break space before it (*tableur :*, *exporter :*, as in the tempo guide's
+  *Indications approximatives :*), so that a narrow card never begins a line with the colon.
+- The hint is longer than the app's other hints on purpose: it says what the file is, how
+  long the result stays (until another check starts or the app closes: nothing is kept
+  from one run of the app to the next) and that the column names are not translated. A
+  claim keeps its conditions, so it was not shortened.
+- *Afgerond* (Dutch, for finished) is the word the Finish command's own text uses (*Afronden
+  en resultaat tonen*); German uses **beendet** and **Beenden**, French **terminé** and
+  **Terminer**, Spanish **terminada**/**finalizado**: Spanish uses two words (*Terminar* on
+  the command, *finalizado* in the ready line) and a reviewer may prefer one.

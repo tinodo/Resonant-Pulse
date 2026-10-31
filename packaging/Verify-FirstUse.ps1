@@ -976,6 +976,270 @@ function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, 
     }
     return $evidence
 }
+# The export of a finished timing check (docs/design/pages-design.md, Train) is one more command in the row of the timing check, after
+# Finish, with a hint under the result. It is read at the sizes the layout gates use and in Dutch: whole and as large as a command, after
+# the commands that come before it and between the edges of its card; those commands as whole as they are without it (a command that is
+# squeezed or pushed over by a new neighbour is the defect this guards); the hint readable (not a sliver, not clipped, below the
+# commands); and off until a check has finished. A hosted runner has no output, so no check can finish there: Test-TimingExportWithOutput
+# finishes one in the local gate, and this function then reads the finished state (-finished) too.
+$timingCommands = @('BeginKeyboardTiming', 'KeyboardAttack', 'FinishKeyboardTiming', 'ExportTimingCsv')
+$timingCommandMinimum = @{ BeginKeyboardTiming = @(100, 40); KeyboardAttack = @(70, 40); FinishKeyboardTiming = @(150, 40); ExportTimingCsv = @(100, 40) }
+function Test-TimingExport([string]$where, [string]$shot = '', [bool]$finished = $false, [string]$mainBeat = 'Main beat', [string]$project = '') {
+    $transportBefore = (Find-Control 'TransportStatus').Current.Name
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
+    $null = Find-Control 'ExportTimingCsv'
+    # A person scrolls to the timing check: down to the export, then up to the command that starts a check, so that all four are on screen.
+    Show-Control 'ExportTimingCsv'
+    Show-Control 'BeginKeyboardTiming'
+    foreach ($id in $timingCommands) { Wait-Settled $id }
+    $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+    $one = 1 * $scale
+    # The card keeps 21 DIP of padding at every size. The card cuts off what is wider than its slot, and what it cuts off is not in the
+    # rectangle that UI Automation reports, so a rectangle that reaches into the padding is one that was cut (or pushed to the edge).
+    $padding = 10 * $scale
+    $card = (Find-Control 'TimingCard').Current.BoundingRectangle
+    $rects = @{}
+    foreach ($id in $timingCommands) {
+        $rects[$id] = (Find-Control $id).Current.BoundingRectangle
+        Test-Visible $rects[$id] $windowRect "${where}: $id"
+        $least = $timingCommandMinimum[$id]
+        if ($rects[$id].Width -lt $least[0] * $scale -or $rects[$id].Height -lt $least[1] * $scale) {
+            throw "${where}: $id is squeezed to $([Math]::Round($rects[$id].Width / $scale, 1)) x $([Math]::Round($rects[$id].Height / $scale, 1)) DIP (a command of the timing check is at least $($least[0]) x $($least[1]) DIP): $($rects[$id])."
+        }
+        if ($rects[$id].Left -lt $card.Left + $padding -or $rects[$id].Right -gt $card.Right - $padding) {
+            throw "${where}: $id is clipped sideways or pushed into the edge of its card ($($rects[$id]) in the card $card)."
+        }
+    }
+    # No two commands overlap: each is a whole command of its own, on one row or in a row under the one before.
+    for ($first = 0; $first -lt $timingCommands.Count; $first++) {
+        for ($second = $first + 1; $second -lt $timingCommands.Count; $second++) {
+            $a = $rects[$timingCommands[$first]]; $b = $rects[$timingCommands[$second]]
+            $a.Inflate(-$one, -$one); $b.Inflate(-$one, -$one)
+            if ($a.IntersectsWith($b)) { throw "${where}: $($timingCommands[$first]) and $($timingCommands[$second]) overlap ($($rects[$timingCommands[$first]]) and $($rects[$timingCommands[$second]]))." }
+        }
+    }
+    # The commands come in the order a check goes: start, press, finish, then export. Each is after the one before it: to its right on the
+    # same row or on a row under it.
+    $finish = $rects['FinishKeyboardTiming']; $export = $rects['ExportTimingCsv']
+    for ($index = 1; $index -lt $timingCommands.Count; $index++) {
+        $before = $rects[$timingCommands[$index - 1]]; $after = $rects[$timingCommands[$index]]
+        $onOneRow = [Math]::Abs(($after.Top + $after.Height / 2) - ($before.Top + $before.Height / 2)) -le 4 * $scale
+        if (($onOneRow -and $after.Left -lt $before.Right - $one) -or (-not $onOneRow -and $after.Top -lt $before.Bottom - $one)) {
+            throw "${where}: $($timingCommands[$index]) does not come after $($timingCommands[$index - 1]) ($after, $before)."
+        }
+    }
+    $layout = if ([Math]::Abs(($export.Top + $export.Height / 2) - ($finish.Top + $finish.Height / 2)) -le 4 * $scale) { 'after-finish-on-its-row' } else { 'under-finish' }
+    # The export is off until a check has finished, and then on.
+    $enabled = (Find-Control 'ExportTimingCsv').Current.IsEnabled
+    if ($finished -and -not $enabled) { throw "${where}: the export is off although a check has finished." }
+    if (-not $finished -and $enabled) { throw "${where}: the export is on although no check has finished." }
+    # The hint is readable and under the commands, and the line that names what is exported is there only for a finished check.
+    Show-Control 'TimingCsvHint'
+    Wait-Settled 'TimingCsvHint'
+    $hintElement = Find-Control 'TimingCsvHint'
+    $hint = $hintElement.Current.BoundingRectangle
+    $export = (Find-Control 'ExportTimingCsv').Current.BoundingRectangle
+    $card = (Find-Control 'TimingCard').Current.BoundingRectangle
+    Test-Visible $hint $windowRect "${where}: the hint under the export"
+    # The export and the hint are on screen together at every size (a rectangle that is not on screen is empty, and would pass any
+    # comparison below it), so that what lies between them is read, not assumed.
+    if ($export.IsEmpty) { throw "${where}: the export and its hint are not on screen together." }
+    # The export is still whole there: an edge of the window that cuts it leaves a rectangle that is not empty but smaller than the command.
+    $leastExport = $timingCommandMinimum['ExportTimingCsv']
+    if ($export.Width -lt $leastExport[0] * $scale -or $export.Height -lt $leastExport[1] * $scale) {
+        throw "${where}: the export is cut by the edge of the window while its hint is on screen: $([Math]::Round($export.Width / $scale, 1)) x $([Math]::Round($export.Height / $scale, 1)) DIP (a command of the timing check is at least $($leastExport[0]) x $($leastExport[1]) DIP): $export."
+    }
+    Test-Visible $export $windowRect "${where}: the export beside its hint"
+    if ($hintElement.Current.Name.Length -lt 80 -or $hintElement.Current.Name -notmatch 'CSV') { throw "${where}: the hint under the export does not say what it saves: '$($hintElement.Current.Name)'." }
+    if ($hint.Width -lt 150 * $scale -or $hint.Height -lt 14 * $scale) {
+        throw "${where}: the hint is squeezed to $([Math]::Round($hint.Width / $scale, 1)) x $([Math]::Round($hint.Height / $scale, 1)) DIP (a line of it is at least 150 DIP wide and 14 high): $hint."
+    }
+    if ($hint.Left -lt $card.Left + $padding -or $hint.Right -gt $card.Right - $padding) { throw "${where}: the hint is clipped sideways or pushed into the edge of its card ($hint in the card $card)." }
+    if ($hint.Top -lt $export.Bottom - $one) { throw "${where}: the hint is not under the export ($hint, export $export)." }
+    $readyEvidence = 'none'
+    $ready = Find-Optional 'TimingCsvReady'
+    if ($finished) {
+        if ($null -eq $ready) { throw "${where}: a check has finished but no line says what the export holds." }
+        $readyText = $ready.Current.Name
+        if ($project -and $readyText -notlike "*$project*") { throw "${where}: the line for the export does not name the project '$project': '$readyText'." }
+        if ($readyText -notlike "*$mainBeat*") { throw "${where}: the line for the export does not name the rhythm '$mainBeat': '$readyText'." }
+        if ($readyText -notmatch '\d{1,2}[:.]\d{2}') { throw "${where}: the line for the export does not say when the check finished: '$readyText'." }
+        Show-Control 'TimingCsvReady'
+        Wait-Settled 'TimingCsvReady'
+        $line = (Find-Control 'TimingCsvReady').Current.BoundingRectangle
+        Test-Visible $line $windowRect "${where}: the line for the export"
+        if ($line.Width -lt 150 * $scale -or $line.Height -lt 14 * $scale) { throw "${where}: the line for the export is squeezed to $line." }
+        if ($line.Left -lt $card.Left + $padding -or $line.Right -gt $card.Right - $padding) { throw "${where}: the line for the export is clipped sideways or pushed into the edge of its card ($line in the card $card)." }
+        $readyEvidence = "$([Math]::Round($line.Width / $scale, 1)) x $([Math]::Round($line.Height / $scale, 1))"
+    } elseif ($null -ne $ready) { throw "${where}: the line for the export is shown although no check has finished: '$($ready.Current.Name)'." }
+    Test-NoApplyButtons "${where}: Train"
+    Assert-NoErrorNotice $where
+    if ((Find-Control 'TransportStatus').Current.Name -ne $transportBefore) {
+        throw "${where}: reading the export controls changed the transport ('$transportBefore' then '$((Find-Control 'TransportStatus').Current.Name))')."
+    }
+    if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
+    $evidence = @{
+        layout = $layout; finished = $finished
+        begin = "$([Math]::Round($rects['BeginKeyboardTiming'].Width / $scale, 1)) x $([Math]::Round($rects['BeginKeyboardTiming'].Height / $scale, 1))"
+        hit = "$([Math]::Round($rects['KeyboardAttack'].Width / $scale, 1)) x $([Math]::Round($rects['KeyboardAttack'].Height / $scale, 1))"
+        finish = "$([Math]::Round($rects['FinishKeyboardTiming'].Width / $scale, 1)) x $([Math]::Round($rects['FinishKeyboardTiming'].Height / $scale, 1))"
+        export = "$([Math]::Round($export.Width / $scale, 1)) x $([Math]::Round($export.Height / $scale, 1))"
+        hint = "$([Math]::Round($hint.Width / $scale, 1)) x $([Math]::Round($hint.Height / $scale, 1))"
+        ready = $readyEvidence
+    }
+    Show-Control 'EditProgram'
+    return $evidence
+}
+# What the export of a finished check depends on, with the real transport (a hosted runner has no output, so this is the local gate only,
+# and the project it plays is silent). Nothing to export before the first check ends, and none while one runs; after one ends, a line that
+# says what is exported (project, rhythm, when) and the command on; kept through Stop, another page and a rename of the project (the line
+# still names the project as it was); gone when another check starts, and when a change of playback ends the check that runs. It leaves a
+# finished check behind, which the Dutch checks then find, in Dutch.
+$script:timingExportFinished = $false
+$script:timingExportProject = ''
+function Test-TimingExportWithOutput {
+    $script:timingExportDone = [System.Collections.Generic.List[string]]::new()
+    function Get-ExportOn { (Find-Control 'ExportTimingCsv').Current.IsEnabled }
+    function Start-PlayingOnTrain {
+        Select-Destination 'DestinationPlay'
+        Wait-Settled 'QuickMeter'
+        Invoke-Control 'TransportStartPause'
+        $null = Wait-Transport 'Playing' $true
+        Select-Destination 'DestinationTrain'
+        Wait-Settled 'TimingTolerance'
+    }
+    function Begin-Check([string]$what) {
+        Invoke-Control 'BeginKeyboardTiming'
+        Wait-Condition { (Find-Control 'KeyboardAttack').Current.IsEnabled } "${what}: the check did not start."
+        if (Get-ExportOn) { throw "${what}: the export is on while a check is running." }
+        if ($null -ne (Find-Optional 'TimingCsvReady')) { throw "${what}: a line says what is exported while a check is running." }
+    }
+    function Finish-Check([string]$what) {
+        Invoke-Control 'FinishKeyboardTiming'
+        Wait-Condition { Get-ExportOn } "${what}: the export did not turn on when the check finished."
+        Wait-Condition { $null -ne (Find-Optional 'TimingCsvReady') } "${what}: no line says what is exported once the check has finished."
+    }
+    function Assert-Kept([string]$what, [string]$project) {
+        if (-not (Get-ExportOn)) { throw "${what}: the finished check can no longer be exported." }
+        # A person waits for the line a moment; so does this check, so that a busy machine is not mistaken for a line that is gone.
+        $limit = [DateTime]::UtcNow.AddSeconds(5)
+        do { $line = Find-Optional 'TimingCsvReady'; if ($null -ne $line) { break }; Start-Sleep -Milliseconds 100 } while ([DateTime]::UtcNow -lt $limit)
+        if ($null -eq $line) { throw "${what}: no line says what is exported any more." }
+        if ($line.Current.Name -notlike "*$project*") { throw "${what}: the line for the export does not name the project '$project': '$($line.Current.Name)'." }
+    }
+    # The name of the project as the person sees it, read from the panel that edits it.
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    $project = (Find-Control 'DocumentName').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
+    Invoke-Control 'ProjectOptionsPanelCancel'
+    Wait-Absent 'DocumentName'
+    if ([string]::IsNullOrWhiteSpace($project)) { throw 'The project has no name to look for in the line for the export.' }
+
+    # 1. Nothing has finished yet: the command is off and nothing says what would be exported.
+    Start-PlayingOnTrain
+    if (Get-ExportOn) { throw 'The export is on before any check has finished.' }
+    if ($null -ne (Find-Optional 'TimingCsvReady')) { throw 'A line says what is exported before any check has finished.' }
+    $script:timingExportDone.Add('off-before-the-first-check')
+    # 2. A check that runs has no result yet.
+    Begin-Check 'A running check'
+    $script:timingExportDone.Add('off-while-a-check-runs')
+    foreach ($press in 1..3) { Invoke-Control 'KeyboardAttack'; Start-Sleep -Milliseconds 700 }
+    # 3. When it finishes, the line says what is exported: project, rhythm and when.
+    Finish-Check 'A finished check'
+    $ready = (Find-Control 'TimingCsvReady').Current.Name
+    if ($ready -notlike "*$project*") { throw "The line for the export does not name the project '$project': '$ready'." }
+    if ($ready -notlike '*Main beat*') { throw "The line for the export does not name the rhythm 'Main beat': '$ready'." }
+    if ($ready -notmatch '\d{1,2}[:.]\d{2}') { throw "The line for the export does not say when the check finished: '$ready'." }
+    $script:timingExportDone.Add('on-after-a-check-with-a-line-naming-project-rhythm-and-time')
+    # 4. It is kept through Stop and through another page.
+    Invoke-Control 'TransportStop'
+    $null = Wait-Transport 'Stopped'
+    Assert-Kept 'After Stop' $project
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
+    Assert-Kept 'After another page' $project
+    $script:timingExportDone.Add('kept-through-stop-and-another-page')
+    # 5. It is kept through a rename of the project, and still says the project's name as it was.
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    $renamed = 'Renamed after the check'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    Wait-Settled 'DocumentName'
+    Set-Text 'DocumentName' $renamed
+    Invoke-Control 'ProjectOptionsPanelDone'
+    Wait-Absent 'DocumentName'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    if ((Find-Control 'DocumentName').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value -ne $renamed) { throw 'The project was not renamed, so a rename cannot be shown not to reach the line for the export.' }
+    Invoke-Control 'ProjectOptionsPanelCancel'
+    Wait-Absent 'DocumentName'
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
+    Assert-Kept 'After the project was renamed' $project
+    if ((Find-Control 'TimingCsvReady').Current.Name -like "*$renamed*") { throw "The line for the export names the project as it is now ('$renamed'), not as it was when the check finished." }
+    $script:timingExportDone.Add('names-the-project-as-it-was-after-a-rename')
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    Wait-Settled 'DocumentName'
+    Set-Text 'DocumentName' $project
+    Invoke-Control 'ProjectOptionsPanelDone'
+    Wait-Absent 'DocumentName'
+    # 6. Another check ends with a result of its own (no press at all is a finished check too).
+    Start-PlayingOnTrain
+    Begin-Check 'A new check'
+    Finish-Check 'The new check'
+    Assert-Kept 'After the new check' $project
+    $script:timingExportDone.Add('a-new-check-ends-with-a-result-of-its-own')
+    # 6b. The project is renamed while it plays. A rename does not reach the audio, so the revision that plays still holds the name from
+    # when playback last started; a check that begins after the rename goes by the name the person sees.
+    $renamedWhilePlaying = 'Renamed while playing'
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    Wait-Settled 'DocumentName'
+    Set-Text 'DocumentName' $renamedWhilePlaying
+    Invoke-Control 'ProjectOptionsPanelDone'
+    Wait-Absent 'DocumentName'
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
+    Begin-Check 'A check after the project was renamed while it plays'
+    Finish-Check 'The check after the project was renamed while it plays'
+    $lineAfterRename = (Find-Control 'TimingCsvReady').Current.Name
+    if ($lineAfterRename -notlike "*$renamedWhilePlaying*") { throw "The line for the export does not name the project as it is called now ('$renamedWhilePlaying'), only as it was when playback last started: '$lineAfterRename'." }
+    $script:timingExportDone.Add('names-the-project-as-renamed-while-playing')
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    Open-Panel @('ProjectOptions') 'DocumentName'
+    Wait-Settled 'DocumentName'
+    Set-Text 'DocumentName' $project
+    Invoke-Control 'ProjectOptionsPanelDone'
+    Wait-Absent 'DocumentName'
+    # The next step goes on from the Train page, where the check before it was left.
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
+    # 7. A new check took the old result away when it began (nothing shows that while it runs), so a change of playback that ends it
+    # leaves nothing to export: not the new result, which never came, and not the old one.
+    Begin-Check 'A check that is about to be ended'
+    Invoke-Control 'TransportStop'
+    $null = Wait-Transport 'Stopped'
+    Wait-Condition { -not (Get-ExportOn) } 'A check that was ended by Stop can be exported.'
+    if ($null -ne (Find-Optional 'TimingCsvReady')) { throw 'A line says what is exported after the check was ended by Stop.' }
+    $script:timingExportDone.Add('off-after-a-change-of-playback-ends-the-check')
+    # 8. One more finished check is left for the Dutch checks.
+    Start-PlayingOnTrain
+    Begin-Check 'The check that is left behind'
+    Finish-Check 'The check that is left behind'
+    Invoke-Control 'TransportStop'
+    $null = Wait-Transport 'Stopped'
+    Assert-Kept 'The check that is left behind' $project
+    $script:timingExportFinished = $true
+    $script:timingExportProject = $project
+    Assert-NoErrorNotice 'The export of a finished check'
+}
 $panels = @(
     @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
     @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
@@ -1480,6 +1744,7 @@ $liveSound = 'not-run-no-output'
 $liveTempoAndMeter = 'not-run-no-output'
 $liveSplitClicks = 'not-run-no-output'
 $tapStartSwitching = 'not-run-no-output'
+$timingExportFlow = 'not-run-no-output'
 if (-not $playAudio) {
     $playback = 'not-run-audio-disabled'
     $practiceStops = 'not-run-audio-disabled'
@@ -1487,6 +1752,7 @@ if (-not $playAudio) {
     $liveTempoAndMeter = 'not-run-audio-disabled'
     $liveSplitClicks = 'not-run-audio-disabled'
     $tapStartSwitching = 'not-run-audio-disabled'
+    $timingExportFlow = 'not-run-audio-disabled'
 } elseif ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
     # Tap to start starts the metronome, so it needs an output to start on: without one the switch is off and says why.
@@ -1641,6 +1907,8 @@ if (-not $playAudio) {
     }
     Test-TapStartWithOutput
     $tapStartSwitching = $script:tapStartDone -join ', '
+    Test-TimingExportWithOutput
+    $timingExportFlow = $script:timingExportDone -join ', '
 }
 # Studio: lanes are added from one menu; every field of a lane applies as it is changed (no Apply button on a lane) and the page is
 # not rebuilt, so the focus, the caret and the scroll position stay; each change is one step of Undo. This runs after the playback
@@ -1906,6 +2174,18 @@ function Test-NewButtonsOnScreen([string]$where, [string[]]$before) {
     }
 }
 Assert-NoErrorNotice 'Before the Dutch checks'
+# The export of a finished timing check at the sizes the layout gates use. In the local gate a check has finished by now, and the same
+# sizes are read for the finished state (the line that names what is exported is read there too); a hosted runner reads the state
+# before any check.
+$timingExportEvidence = @{}
+$timingExportEvidence['firstUse'] = Test-TimingExport 'Timing export at the first-use size' 'timing-first-use' $script:timingExportFinished 'Main beat' $script:timingExportProject
+foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
+    $timingExportEvidence["$($size[0])x$($size[1])"] = Test-TimingExport "Timing export at $($size[0])x$($size[1])" "timing-$($size[0])x$($size[1])" $script:timingExportFinished 'Main beat' $script:timingExportProject
+}
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
 Select-Destination 'DestinationSettings'
 Wait-Settled 'Language'
 Select-Combo 'Language' 'Nederlands'
@@ -1942,6 +2222,14 @@ $tempoGuideEvidence['dutch'] = Test-TempoGuide 'Dutch tempo guide' 'tempo-nl' -I
 Resize-To 400 720
 Start-Sleep -Milliseconds 800
 $tempoGuideEvidence['dutch400x720'] = Test-TempoGuide 'Dutch tempo guide at 400x720' 'tempo-nl-400x720'
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 800
+# The export in Dutch, whose words are longer, and where the main beat is Hoofdpuls: the same rules at the first-use size and at 400x720.
+# After the local gate's finished check this also shows that the check survived the change of language and is described in Dutch.
+$timingExportEvidence['dutch'] = Test-TimingExport 'Dutch timing export' 'timing-nl' $script:timingExportFinished 'Hoofdpuls' $script:timingExportProject
+Resize-To 400 720
+Start-Sleep -Milliseconds 800
+$timingExportEvidence['dutch400x720'] = Test-TimingExport 'Dutch timing export at 400x720' 'timing-nl-400x720' $script:timingExportFinished 'Hoofdpuls' $script:timingExportProject
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
 # The same for the commands each page shows on its first screen (the rest is reached by scrolling).
@@ -2019,6 +2307,7 @@ Wait-Settled 'QuickMeter'
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
   tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
+  timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
