@@ -1245,7 +1245,8 @@ function Test-TimingExportWithOutput {
 # Dutch: the three commands whole and as large as a command, in the order they come, between the edges of their card and not on top of each
 # other (a command that is squeezed or pushed over by a new neighbour is the defect this guards); the hint readable and under the commands.
 # Then the command is pressed: it asks first, in words that give the number of tracks, how long each is and what they take unzipped, with a
-# Continue and a Cancel that are whole and as large as a button of a dialog; Cancel closes the question and leaves everything as it was.
+# Continue and a Cancel that are whole and at least 100 x 32 DIP (the size of the buttons of the system's dialog, which every question of the
+# app is); Cancel closes the question and leaves everything as it was.
 # The native save dialog cannot be driven on a runner, so the run goes no further than the question (the file itself is read in the
 # end-to-end run that the pull request describes). The numbers of the question are compared with what the project gives: the track count with
 # the lanes the project has, and the size with the length and the track count (4 bytes a frame, 48,000 frames a second); the first call
@@ -1320,7 +1321,7 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
     # Pressing the command asks first. The question gives the number of tracks, how long each is and what they take unzipped.
     if (-not (Find-Control 'ExportWavStems').Current.IsEnabled) { throw "${where}: the command is off although no export of tracks is going." }
-    Invoke-Control 'ExportWavStems'
+    $null = Invoke-Control 'ExportWavStems'
     Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "${where}: the command did not ask for confirmation."
     $messageElement = Find-Control 'ConfirmationMessage'
     $question = $messageElement.Current.Name
@@ -1345,7 +1346,8 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     }
     if ($exactLength -and $lengthText -ne $exactLength) { throw "${where}: the question says each track is about $lengthText long, not $exactLength as the project that the run starts with gives: '$question'." }
     if ($exactSize -and "$sizeText $sizeUnit" -ne $exactSize) { throw "${where}: the question says the tracks take about $sizeText $sizeUnit, not $exactSize as the project that the run starts with gives: '$question'." }
-    # The question is whole, and so are its two buttons, as large as a button of a dialog.
+    # The question is whole, and so are its two buttons: at least 100 DIP wide and as high as a button of the system's dialog, which is 32 DIP
+    # (measured here, 231 x 32 at the first-use size; every question of the app is that dialog, so 32 is what a whole button is).
     $questionRect = $messageElement.Current.BoundingRectangle
     Test-Visible $questionRect $windowRect "${where}: the question"
     if ($questionRect.Width -lt 150 * $scale -or $questionRect.Height -lt 14 * $scale) { throw "${where}: the question is squeezed to $questionRect." }
@@ -1355,8 +1357,8 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
         if ($null -eq $element) { throw "${where}: the question has no $($button[1]) button." }
         $rect = $element.Current.BoundingRectangle
         Test-Visible $rect $windowRect "${where}: the $($button[1]) button of the question"
-        if ($rect.Width -lt 100 * $scale -or $rect.Height -lt 40 * $scale) {
-            throw "${where}: the $($button[1]) button of the question is squeezed to $([Math]::Round($rect.Width / $scale, 1)) x $([Math]::Round($rect.Height / $scale, 1)) DIP (at least 100 x 40 DIP): $rect."
+        if ($rect.Width -lt 100 * $scale -or $rect.Height -lt 32 * $scale) {
+            throw "${where}: the $($button[1]) button of the question is squeezed to $([Math]::Round($rect.Width / $scale, 1)) x $([Math]::Round($rect.Height / $scale, 1)) DIP (at least 100 x 32 DIP): $rect."
         }
         $buttons[$button[1]] = "$([Math]::Round($rect.Width / $scale, 1)) x $([Math]::Round($rect.Height / $scale, 1))"
     }
