@@ -272,6 +272,22 @@ public sealed class WaveStemExporterTests
     }
 
     [TestMethod]
+    public async Task MixedExport_StillRefusesATooLongPlanBeforeTouchingTheFileSystem()
+    {
+        // The check moved into PcmWaveWriter with the writer, and the mixed export still makes it before it looks at the path: a folder
+        // that is not there would give a different error if the export got that far. (WaveExporterTests is as it is on main.)
+        using var temp = new TempDirectory();
+        var document = Check.Document();
+        document.Settings.Tempo = 1;
+        document.Settings.BeatUnitQuarters = 16;
+        var plan = Check.Plan(document, 5760, 192000);
+        var error = await Check.ThrowsAsync<ArgumentException>(() =>
+            WaveExporter.ExportAsync(Path.Combine(temp.Root, "no such folder", "huge.wav"), plan));
+        StringAssert.Contains(error.Message, "RIFF");
+        Assert.AreEqual(0, Directory.GetFileSystemEntries(temp.Root).Length);
+    }
+
+    [TestMethod]
     public async Task Export_AllEightSilentLanesKeepTheirAuthoredCountAfterDocumentMutation()
     {
         using var temp = new TempDirectory();
