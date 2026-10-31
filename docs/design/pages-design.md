@@ -110,7 +110,12 @@ is specified in `metronome-design.md` and is not changed here.
   Empty and "no project matches" are said only about a library that was read successfully: while it is being looked at, or
   when it could not be read, the status line is all the page says, whatever is typed in Search.
 - **Export:** one sentence per format; *Length when the project has no program: [16] bars* ("this many bars are
-  rendered"); *Export WAV*, *Export MIDI*; a failure names the file and the reason.
+  rendered"); *Export WAV*, *Export MIDI* and *Export separate tracks (ZIP)* as one row of commands (the third wraps under the other
+  two where the card is too narrow for three), with a hint under the row that says what the ZIP holds (a WAV file for the main beat
+  and one for each lane, all starting at the same moment, to line up in music software); a failure names the file and the reason.
+  The tracks command asks first (how many tracks, how long each is, what they take unzipped, where the count-in is and what a muted
+  lane gives), because the ZIP can be large, and only then chooses the file; it is off while it saves, with a notice that says so
+  (*Saving the tracks...*), and closing the window stops it. docs/WAV-STEMS.md is the specification.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,
   program steps). Choosing one asks first ("Replace the current project?") and says the current project stays in the undo
   history.

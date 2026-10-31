@@ -45,7 +45,9 @@ can be added without changing these application-facing types.
 - `RenderPlan`: `int SampleRate`, `long TotalFrames`,
   `IReadOnlyList<ScheduledOnset> Onsets`,
   `IReadOnlyList<TempoSegment> TempoSegments`,
-  `IReadOnlyList<(long StartFrame, long EndFrame)> SilentRanges`.
+  `IReadOnlyList<(long StartFrame, long EndFrame)> SilentRanges`,
+  `int LaneCount` (the authored lanes of the project, also those that have no audible click: a lane
+  that is muted, left out by solo or has a chance of 0 is still a lane).
   A parameterless/default constructor is not required.
 - `ScheduleCompiler.Compile(PulseDocument document, int sampleRate,
   int bars = 16, bool includeCountIn = true)` returns RenderPlan.
@@ -58,6 +60,19 @@ can be added without changing these application-facing types.
   plan caches created outside the render callback.
 - `WaveExporter.ExportAsync(string path, RenderPlan plan,
   CancellationToken cancellationToken = default)` writes a finite WAV.
+- `WaveStemExporter.ExportAsync(string path, RenderPlan plan,
+  IReadOnlyList<string> laneNames, CancellationToken cancellationToken = default)` writes one ZIP
+  holding `main.wav`, `lane-01.wav` to `lane-NN.wav` (one for each authored lane, named by number
+  and never by the lane's name) and `manifest.json`, through `AtomicFile.WriteAsync` (a temporary
+  file next to the destination, then a move: a locked, read-only or full destination keeps its old
+  content, and a cancelled export leaves no temporary file). `laneNames` has the name of every
+  authored lane in lane order (at most 256 well-formed UTF-16 characters each); the names are data
+  in the manifest. `WriteAsync(Stream, ...)` writes the same bytes without the atomic move, and
+  `GetUncompressedAudioBytes(plan)` is the audio of all the tracks before compression (4 bytes a
+  frame for each of the `LaneCount + 1` tracks, without headers and the manifest). Every track
+  starts at frame 0 and ends at `TotalFrames`, so they line up. A track longer than a RIFF file
+  (4 GiB) is refused with an `ArgumentException` before anything is written. docs/WAV-STEMS.md is
+  the specification.
 - `DocumentStore.SaveAsync(string path, PulseDocument document,
   CancellationToken cancellationToken = default)` and
   `DocumentStore.LoadAsync(string path, CancellationToken cancellationToken = default)`.
