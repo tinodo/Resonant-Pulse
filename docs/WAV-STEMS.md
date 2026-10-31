@@ -51,8 +51,8 @@ what it says is what is saved:
 - **The window is closed** while the file is written: the export stops, the temporary file is removed and a file that was already at the
   destination is as it was. Closing waits for the export to stop for at most 4 seconds, after the up to 4 seconds it already allows for saving
   the project (on the largest project here it stopped in 0.6 seconds); a close that is refused, because the project could not be saved, leaves
-  the export running; and if the export had not stopped when the 4 seconds passed the window would close without it, which was not seen and
-  could leave a temporary file beside the destination.
+  the export running; and if the export had not stopped when the 4 seconds passed the window would close without it (the log says so),
+  which was not seen and could leave a temporary file beside the destination.
 
 ## Format
 

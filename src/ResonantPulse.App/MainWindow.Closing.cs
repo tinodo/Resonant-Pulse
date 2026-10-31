@@ -65,8 +65,11 @@ public sealed partial class MainWindow
             saved = !timedOut && await flush;
             // An export of separate tracks that is being written is stopped and waited for (at most the same limit again, after the one for
             // the save), so that no temporary archive is left beside its destination. Only when the window will go: a close that is refused
-            // leaves it running. If it has not stopped when the limit passes the window goes anyway, and the temporary file may stay.
-            await _stemExport.StopForCloseAsync(saved || _closeAttemptFailed, CloseSaveLimit);
+            // leaves it running. If it has not stopped when the limit passes the window goes anyway, and the temporary file may stay (said
+            // in the log).
+            var windowWillGo = saved || _closeAttemptFailed;
+            if (!await _stemExport.StopForCloseAsync(windowWillGo, CloseSaveLimit) && windowWillGo)
+                Diagnostics.Write("The window closed while an export of separate tracks had not stopped; its temporary file may be left beside the destination.");
         }
         catch (Exception exception) { Diagnostics.Write("Saving before the window closed", exception); }
         finally
