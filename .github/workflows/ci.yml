@@ -99,6 +99,7 @@ jobs:
             artifacts/help-*.png
             artifacts/tempo-*.png
             artifacts/timing-*.png
+            artifacts/stems-*.png
             artifacts/application-stdout.log
             artifacts/application-stderr.log
             artifacts/native-app.log
@@ -149,7 +150,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: Exercise Windows file-lock and export rollback semantics
-        run: dotnet test tests/ResonantPulse.Core.Tests/ResonantPulse.Core.Tests.csproj -c Release --filter "FullyQualifiedName~WaveExporterTests|FullyQualifiedName~TimingCsvExporterTests" --logger "trx;LogFileName=windows-integrity.trx" --results-directory TestResults-Windows
+        run: dotnet test tests/ResonantPulse.Core.Tests/ResonantPulse.Core.Tests.csproj -c Release --filter "FullyQualifiedName~WaveExporterTests|FullyQualifiedName~WaveStemExporterTests|FullyQualifiedName~TimingCsvExporterTests" --logger "trx;LogFileName=windows-integrity.trx" --results-directory TestResults-Windows
       - name: Exercise Windows workspace and concurrent preference persistence
         run: dotnet test tests/ResonantPulse.App.Tests/ResonantPulse.App.Tests.csproj -c Release --filter FullyQualifiedName~LocalWorkspaceTests --logger "trx;LogFileName=windows-workspace.trx" --results-directory TestResults-Windows
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

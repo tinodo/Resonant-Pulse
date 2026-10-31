@@ -30,6 +30,12 @@ The budgets below are explicit defensive limits, **not achieved benchmarks**.
   outputs), successful commit with failed cleanup, and failed export cleanup.
   Its typed outcome and candidate recovery paths let callers localize the
   correct recovery action without parsing an English exception message.
+- `WaveStemExporter.ExportAsync/WriteAsync` write one ZIP: `main.wav` (the main beat, the clicks that split it and the
+  count-in), `lane-NN.wav` for each authored lane and `manifest.json`, described in `docs/WAV-STEMS.md`. The tracks are cut out of
+  the compiled plan, never compiled one by one, so the seeded chances and the count-in are those of the mixed WAV; each file is
+  written by the code that writes the mixed WAV (`PcmWaveWriter`), so a project without lanes gives a `main.wav` that is byte for
+  byte the mixed WAV. Entries are dated 1 January 1980, so the same plan gives the same bytes in one build of the app. `ExportAsync`
+  calls queue one at a time, also for different destinations; `WriteAsync`, which writes to a stream, does not queue.
 - `MidiExporter.Preflight` reports PPQ, timing-error bound, errors and notices.
   `ExportAsync` writes SMF type 0 or throws an actionable `ArgumentException`.
 - `DocumentStore.SaveAsync/LoadAsync` implement local schema-one JSON.
@@ -200,7 +206,9 @@ propagate; the app should present localized explanations and retain edits.
 
 Writes use a unique same-directory temporary file, flush-to-disk, and atomic
 replace/rename. Existing files remain intact if writing or pre-commit
-cancellation fails. Directories are not silently created. No remote content,
+cancellation fails. When a failed write cannot remove its temporary file either, the
+error is a `TemporaryFileCleanupException` (an `IOException`: same message, both causes in its
+inner `AggregateException`) whose `TemporaryPath` is the file that stays. Directories are not silently created. No remote content,
 asset path or executable material is loaded from documents. This is not an
 exchange-package, recovery-snapshot or multi-process conflict-resolution system.
 
@@ -256,7 +264,7 @@ an appended off-grid endpoint, rather than returning a document-invalid program.
 No time-authored/nested/mastery programs, per-section count-ins, random bounded
 gap schedules, tempo-dependent swing curves, random tempo ladders, free-running
 no-bar mode, pickup bars, metric-modulation authoring, sustained pitches/drone,
-per-step millisecond microtiming, sample import, spoken-count assets, stems,
+per-step millisecond microtiming, sample import, spoken-count assets,
 MIDI/tempo-map import, live MIDI/Link/device adapters, backing media/time stretch,
 charts/notation, calibration/transient detection, journals/history/recovery,
 package exchange or undo/redo engine is claimed here. Some belong to the app or
@@ -286,7 +294,10 @@ Do not advertise the entire approved product as complete based on this Core.
    loops, rational-size bounds, nested/cyclic setlists and unknown sounds.
 7. WAV headers/frame length/sample payload/finite tails, manifest contents,
    RIFF-size rejection, destination failure, cancellation, manifest-commit
-   failure preservation and WAV-commit rollback. MIDI byte-level parse, PPQ exactness, dotted-quarter tempo conversion,
+   failure preservation and WAV-commit rollback. The stem archive: entry names whatever the lane names are, ZIP structure and every
+   CRC-32 against an independent reader, each WAV canonical at several sample rates, alignment of every track, a lane that does not
+   sound still having its silent track, the tracks against the mixed WAV (within a rounding bound when nothing clips, not when
+   the mix clips), the same bytes for the same plan, a full or cancelled sink, and a blocked destination (Windows). MIDI byte-level parse, PPQ exactness, dotted-quarter tempo conversion,
    meter changes, seeded realization, note pairing, metadata, 1 BPM rejection,
    continuous-ramp/PPQ/tick/rounding preflight errors.
 8. JSON round trips, missing/wrong/future schema, duplicate/unknown fields,

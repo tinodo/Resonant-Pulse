@@ -135,7 +135,8 @@ public static class ScheduleCompiler
         ValidateWindow(notes.Select(n => n.Onset.Frame).ToArray(), (int)Math.Ceiling(sampleRate * 0.05), total, 256,
             "More than 256 audible voices overlap in a 50 ms window. Reduce density/tempo or mute lanes.");
         return new(sampleRate, total, notes.Select(n => n.Onset).ToArray(), tempos.ToArray(), silence.ToArray(),
-            targets.ToArray(), countIn, s.MasterGain, notes.ToArray(), sections.ToArray(), s.BeatUnitQuarters, document.Seed, document.ProbabilityAlgorithm);
+            targets.ToArray(), countIn, s.MasterGain, notes.ToArray(), sections.ToArray(), s.BeatUnitQuarters, document.Seed, document.ProbabilityAlgorithm,
+            document.Lanes.Count);
     }
 
     internal static List<ResolvedSection> Resolve(PulseDocument d, int bars, bool countIn)

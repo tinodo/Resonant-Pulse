@@ -110,7 +110,18 @@ is specified in `metronome-design.md` and is not changed here.
   Empty and "no project matches" are said only about a library that was read successfully: while it is being looked at, or
   when it could not be read, the status line is all the page says, whatever is typed in Search.
 - **Export:** one sentence per format; *Length when the project has no program: [16] bars* ("this many bars are
-  rendered"); *Export WAV*, *Export MIDI*; a failure names the file and the reason.
+  rendered"); *Export WAV*, *Export MIDI* and *Export separate tracks (ZIP)* as one row of commands (the third wraps under the other
+  two where the card is too narrow for three), with a hint under the row that says what the ZIP holds (a WAV file for the main beat
+  and one for each lane, all starting at the same moment, to line up in music software); a failure of the WAV or the MIDI export
+  names the file and the reason, and one of the tracks says what to check (the location, the free space, another program that has
+  the file open) and that a file that was already there is unchanged, when the file could not be written; when the temporary file could not
+  be removed either, it says so and names the file that stays, so that it can be deleted.
+  The tracks command asks first (how many tracks, how long each is, what they take unzipped, where the count-in is and what a muted
+  lane gives), because the ZIP can be large, and only then chooses the file; it is off from the press until the end, with a notice
+  while the file is written (*Saving the tracks...*; it comes back when a transient notice that replaced it, *Saved*, has faded, and no
+  warning or error is replaced by it), and closing the window stops it once the file is being written (it waits for
+  that for at most 4 seconds, after the wait for the save; a question that is open when closing begins is answered No, and a plan that is
+  still being compiled when a close is refused is not asked about afterwards). docs/WAV-STEMS.md is the specification.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,
   program steps). Choosing one asks first ("Replace the current project?") and says the current project stays in the undo
   history.
