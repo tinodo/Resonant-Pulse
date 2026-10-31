@@ -65,7 +65,8 @@ can be added without changing these application-facing types.
   holding `main.wav`, `lane-01.wav` to `lane-NN.wav` (one for each authored lane, named by number
   and never by the lane's name) and `manifest.json`, through `AtomicFile.WriteAsync` (a temporary
   file next to the destination, then a move: a locked, read-only or full destination keeps its old
-  content, and a cancelled export removes its temporary file; when it cannot, the `IOException` names it). `laneNames` has the name of every
+  content, and a cancelled export removes its temporary file; when it cannot, the exception is a `TemporaryFileCleanupException` (an
+  `IOException`) with the path of the file that stays as `TemporaryPath` and both causes in its inner `AggregateException`). `laneNames` has the name of every
   authored lane in lane order (at most 256 well-formed UTF-16 characters each); the names are data
   in the manifest. `WriteAsync(Stream, ...)` writes the same bytes without the atomic move, and
   `GetUncompressedAudioBytes(plan)` is the audio of all the tracks before compression (4 bytes a

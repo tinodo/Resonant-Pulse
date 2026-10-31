@@ -54,8 +54,10 @@ what it says is what is saved:
   the project (on the largest project here the process exited 0.6 seconds after the close was asked for); a close that is refused, because the
   project could not be saved, leaves the export running; and if the export had not stopped when the 4 seconds passed the window would close
   without it (the log says so), which was not seen and could leave a temporary file beside the destination. Closed earlier, while the plan is
-  compiled or the question is open, nothing is written: closing answers an open question No and does not ask one that has not been asked, so the
-  export ends, also when the close is then refused because the project could not be saved (reasoned from the code, not run in the window).
+  compiled or the question is open, nothing is written. Closing answers an open question No. When the close is refused (the project could
+  not be saved) while the plan is still being compiled, that export is marked void and the page looks at the mark before it asks, so it ends without
+  a question and the command is on again; a unit test holds the order (a compile that is held, a refused close, no question). A close that is
+  refused while the save dialog is open does not stop the export, because the person has answered Continue.
 
 ## Format
 
@@ -92,13 +94,17 @@ what it says is what is saved:
 
 The file is written atomically: to a temporary file next to the destination, then moved over it. If anything goes wrong (the file is open in
 another program, it is read-only, the disk is full, the export is cancelled or the window is closed) the file that was there stays as it was and
-the temporary file is removed (when it cannot be removed the error names it, and a window that closes before the export has stopped is the case described
-above). What the page says depends on what went wrong: for a file that is open in another program, read-only or on a full
+the temporary file is removed. When the temporary file cannot be removed either, Core throws a `TemporaryFileCleanupException` (an `IOException`
+with the path of the file that stays, whose inner exception holds both causes) and the page says so and names the file: the tracks could not be
+saved, a temporary file could not be removed, a file that was already there has not been changed, and the file can be deleted (a window that
+closes before the export has stopped is the case described above). What the page says otherwise depends on what went wrong: for a file that is
+open in another program, read-only or on a full
 disk (an input/output or access error) it says that the tracks could not be saved and that a file that was already there has not been changed; for
 another failure (a destination that is not a local path, a project that cannot be compiled) it shows the app's ordinary error for it; and when the
 window is closed nothing is shown. One export of tracks runs at a time, and the command is off from the press to the end, also while the question
 is open and the plan is compiled; a notice says that the tracks are being saved only while the file is written (after the save dialog), not
-before. A track longer than a WAV file
+before. If another notice replaces it while the file is written (Saved, from Save to library, fades after 6 seconds), it comes back when that
+one has faded; a warning or an error stays until it is dismissed and is never replaced by it. A track longer than a WAV file
 can be (4 GiB, about 6 hours at 48,000 Hz) is refused in words, naming the setting that can be changed, before a file is chosen. Everything about the
 file is checked before anything is written.
 

@@ -206,7 +206,9 @@ propagate; the app should present localized explanations and retain edits.
 
 Writes use a unique same-directory temporary file, flush-to-disk, and atomic
 replace/rename. Existing files remain intact if writing or pre-commit
-cancellation fails. Directories are not silently created. No remote content,
+cancellation fails. When a failed write cannot remove its temporary file either, the
+error is a `TemporaryFileCleanupException` (an `IOException`: same message, both causes in its
+inner `AggregateException`) whose `TemporaryPath` is the file that stays. Directories are not silently created. No remote content,
 asset path or executable material is loaded from documents. This is not an
 exchange-package, recovery-snapshot or multi-process conflict-resolution system.
 

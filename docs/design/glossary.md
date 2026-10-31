@@ -266,3 +266,10 @@ person gets, *separate tracks*, and the file type in brackets, as *Export result
   space, another program that has the file open) and that **a file that was already there has
   not been changed**, which is true because the archive is written next to it and moved over it
   only when it is whole.
+- The sentence for a **temporary file that could not be removed** either (it is shown only then, in
+  place of the one above) says that the tracks could not be saved, that a temporary file could not
+  be removed, that a file that was already there has not been changed, and which file the person can
+  delete, with the path last so that nothing follows it that could be read as part of the path:
+  *tijdelijk bestand*, *temporäre Datei*, *fichier temporaire* (French keeps the no-break space
+  before the colon) and *archivo temporal*, the words the app's WAV-export sentence about leftover
+  files already uses. German, French and Spanish are drafts like the rest and are in the questions.
