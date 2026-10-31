@@ -203,6 +203,8 @@ public sealed class WaveExporterTests
         Assert.IsTrue(p.TotalFrames * 4 > uint.MaxValue - 36L);
         var error = await Check.ThrowsAsync<ArgumentException>(() => WaveExporter.ExportAsync(path, p));
         Assert.IsTrue(error.Message.Contains("RIFF", StringComparison.Ordinal));
+        // Refused before the file system is touched: a folder that is not there would give a different error if the export got that far.
+        await Check.ThrowsAsync<ArgumentException>(() => WaveExporter.ExportAsync(Path.Combine(temp.Root, "no such folder", "huge.wav"), p));
         Assert.AreEqual("retained", await File.ReadAllTextAsync(path));
         Assert.AreEqual("retained manifest", await File.ReadAllTextAsync(path + ".manifest.json")); temp.NoTemps();
     }

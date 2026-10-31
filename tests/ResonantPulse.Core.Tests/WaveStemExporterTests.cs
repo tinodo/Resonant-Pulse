@@ -180,6 +180,10 @@ public sealed class WaveStemExporterTests
         Assert.IsTrue(plan.SilentRanges.Count > 0);
         foreach (var range in plan.SilentRanges)
             Assert.IsTrue(wave.IsSilent(range.StartFrame, range.EndFrame - range.StartFrame), "A gap is silent in every track, tails included.");
+        using var manifest = archive.Manifest();
+        var listed = manifest.RootElement.GetProperty("SilentRanges").EnumerateArray()
+            .Select(range => (range.GetProperty("StartFrame").GetInt64(), range.GetProperty("EndFrame").GetInt64())).ToArray();
+        Check.Sequence(plan.SilentRanges.ToArray(), listed);
         temp.NoTemps();
     }
 
@@ -260,6 +264,8 @@ public sealed class WaveStemExporterTests
         var error = await Check.ThrowsAsync<ArgumentException>(() => WaveStemExporter.ExportAsync(path, plan, []));
         StringAssert.Contains(error.Message, "RIFF");
         Check.Throws<ArgumentException>(() => WaveStemExporter.GetUncompressedAudioBytes(plan));
+        // Everything is checked before the file system is touched: a folder that is not there would be a different error if the export got that far.
+        await Check.ThrowsAsync<ArgumentException>(() => WaveStemExporter.ExportAsync(Path.Combine(temp.Root, "no such folder", "huge.zip"), plan, []));
         Assert.AreEqual("retained", await File.ReadAllTextAsync(path));
         Assert.AreEqual(1, Directory.GetFiles(temp.Root).Length);
         temp.NoTemps();
@@ -299,11 +305,25 @@ public sealed class WaveStemExporterTests
             document.Settings.Tempo = 80 + seed * 20;
             document.Settings.MasterGain = 0.1f + seed * 0.1f;
             document.Lanes[0].Pan = -1 + seed * 0.4f;
-            return Check.Plan(document);
+            return Check.Plan(document, 40);
         }).ToArray();
         Assert.AreEqual(plans.Length, plans.Select(plan => plan.TotalFrames).Distinct().Count());
+        // A temporary archive exists only while its export writes, so more than one at a time would mean that two exports ran together.
+        using var finished = new CancellationTokenSource();
+        int mostTemporaryArchives = 0;
+        var watcher = Task.Factory.StartNew(() =>
+        {
+            while (!finished.IsCancellationRequested)
+            {
+                try { mostTemporaryArchives = Math.Max(mostTemporaryArchives, Directory.GetFiles(temp.Root, "*.tmp").Length); }
+                catch (IOException) { }
+            }
+        }, TaskCreationOptions.LongRunning);
         await Task.WhenAll(plans.Select(plan =>
             WaveStemExporter.ExportAsync(path, plan, ["Seed " + plan.Seed]))).WaitAsync(TimeSpan.FromSeconds(30));
+        await finished.CancelAsync();
+        await watcher;
+        Assert.IsTrue(mostTemporaryArchives <= 1, $"One export of tracks runs at a time, but {mostTemporaryArchives} temporary archives were there together.");
         var archive = await StemArchive.ReadAsync(path);
         using var manifest = archive.Manifest();
         int seed = manifest.RootElement.GetProperty("Seed").GetInt32();
@@ -412,7 +432,7 @@ public sealed class WaveStemExporterTests
             using var copy = new MemoryStream();
             await stream.CopyToAsync(copy);
             Check.Sequence(expanded, copy.ToArray());
-            Assert.IsTrue(info.Method is 0 or 8, $"{info.Name}: method {info.Method}");
+            Assert.AreEqual(8, info.Method, $"{info.Name}: every entry is Deflate-compressed (a stored entry would be about 18 times larger for the first project)");
             Assert.AreEqual(0, info.Flags & 1, $"{info.Name}: encrypted");
             Assert.IsFalse(info.Name.EndsWith('/') || info.Name.Contains('\\'), $"{info.Name}: a directory entry or a path");
             Assert.AreEqual(new DateTime(1980, 1, 1), info.Modified, $"{info.Name}: the date is fixed so that the same project always gives the same bytes");
