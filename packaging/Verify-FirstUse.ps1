@@ -1240,6 +1240,146 @@ function Test-TimingExportWithOutput {
     $script:timingExportProject = $project
     Assert-NoErrorNotice 'The export of a finished check'
 }
+# The export of the separate tracks (docs/WAV-STEMS.md) is the third command of the export card on the Library page, after Export WAV and
+# Export MIDI, with a hint under the commands (docs/design/pages-design.md, Library). It is read at the sizes the layout gates use and in
+# Dutch: the three commands whole and as large as a command, in the order they come, between the edges of their card and not on top of each
+# other (a command that is squeezed or pushed over by a new neighbour is the defect this guards); the hint readable and under the commands.
+# Then the command is pressed: it asks first, in words that give the number of tracks, how long each is and what they take unzipped, with a
+# Continue and a Cancel that are whole and as large as a button of a dialog; Cancel closes the question and leaves everything as it was.
+# The native save dialog cannot be driven on a runner, so the run goes no further than the question (the file itself is read in the
+# end-to-end run that the pull request describes). The numbers of the question are compared with what the project gives: the track count with
+# the lanes the project has, and the size with the length and the track count (4 bytes a frame, 48,000 frames a second); the first call
+# also with the exact numbers of the project that the run starts with.
+$stemCommands = @('ExportWav', 'ExportMidi', 'ExportWavStems')
+$stemCommandMinimum = @{ ExportWav = @(100, 40); ExportMidi = @(100, 40); ExportWavStems = @(150, 40) }
+$stemQuestion = @{
+    en = @{ tracks = 'Tracks: (?<tracks>\d+), each about (?<length>\d+(?::\d{2}){1,2}) long'; size = 'take about (?<size>[\d.,]+) (?<unit>KiB|MiB|GiB)'; thousands = ','; point = '.' }
+    nl = @{ tracks = 'Sporen: (?<tracks>\d+), elk ongeveer (?<length>\d+(?::\d{2}){1,2}) lang'; size = 'nemen ze ongeveer (?<size>[\d.,]+) (?<unit>KiB|MiB|GiB) in'; thousands = '.'; point = ',' }
+}
+function Test-StemExport([string]$where, [string]$shot = '', [string]$language = 'en', [int]$tracks = 1, [string]$exactLength = '', [string]$exactSize = '') {
+    $transportBefore = (Find-Control 'TransportStatus').Current.Name
+    Select-Destination 'DestinationLibrary'
+    Wait-Settled 'ExportBars'
+    $null = Find-Control 'ExportWavStems'
+    # A person scrolls to the export card: down to the hint, then up to the first command, so that the three commands and the hint are
+    # on screen together.
+    Show-Control 'StemExportHint'
+    Show-Control 'ExportWav'
+    foreach ($id in $stemCommands + 'StemExportHint') { Wait-Settled $id }
+    $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+    $one = 1 * $scale
+    # The card keeps 21 DIP of padding at every size. What the card cuts off is not in the rectangle that UI Automation reports, so a
+    # rectangle that reaches into the padding is one that was cut (or pushed to the edge).
+    $padding = 10 * $scale
+    $card = (Find-Control 'ExportCard').Current.BoundingRectangle
+    $rects = @{}
+    foreach ($id in $stemCommands) {
+        $rects[$id] = (Find-Control $id).Current.BoundingRectangle
+        Test-Visible $rects[$id] $windowRect "${where}: $id"
+        $least = $stemCommandMinimum[$id]
+        if ($rects[$id].Width -lt $least[0] * $scale -or $rects[$id].Height -lt $least[1] * $scale) {
+            throw "${where}: $id is squeezed to $([Math]::Round($rects[$id].Width / $scale, 1)) x $([Math]::Round($rects[$id].Height / $scale, 1)) DIP (a command of the export card is at least $($least[0]) x $($least[1]) DIP): $($rects[$id])."
+        }
+        if ($rects[$id].Left -lt $card.Left + $padding -or $rects[$id].Right -gt $card.Right - $padding) {
+            throw "${where}: $id is clipped sideways or pushed into the edge of its card ($($rects[$id]) in the card $card)."
+        }
+    }
+    # No two commands overlap: each is a whole command of its own, on one row or in a row under the one before.
+    for ($first = 0; $first -lt $stemCommands.Count; $first++) {
+        for ($second = $first + 1; $second -lt $stemCommands.Count; $second++) {
+            $a = $rects[$stemCommands[$first]]; $b = $rects[$stemCommands[$second]]
+            $a.Inflate(-$one, -$one); $b.Inflate(-$one, -$one)
+            if ($a.IntersectsWith($b)) { throw "${where}: $($stemCommands[$first]) and $($stemCommands[$second]) overlap ($($rects[$stemCommands[$first]]) and $($rects[$stemCommands[$second]]))." }
+        }
+    }
+    # The commands come in the order Export WAV, Export MIDI, separate tracks. Each is after the one before it: to its right on the same
+    # row or on a row under it.
+    for ($index = 1; $index -lt $stemCommands.Count; $index++) {
+        $before = $rects[$stemCommands[$index - 1]]; $after = $rects[$stemCommands[$index]]
+        $onOneRow = [Math]::Abs(($after.Top + $after.Height / 2) - ($before.Top + $before.Height / 2)) -le 4 * $scale
+        if (($onOneRow -and $after.Left -lt $before.Right - $one) -or (-not $onOneRow -and $after.Top -lt $before.Bottom - $one)) {
+            throw "${where}: $($stemCommands[$index]) does not come after $($stemCommands[$index - 1]) ($after, $before)."
+        }
+    }
+    $midi = $rects['ExportMidi']; $stems = $rects['ExportWavStems']
+    $layout = if ([Math]::Abs(($stems.Top + $stems.Height / 2) - ($midi.Top + $midi.Height / 2)) -le 4 * $scale) { 'after-midi-on-its-row' } else { 'under-midi' }
+    # The hint is readable, between the edges of the card and under every command, and it says what the command saves.
+    $hintElement = Find-Control 'StemExportHint'
+    $hint = $hintElement.Current.BoundingRectangle
+    Test-Visible $hint $windowRect "${where}: the hint under the commands"
+    if ($hintElement.Current.Name.Length -lt 80 -or $hintElement.Current.Name -notmatch 'ZIP') { throw "${where}: the hint under the commands does not say what it saves: '$($hintElement.Current.Name)'." }
+    if ($hint.Width -lt 150 * $scale -or $hint.Height -lt 14 * $scale) {
+        throw "${where}: the hint is squeezed to $([Math]::Round($hint.Width / $scale, 1)) x $([Math]::Round($hint.Height / $scale, 1)) DIP (a line of it is at least 150 DIP wide and 14 high): $hint."
+    }
+    if ($hint.Left -lt $card.Left + $padding -or $hint.Right -gt $card.Right - $padding) { throw "${where}: the hint is clipped sideways or pushed into the edge of its card ($hint in the card $card)." }
+    foreach ($id in $stemCommands) {
+        if ($hint.Top -lt $rects[$id].Bottom - $one) { throw "${where}: the hint is not under $id ($hint, $id $($rects[$id]))." }
+    }
+    Test-NoApplyButtons "${where}: Library"
+    Assert-NoErrorNotice $where
+    if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
+    # Pressing the command asks first. The question gives the number of tracks, how long each is and what they take unzipped.
+    if (-not (Find-Control 'ExportWavStems').Current.IsEnabled) { throw "${where}: the command is off although no export of tracks is going." }
+    Invoke-Control 'ExportWavStems'
+    Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "${where}: the command did not ask for confirmation."
+    $messageElement = Find-Control 'ConfirmationMessage'
+    $question = $messageElement.Current.Name
+    $words = $stemQuestion[$language]
+    if ($question -notmatch $words.tracks) { throw "${where}: the question does not give the number of tracks and how long each is: '$question'." }
+    $trackCount = [int]$Matches['tracks']; $lengthText = $Matches['length']
+    if ($question -notmatch $words.size) { throw "${where}: the question does not give what the tracks take unzipped: '$question'." }
+    $sizeText = $Matches['size']
+    $sizeNumber = [double]::Parse($sizeText.Replace($words.thousands, '').Replace($words.point, '.'), [Globalization.CultureInfo]::InvariantCulture)
+    $sizeUnit = $Matches['unit']
+    if ($trackCount -ne $tracks) { throw "${where}: the question says $trackCount tracks, but the project has $($tracks - 1) lanes and so $tracks tracks: '$question'." }
+    $lengthParts = @($lengthText -split ':' | ForEach-Object { [int]$_ })
+    $lengthSeconds = if ($lengthParts.Count -eq 3) { $lengthParts[0] * 3600 + $lengthParts[1] * 60 + $lengthParts[2] } else { $lengthParts[0] * 60 + $lengthParts[1] }
+    # The size is the tracks, each as long as the length (rounded up to the next second), at 4 bytes a frame and 48,000 frames a second.
+    # It is written to one decimal (KiB without), so the range it stands for is compared with the range the length allows.
+    $unitBytes = switch ($sizeUnit) { 'KiB' { 1024.0 } 'MiB' { 1048576.0 } default { 1073741824.0 } }
+    $half = if ($sizeUnit -eq 'KiB') { 0.5 } else { 0.05 }
+    $shownLow = ($sizeNumber - $half) * $unitBytes; $shownHigh = ($sizeNumber + $half) * $unitBytes
+    $allowedLow = $tracks * 192000.0 * ($lengthSeconds - 1); $allowedHigh = $tracks * 192000.0 * $lengthSeconds
+    if ($shownHigh -lt $allowedLow -or $shownLow -gt $allowedHigh) {
+        throw "${where}: the size in the question ($sizeNumber $sizeUnit) does not fit $tracks tracks of $lengthText (between $([Math]::Round($allowedLow / 1MB, 2)) and $([Math]::Round($allowedHigh / 1MB, 2)) MiB): '$question'."
+    }
+    if ($exactLength -and $lengthText -ne $exactLength) { throw "${where}: the question says each track is about $lengthText long, not $exactLength as the project that the run starts with gives: '$question'." }
+    if ($exactSize -and "$sizeText $sizeUnit" -ne $exactSize) { throw "${where}: the question says the tracks take about $sizeText $sizeUnit, not $exactSize as the project that the run starts with gives: '$question'." }
+    # The question is whole, and so are its two buttons, as large as a button of a dialog.
+    $questionRect = $messageElement.Current.BoundingRectangle
+    Test-Visible $questionRect $windowRect "${where}: the question"
+    if ($questionRect.Width -lt 150 * $scale -or $questionRect.Height -lt 14 * $scale) { throw "${where}: the question is squeezed to $questionRect." }
+    $buttons = @{}
+    foreach ($button in @(@('PrimaryButton', 'Continue'), @('CloseButton', 'Cancel'))) {
+        $element = Find-DialogButton $button[0]
+        if ($null -eq $element) { throw "${where}: the question has no $($button[1]) button." }
+        $rect = $element.Current.BoundingRectangle
+        Test-Visible $rect $windowRect "${where}: the $($button[1]) button of the question"
+        if ($rect.Width -lt 100 * $scale -or $rect.Height -lt 40 * $scale) {
+            throw "${where}: the $($button[1]) button of the question is squeezed to $([Math]::Round($rect.Width / $scale, 1)) x $([Math]::Round($rect.Height / $scale, 1)) DIP (at least 100 x 40 DIP): $rect."
+        }
+        $buttons[$button[1]] = "$([Math]::Round($rect.Width / $scale, 1)) x $([Math]::Round($rect.Height / $scale, 1))"
+    }
+    if ($shot) { $null = Save-PlayScreenshot "$shot-question.png" }
+    # Cancel closes the question; nothing is saved, nothing plays, no error appears, and the command is on again.
+    Invoke-DialogButton 'CloseButton' "${where}: the question went away before Cancel could be pressed."
+    Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } "${where}: Cancel did not close the question."
+    Wait-Condition { (Find-Control 'ExportWavStems').Current.IsEnabled } "${where}: the command stayed off after Cancel."
+    Start-Sleep -Milliseconds 500
+    Assert-NoErrorNotice "${where} after Cancel"
+    if ((Find-Control 'TransportStatus').Current.Name -ne $transportBefore) {
+        throw "${where}: reading the export of tracks changed the transport ('$transportBefore' then '$((Find-Control 'TransportStatus').Current.Name)')."
+    }
+    return @{
+        layout = $layout; tracks = $trackCount; length = $lengthText; size = "$sizeText $sizeUnit"
+        wav = "$([Math]::Round($rects['ExportWav'].Width / $scale, 1)) x $([Math]::Round($rects['ExportWav'].Height / $scale, 1))"
+        midi = "$([Math]::Round($midi.Width / $scale, 1)) x $([Math]::Round($midi.Height / $scale, 1))"
+        stems = "$([Math]::Round($stems.Width / $scale, 1)) x $([Math]::Round($stems.Height / $scale, 1))"
+        hint = "$([Math]::Round($hint.Width / $scale, 1)) x $([Math]::Round($hint.Height / $scale, 1))"
+        question = "$([Math]::Round($questionRect.Width / $scale, 1)) x $([Math]::Round($questionRect.Height / $scale, 1))"
+        buttons = $buttons
+    }
+}
 $panels = @(
     @{open=@('QuickMeter');                 field='MeterPreset4_4';    close='MeterPreset4_4'; focus='MeterPreset4_4'},
     @{open=@('QuickMeter', 'MeterCustom');  field='MeterBeats';        close='RhythmOptionsCancel'; focus='RhythmOptionsCancel'
@@ -1491,6 +1631,11 @@ Select-Song 'StageSong1'
 Wait-Condition { (Get-SongNotes) -eq '' } 'Stage: the second song shows the notes of the first.'
 Select-Song 'StageSong0'
 Wait-Condition { (Get-SongNotes) -eq $songNotes } 'Stage: the notes typed for the first song were not saved before the selection moved on.'
+function Show-Control([string]$id) {
+    # Brings a control that is below the first screen into view, the way a person scrolls to it.
+    try { (Find-Control $id).GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView() } catch { }
+    Start-Sleep -Milliseconds 400
+}
 # The setlist is switched off while songs are being added, moved or removed, so a song cannot be chosen from rows that are about
 # to be replaced: Remove asks for confirmation inside the operation, so while the question is open the list is off, and after
 # Cancel it is on again with every song still in it. (It is not switched off for other operations: that would take the keyboard
@@ -1524,6 +1669,12 @@ Invoke-DialogButton 'CloseButton' 'Stage: the confirmation went away before Canc
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Stage: Cancel did not close the confirmation.'
 Wait-Condition { (Find-Control 'StageSetlist').Current.IsEnabled } 'Stage: the setlist stayed switched off after the removal was cancelled.'
 Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: cancelling the removal removed a song.'
+# The export of the separate tracks, read with the project that the run started with: the Studio checks below add the lanes, so there is no
+# lane yet, one track of the default length (16 bars in 4/4 at 120 BPM and a count-in of one bar are 17 bars of 2 s = 34 s = 1,632,000
+# frames of 4 bytes = 6,528,000 bytes = 6.2 MiB). A project that an earlier check left changed would give other numbers, and the message
+# of the check says so.
+$stemExportEvidence = @{}
+$stemExportEvidence['firstUse'] = Test-StemExport 'Stem export at the first-use size' 'stems-first-use' 'en' 1 '0:34' '6.2 MiB'
 # Train: content-sized fields; with no program the page says how to get one; a timing check offers only the command that makes
 # sense now (nothing to press or finish until one is running).
 Select-Destination 'DestinationTrain'
@@ -1990,11 +2141,6 @@ foreach ($id in $laneFields) {
 Wait-Condition { $null -ne (Find-Optional 'Lane1Card') } 'Studio: cancelling the removal removed the lane.'
 function Get-Box([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
 function Get-StepValue([string]$id) { (Find-Control $id).GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.Value }
-function Show-Control([string]$id) {
-    # Brings a control that is below the first screen into view, the way a person scrolls to it.
-    try { (Find-Control $id).GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView() } catch { }
-    Start-Sleep -Milliseconds 400
-}
 # The exact positions of the Euclidean lane are rows that open to fields applying as they are changed: no Apply button, the row is
 # not rebuilt, a typed position is read exactly, one outside the cycle is refused and the box goes back.
 Show-Control 'Lane1Positions'
@@ -2179,10 +2325,14 @@ Assert-NoErrorNotice 'Before the Dutch checks'
 # before any check.
 $timingExportEvidence = @{}
 $timingExportEvidence['firstUse'] = Test-TimingExport 'Timing export at the first-use size' 'timing-first-use' $script:timingExportFinished 'Main beat' $script:timingExportProject
+# The export of the separate tracks once the Studio checks have added two lanes (a plain one and a Euclidean one): three tracks, at the
+# same sizes, and the same question whatever the size.
+$stemExportEvidence['withLanes'] = Test-StemExport 'Stem export with two lanes at the first-use size' 'stems-lanes-first-use' 'en' 3
 foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 800
     $timingExportEvidence["$($size[0])x$($size[1])"] = Test-TimingExport "Timing export at $($size[0])x$($size[1])" "timing-$($size[0])x$($size[1])" $script:timingExportFinished 'Main beat' $script:timingExportProject
+    $stemExportEvidence["$($size[0])x$($size[1])"] = Test-StemExport "Stem export at $($size[0])x$($size[1])" "stems-$($size[0])x$($size[1])" 'en' 3
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
@@ -2227,9 +2377,11 @@ Start-Sleep -Milliseconds 800
 # The export in Dutch, whose words are longer, and where the main beat is Hoofdpuls: the same rules at the first-use size and at 400x720.
 # After the local gate's finished check this also shows that the check survived the change of language and is described in Dutch.
 $timingExportEvidence['dutch'] = Test-TimingExport 'Dutch timing export' 'timing-nl' $script:timingExportFinished 'Hoofdpuls' $script:timingExportProject
+$stemExportEvidence['dutch'] = Test-StemExport 'Dutch stem export' 'stems-nl' 'nl' 3
 Resize-To 400 720
 Start-Sleep -Milliseconds 800
 $timingExportEvidence['dutch400x720'] = Test-TimingExport 'Dutch timing export at 400x720' 'timing-nl-400x720' $script:timingExportFinished 'Hoofdpuls' $script:timingExportProject
+$stemExportEvidence['dutch400x720'] = Test-StemExport 'Dutch stem export at 400x720' 'stems-nl-400x720' 'nl' 3
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
 # The same for the commands each page shows on its first screen (the rest is reached by scrolling).
@@ -2307,7 +2459,7 @@ Wait-Settled 'QuickMeter'
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
   tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
-  timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;
+  timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8

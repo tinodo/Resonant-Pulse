@@ -99,6 +99,7 @@ jobs:
             artifacts/help-*.png
             artifacts/tempo-*.png
             artifacts/timing-*.png
+            artifacts/stems-*.png
             artifacts/application-stdout.log
             artifacts/application-stderr.log
             artifacts/native-app.log
