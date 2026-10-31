@@ -185,8 +185,8 @@ WAV and Export MIDI, with a line under the row that says what it saves; docs/WAV
 compiles the project off the interface's thread, asks (how many tracks, how long each is, how much room they take unzipped, that the count-in is
 in the main file only and that a muted lane is a silent file, and from 512 MiB unzipped that it can take a while) and only after Continue opens
 the save dialog; Cancel writes nothing and leaves the command on. From the press to the end the command is off and a notice says that the tracks
-are being saved; closing the window stops the export and removes the temporary file, and a file that was already at the destination stays as it
-was. The archive holds `main.wav` (the main beat, the clicks that split a beat and the count-in), `lane-01.wav` to `lane-NN.wav` (one for each
+are being saved; closing the window stops the export and removes the temporary file (closing waits up to 4 seconds for that, and a close that is
+refused leaves the export running), and a file that was already at the destination stays as it was. The archive holds `main.wav` (the main beat, the clicks that split a beat and the count-in), `lane-01.wav` to `lane-NN.wav` (one for each
 lane, silent during the count-in, named by number and never by the lane's name) and `manifest.json`; every WAV file starts at frame 0 and is as
 long as the mixed WAV would be, and a lane that is muted, left out by another lane's Solo, with a chance of 0 or without a click still has its
 file, silent. The WAV files are written by the code that writes the mixed WAV, whose own files did not change (a throwaway test hashed the files of

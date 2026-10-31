@@ -34,7 +34,8 @@ The budgets below are explicit defensive limits, **not achieved benchmarks**.
   count-in), `lane-NN.wav` for each authored lane and `manifest.json`, described in `docs/WAV-STEMS.md`. The tracks are cut out of
   the compiled plan, never compiled one by one, so the seeded chances and the count-in are those of the mixed WAV; each file is
   written by the code that writes the mixed WAV (`PcmWaveWriter`), so a project without lanes gives a `main.wav` that is byte for
-  byte the mixed WAV. Entries are dated 1 January 1980, so the same plan gives the same bytes in one build of the app. Calls queue one at a time.
+  byte the mixed WAV. Entries are dated 1 January 1980, so the same plan gives the same bytes in one build of the app. `ExportAsync`
+  calls queue one at a time, also for different destinations; `WriteAsync`, which writes to a stream, does not queue.
 - `MidiExporter.Preflight` reports PPQ, timing-error bound, errors and notices.
   `ExportAsync` writes SMF type 0 or throws an actionable `ArgumentException`.
 - `DocumentStore.SaveAsync/LoadAsync` implement local schema-one JSON.

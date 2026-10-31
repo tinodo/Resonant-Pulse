@@ -13,6 +13,31 @@ public sealed class WaveStemExporterTests
 
     private static string TrackFile(int laneIndex) => "lane-" + (laneIndex + 1).ToString("D2", System.Globalization.CultureInfo.InvariantCulture) + ".wav";
 
+    /// <summary>
+    /// Runs <paramref name="work"/> and returns the most temporary archives that were in <paramref name="folder"/> at one moment while it ran
+    /// (a temporary archive exists only while its export writes). It reads the folder as fast as it can, so a short overlap is seen.
+    /// </summary>
+    private static async Task<int> MostTemporaryArchivesAsync(string folder, Func<Task> work)
+    {
+        using var finished = new CancellationTokenSource();
+        int most = 0;
+        var watcher = Task.Factory.StartNew(() =>
+        {
+            while (!finished.IsCancellationRequested)
+            {
+                try { most = Math.Max(most, Directory.GetFiles(folder, "*.tmp").Length); }
+                catch (IOException) { }
+            }
+        }, TaskCreationOptions.LongRunning);
+        try { await work(); }
+        finally
+        {
+            await finished.CancelAsync();
+            await watcher;
+        }
+        return most;
+    }
+
     /// <summary>A destination that is not seekable and takes only so many bytes, as a disk that fills up does.</summary>
     private sealed class LimitedStream(long limit, Action<long>? afterWrite = null) : Stream
     {
@@ -215,6 +240,31 @@ public sealed class WaveStemExporterTests
     }
 
     [TestMethod]
+    public async Task Export_AGainOfZeroGivesSilentFilesThatStillListTheClicksTheScheduleLetsThrough()
+    {
+        // AudibleOnsetCount and AudibleOnsets are what the schedule lets into a file: not muted, not left out by Solo, not dropped by a chance
+        // or a gap. The schedule does not look at a gain, so a click whose gain is 0 (here the master gain) is listed and the file is silent;
+        // docs/WAV-STEMS.md says so.
+        using var temp = new TempDirectory();
+        var document = Check.Document();
+        document.Settings.MasterGain = 0;
+        document.Lanes = [new() { Name = "One", Pulses = 4 }];
+        var plan = Check.Plan(document, 2, 8000, false);
+        int mainClicks = plan.Onsets.Count(onset => onset.LaneIndex < 0), laneClicks = plan.Onsets.Count(onset => onset.LaneIndex == 0);
+        Assert.IsTrue(mainClicks > 0 && laneClicks > 0, "The schedule has clicks for both tracks.");
+        await WaveStemExporter.ExportAsync(temp.File("zero.zip"), plan, ["One"]);
+        var archive = await StemArchive.ReadAsync(temp.File("zero.zip"));
+        Assert.IsTrue(archive.Wave("main.wav").IsSilent());
+        Assert.IsTrue(archive.Wave("lane-01.wav").IsSilent());
+        using var manifest = archive.Manifest();
+        var tracks = manifest.RootElement.GetProperty("Tracks");
+        Assert.AreEqual(mainClicks, tracks[0].GetProperty("AudibleOnsetCount").GetInt32());
+        Assert.AreEqual(laneClicks, tracks[1].GetProperty("AudibleOnsetCount").GetInt32());
+        Assert.AreEqual(plan.Onsets.Count, manifest.RootElement.GetProperty("AudibleOnsets").GetArrayLength());
+        temp.NoTemps();
+    }
+
+    [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
     public async Task Export_PreCanceledPreservesPriorContentsOrAbsence(bool existing)
@@ -325,20 +375,8 @@ public sealed class WaveStemExporterTests
         }).ToArray();
         Assert.AreEqual(plans.Length, plans.Select(plan => plan.TotalFrames).Distinct().Count());
         // A temporary archive exists only while its export writes, so more than one at a time would mean that two exports ran together.
-        using var finished = new CancellationTokenSource();
-        int mostTemporaryArchives = 0;
-        var watcher = Task.Factory.StartNew(() =>
-        {
-            while (!finished.IsCancellationRequested)
-            {
-                try { mostTemporaryArchives = Math.Max(mostTemporaryArchives, Directory.GetFiles(temp.Root, "*.tmp").Length); }
-                catch (IOException) { }
-            }
-        }, TaskCreationOptions.LongRunning);
-        await Task.WhenAll(plans.Select(plan =>
-            WaveStemExporter.ExportAsync(path, plan, ["Seed " + plan.Seed]))).WaitAsync(TimeSpan.FromSeconds(30));
-        await finished.CancelAsync();
-        await watcher;
+        int mostTemporaryArchives = await MostTemporaryArchivesAsync(temp.Root, () => Task.WhenAll(plans.Select(plan =>
+            WaveStemExporter.ExportAsync(path, plan, ["Seed " + plan.Seed]))).WaitAsync(TimeSpan.FromSeconds(30)));
         Assert.IsTrue(mostTemporaryArchives <= 1, $"One export of tracks runs at a time, but {mostTemporaryArchives} temporary archives were there together.");
         var archive = await StemArchive.ReadAsync(path);
         using var manifest = archive.Manifest();
@@ -348,6 +386,26 @@ public sealed class WaveStemExporterTests
         Check.Sequence(await File.ReadAllBytesAsync(temp.File("expected.wav")), archive.Extract("lane-01.wav"));
         Assert.AreEqual(3, archive.Entries.Count);
         Assert.AreEqual(1, Directory.GetFiles(temp.Root, "*.zip").Length);
+        temp.NoTemps();
+    }
+
+    [TestMethod]
+    public async Task Export_ExportsToDifferentDestinationsNeverRunTogetherEither()
+    {
+        // The one-at-a-time rule is Core's, not the destination's: four exports to four files still write one after the other.
+        using var temp = new TempDirectory();
+        var plans = Enumerable.Range(1, 4).Select(seed =>
+        {
+            var document = Check.LaneDocument();
+            document.Seed = seed;
+            document.Settings.Tempo = 80 + seed * 20;
+            return Check.Plan(document, 40);
+        }).ToArray();
+        int mostTemporaryArchives = await MostTemporaryArchivesAsync(temp.Root, () => Task.WhenAll(plans.Select((plan, index) =>
+            WaveStemExporter.ExportAsync(temp.File($"part-{index}.zip"), plan, ["Lane"]))).WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.IsTrue(mostTemporaryArchives <= 1, $"One export of tracks runs at a time, but {mostTemporaryArchives} temporary archives were there together.");
+        for (int index = 0; index < plans.Length; index++)
+            Assert.AreEqual(3, (await StemArchive.ReadAsync(temp.File($"part-{index}.zip"))).Entries.Count, $"part-{index}.zip");
         temp.NoTemps();
     }
 
@@ -577,7 +635,7 @@ public sealed class WaveStemExporterTests
     }
 
     [TestMethod]
-    public async Task Write_StopsAtOnceWhenItIsCancelledWhileWriting()
+    public async Task Write_StopsWhenItIsCancelledWhileWritingAndWritesNoLaterTrackAndNoManifest()
     {
         var document = Check.Document();
         document.Lanes = [new() { Name = "A" }, new() { Name = "B" }, new() { Name = "C" }];
@@ -610,7 +668,7 @@ public sealed class WaveStemExporterTests
         Exception? failure = null;
         try { await export.WaitAsync(TimeSpan.FromSeconds(60)); }
         catch (OperationCanceledException error) { failure = error; }
-        if (failure is null) Assert.Inconclusive("The export finished before it could be cancelled; the cancelling itself is covered by Write_StopsAtOnceWhenItIsCancelledWhileWriting.");
+        if (failure is null) Assert.Inconclusive("The export finished before it could be cancelled; the cancelling itself is covered by Write_StopsWhenItIsCancelledWhileWritingAndWritesNoLaterTrackAndNoManifest.");
         Assert.AreEqual("retained", await File.ReadAllTextAsync(path));
         temp.NoTemps();
         Assert.AreEqual(1, Directory.GetFiles(temp.Root).Length);

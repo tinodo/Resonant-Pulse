@@ -67,8 +67,8 @@ lane and a manifest. All the files start at the same moment and are equally long
 same place in music software. It asks first how many tracks it will save, how long each is and how much room they take
 unzipped, and only then for the file. The count-in is in the main file only, and a lane that is muted, or left out by another
 lane's Solo, still has its file, silent. The files added together are not guaranteed to give the exported WAV back: each one is
-rounded to 16 bits and held at full scale on its own. Closing the window while it saves stops it and leaves no half-written
-file. The archive is described in [docs/WAV-STEMS.md](docs/WAV-STEMS.md).
+rounded to 16 bits and held at full scale on its own. Closing the window while it saves stops it and removes the half-written
+file (closing waits up to 4 seconds for that). The archive is described in [docs/WAV-STEMS.md](docs/WAV-STEMS.md).
 
 On Train, the timing check compares when each key press (F, or the Hit button)
 reached the app with when each click was due. When a check has finished, **Export

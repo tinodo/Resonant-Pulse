@@ -3,7 +3,8 @@
 **Export separate tracks (ZIP)** in the Library page's Export card saves one ZIP archive with a WAV file for the main beat, a WAV
 file for each lane of the project, and a `manifest.json`. All the WAV files start at the same moment and are the same length, so
 they line up when you put them at the same place in music software. This page says exactly what is in the archive and what it
-depends on. The same archive is written in every language of the app, on every computer.
+depends on. The same entries, the same audio and the same manifest are written in every language of the app, on every computer; the bytes
+of the archive itself are the same for one build of the app (see Format).
 
 ## What it is, and what it is not
 
@@ -20,7 +21,9 @@ depends on. The same archive is written in every language of the app, on every c
   bars that a program or the gap setting leaves silent are silent in every file.
 - **A lane that does not sound still has its file**, silent and as long as the others: a lane that is muted, one that another lane's
   Solo leaves out, one with a chance of 0 and one without a click are all silent files, so the number of files is always the
-  number of lanes plus one. `AudibleOnsetCount` in the manifest says how many clicks sound in a file (0 for a silent one).
+  number of lanes plus one. `AudibleOnsetCount` in the manifest says how many clicks the schedule lets into a file: 0 for a file that is
+  silent because nothing is scheduled in it (every case above). A click whose gain is 0 (a master gain, a lane volume or an event gain of
+  0) is not left out by the schedule: it is counted and listed, and renders as silence (a test holds this).
 - **The same moment, the same length.** Every file starts at frame 0 and is exactly `TotalFrames` frames long (the manifest says
   both). The length is the program's when the project has a program, and the export length that the Library page shows (the number
   of bars) when it has not, plus the count-in. The practice limits of the Timer panel (seconds, beats, bars) do not shorten it, as
@@ -46,7 +49,10 @@ what it says is what is saved:
 - **The metronome plays** meanwhile (as it may while a WAV is exported): the export reads only its copy. It does not change what plays and
   does not follow its edits. Whether the rendering can make the audio stutter on a slow machine is not established.
 - **The window is closed** while the file is written: the export stops, the temporary file is removed and a file that was already at the
-  destination is as it was.
+  destination is as it was. Closing waits for the export to stop for at most 4 seconds, the time it already allows for saving the project
+  (on the largest project here it stopped in 0.6 seconds); a close that is refused, because the project could not be saved, leaves the export
+  running; and if the export had not stopped when the 4 seconds passed the window would close without it, which was not seen and could leave
+  a temporary file beside the destination.
 
 ## Format
 
@@ -71,13 +77,13 @@ what it says is what is saved:
 | `CountInFrames` | The frames of the count-in at the start (0 without one); `lane-NN.wav` is silent for that long |
 | `LaneCount` | The number of lanes in the project, which is the number of `lane-NN.wav` entries |
 | `OriginFrame` | 0: every file starts here |
-| `UncompressedAudioBytes` | The audio of all the files together, 4 bytes a frame for each of the `LaneCount` + 1 files, without the headers and the manifest: the number the question gives as the size |
+| `UncompressedAudioBytes` | The audio of all the files together, 4 bytes a frame for each of the `LaneCount` + 1 files, without the headers (44 bytes a file) and without the manifest, which comes on top (11,748 bytes for the first project; 149 MB, about 4% of the audio, for the dense 1,024-bar project measured under *What it costs*): the number the question gives as the size |
 | `BeatUnitQuarters`, `Seed`, `ProbabilityAlgorithm` | What the mixed WAV's own manifest holds (the note value the tempo counts, the seed of the chances and how they are decided) |
 | `MasterGain` | The project's master gain, which every file has |
 | `PeakProtection`, `Recombination`, `MainTrack`, `MixPolicy`, `Loop`, `TailPolicy` | What is said above, in a sentence each (`Loop` is `false`) |
 | `Tracks` | One entry for each file, in the order of the archive: `File`, `Kind` (`main` or `lane`), `LaneIndex` (0 is the first lane; null for the main file), `Name` (the lane's name as it is in the project, possibly empty; null for the main file) and `AudibleOnsetCount` |
 | `TempoSegments`, `SectionBoundaries`, `SilentRanges` | The tempo from frame to frame, the program's sections (the count-in is section -1) and the stretches of the project that are silent (silent bars), as in the mixed WAV's manifest |
-| `AudibleOnsets` | Every click that sounds in any file: `Frame`, `LaneIndex` (-1 and -2 for the main file, 0 and up for a lane), `Accent`, `Gain`, `Pan` and `Sound` |
+| `AudibleOnsets` | Every click that the schedule lets into any file (one that a Mute, a Solo, a chance or a gap leaves out is not listed; one whose gain is 0 is listed and renders as silence): `Frame`, `LaneIndex` (-1 and -2 for the main file, 0 and up for a lane), `Accent`, `Gain`, `Pan` and `Sound` |
 
 ## Writing it
 
