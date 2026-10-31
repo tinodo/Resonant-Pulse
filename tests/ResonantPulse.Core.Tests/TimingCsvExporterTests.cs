@@ -40,7 +40,7 @@ public sealed class TimingCsvExporterTests
             "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"schema_version\",\"1\"",
             "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"source\",\"keyboard-ui-arrival\"",
             "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"limitation\",\"Key presses as the app received them, compared with the scheduled clicks. Keyboard, system, speaker and device delays are not corrected for. Not a recording.\"",
-            "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"clock_reference\",\"start_frame and end_frame are audio device frames the app had processed (not a calibrated acoustic position); observed_seconds come from the system timer, counted from the start of the check.\"",
+            "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"clock_reference\",\"start_frame is the audio frame the app had processed when the check began. end_frame is start_frame plus the time the system timer counted until the check ended, at the sample rate, or the frame where a program or a practice limit ended it first. Neither is a calibrated acoustic position. observed_seconds come from the system timer, counted from the start of the check.\"",
             "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"index_base\",\"0\"",
             "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"window_policy\",\"start frame included, end frame excluded; expected_seconds and observed_seconds are counted from the start of the check.\"",
             "\"metadata\",\"\",\"\",\"\",\"\",\"\",\"completed_at_utc\",\"2026-10-31T00:46:32.2420000+00:00\"",

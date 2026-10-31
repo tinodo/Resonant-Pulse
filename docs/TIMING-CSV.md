@@ -13,8 +13,11 @@ computer.
   with the system's timer, and `expected_seconds` are the times of the clicks that the check followed. Keyboard, system, display, speaker
   and Bluetooth delays are not corrected for, nothing is recorded or heard, and a mean offset is not subtracted ("tap in time" is not a
   calibration). `source` says `keyboard-ui-arrival`, and `limitation` says it again, in the file.
-- **Not acoustic.** `start_frame` and `end_frame` are positions in the audio stream as the app had processed it. That is not what the
-  speakers played at that moment.
+- **Not acoustic.** `start_frame` is the audio frame the app had processed when the check began. `end_frame` is that frame plus the time
+  that the system's timer counted until the check ended, at the sample rate (or the frame where a program or a practice limit ended the
+  check first): it is not a frame that the audio has necessarily reached, so if the audio and the timer drift apart, or the audio stalls,
+  the window can differ from what was played. Neither is what the speakers played at that moment. `clock_reference` says this in the
+  file.
 
 ## What it holds when the project changes afterwards
 
@@ -41,8 +44,9 @@ check ended:
 ## Format
 
 UTF-8 with a byte order mark, one record per line, CRLF after every record, every field in double quotes (a double quote inside a field is
-written twice), a comma between fields. Numbers have a decimal point and no thousands separator, and carry every digit that is needed to
-read them back exactly (for example `0.30000000000000004` and `1E-07`). A value that is not available is an empty field, never a zero.
+written twice), a comma between fields. Numbers use a point as the decimal separator where they have a fraction (a whole number has none), no
+thousands separator, and carry every digit that is needed to read them back exactly (for example `8000`, `0.30000000000000004` and `1E-07`).
+A value that is not available is an empty field, never a zero.
 Column and row names, and every description, are English and the same in every language.
 
 Eight columns: `record_type`, `expected_index`, `observed_index`, `expected_seconds`, `observed_seconds`, `offset_milliseconds`, `name`,
@@ -56,7 +60,8 @@ Eight columns: `record_type`, `expected_index`, `observed_index`, `expected_seco
 | `miss` | one for each click that no press was matched with, by index | `expected_index`, `expected_seconds` |
 | `extra` | one for each press that was matched with no click, by index | `observed_index`, `observed_seconds` |
 
-- **Indices** start at 0 and are places in the lists as the check kept them, which is the order in time. A press is matched with one click
+- **Indices** start at 0 and are places in the lists as the check kept them. The app keeps both lists in time order, so there they are
+  the order in time; a program that calls `TimingCsvExporter` with lists in another order gets indices in that order. A press is matched with one click
   within the tolerance, a click with one press: the match that has the most pairs wins, and among those the one with the smallest total
   distance.
 - **Blank values.** `median_offset_milliseconds` and `spread_milliseconds` are blank when nothing matched. `coverage` is blank when the

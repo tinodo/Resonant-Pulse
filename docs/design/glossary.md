@@ -199,6 +199,8 @@ sentence that says why a drift was not worked out.
   names that the same page already uses. A project or a lane without a name (the app allows
   an empty name) stands in the line as *(no name)*: *(zonder naam)*, *(ohne Namen)*, *(sans nom)*
   and *(sin nombre)*; the file keeps it empty.
+- In French the colon has a no-break space before it (*tableur :*, *exporter :*, as in the tempo guide's
+  *Indications approximatives :*), so that a narrow card never begins a line with the colon.
 - The hint is longer than the app's other hints on purpose: it says what the file is, how
   long the result stays (until another check starts or the app closes: nothing is kept
   from one run of the app to the next) and that the column names are not translated. A

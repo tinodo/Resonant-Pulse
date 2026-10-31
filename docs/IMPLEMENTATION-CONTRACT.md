@@ -93,7 +93,8 @@ can be added without changing these application-facing types.
   move: a locked, read-only or full destination keeps its old content); `WriteAsync(Stream,
   ...)` writes the same bytes without the atomic move. The format is schema version 1,
   fixed and invariant: UTF-8 with a byte order mark, CRLF, every field quoted, eight
-  columns, numbers with a decimal point and every digit needed to read them back, a value
+  columns, numbers with a point as the decimal separator (where they have a fraction) and
+  every digit needed to read them back, a value
   that is not available as an empty field, and the project's and the target's names as
   JSON strings. docs/TIMING-CSV.md is the specification.
 - `TapTempoEstimator.Tap(double timestampSeconds)` returns `double?` BPM;

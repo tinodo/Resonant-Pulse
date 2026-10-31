@@ -151,14 +151,15 @@ check keeps a copy of what it measured, so the file names the project as it was 
 played, and holds the times and the analysis of that run, whatever is edited, renamed, opened or removed afterwards (a rename while the metronome plays counts:
 a check that begins after it goes by the new name); a lane that was followed and then removed keeps its
 name in the file, and its place is the place it had in the project that played. The page says the same before anything is saved ("Ready to
-export: the project, the rhythm, when it ended"). The file is UTF-8 with a byte order mark, CRLF, every field quoted, numbers with a decimal
-point and every digit that is needed to read them back; a value that is not available (the median and the spread when nothing matched, the
+export: the project, the rhythm, when it ended"). The file is UTF-8 with a byte order mark, CRLF, every field quoted, numbers written the same on
+every computer (a point as the decimal separator where there is a fraction, no thousands separator, every digit that is needed to read them back); a value that is not available (the median and the spread when nothing matched, the
 coverage when no clicks were followed, a drift that needs four matches on clicks at different times) is empty and never 0; the names are
 JSON strings, so no name can become a formula in a spreadsheet or add a record. The column names, the metadata and the main beat's name are
 English and the same in every language and on every computer, by design: a script reads every file the same way, and the hint under the
 command says that the column names and numbers are the same in every language; only the words on the page are translated. The file is
 written atomically (a file that is open elsewhere, read-only or on a full disk stays as it was, and the error is shown). It holds when the
-keyboard (or Hit) delivered each press to the app and where the app's audio stream stood, not when anything was heard: keyboard, system,
+keyboard (or Hit) delivered each press to the app, counted by the system timer, and the audio frame the app had processed when the check began (the
+end of the check's window is that frame plus the time the system timer counted, not a frame that the audio has necessarily reached), not when anything was heard: keyboard, system,
 display, speaker and Bluetooth delays are not corrected for and nothing is recorded, so it is not a calibration. The unit tests hold the
 writer to exact bytes, to a reader that knows only this format, to the .NET library's own CSV reader and to a decoder for the names, and the
 Windows file-integrity job runs its file-sharing cases. The first-use verifier opens the page at the first-use size, 800x600, 1000x720,

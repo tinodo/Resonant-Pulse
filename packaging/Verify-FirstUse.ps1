@@ -1045,6 +1045,12 @@ function Test-TimingExport([string]$where, [string]$shot = '', [bool]$finished =
     # The export and the hint are on screen together at every size (a rectangle that is not on screen is empty, and would pass any
     # comparison below it), so that what lies between them is read, not assumed.
     if ($export.IsEmpty) { throw "${where}: the export and its hint are not on screen together." }
+    # The export is still whole there: an edge of the window that cuts it leaves a rectangle that is not empty but smaller than the command.
+    $leastExport = $timingCommandMinimum['ExportTimingCsv']
+    if ($export.Width -lt $leastExport[0] * $scale -or $export.Height -lt $leastExport[1] * $scale) {
+        throw "${where}: the export is cut by the edge of the window while its hint is on screen: $([Math]::Round($export.Width / $scale, 1)) x $([Math]::Round($export.Height / $scale, 1)) DIP (a command of the timing check is at least $($leastExport[0]) x $($leastExport[1]) DIP): $export."
+    }
+    Test-Visible $export $windowRect "${where}: the export beside its hint"
     if ($hintElement.Current.Name.Length -lt 80 -or $hintElement.Current.Name -notmatch 'CSV') { throw "${where}: the hint under the export does not say what it saves: '$($hintElement.Current.Name)'." }
     if ($hint.Width -lt 150 * $scale -or $hint.Height -lt 14 * $scale) {
         throw "${where}: the hint is squeezed to $([Math]::Round($hint.Width / $scale, 1)) x $([Math]::Round($hint.Height / $scale, 1)) DIP (a line of it is at least 150 DIP wide and 14 high): $hint."
@@ -1212,6 +1218,9 @@ function Test-TimingExportWithOutput {
     Set-Text 'DocumentName' $project
     Invoke-Control 'ProjectOptionsPanelDone'
     Wait-Absent 'DocumentName'
+    # The next step goes on from the Train page, where the check before it was left.
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
     # 7. A new check took the old result away when it began (nothing shows that while it runs), so a change of playback that ends it
     # leaves nothing to export: not the new result, which never came, and not the old one.
     Begin-Check 'A check that is about to be ended'

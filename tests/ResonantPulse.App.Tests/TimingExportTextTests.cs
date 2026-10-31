@@ -138,6 +138,19 @@ public sealed class TimingExportTextTests
     }
 
     [TestMethod]
+    public void TheFrenchColonsHaveANoBreakSpaceSoThatNoLineStartsWithOne()
+    {
+        // As in the tempo guide: in French the space before a colon cannot break, so a narrow card never begins a line with the colon.
+        foreach (var key in Keys)
+        {
+            var french = Get("fr", key);
+            Assert.IsFalse(french.Contains(" :"), $"fr/{key} has a space that can break before a colon: {french}");
+        }
+        StringAssert.Contains(Get("fr", "TimingCsvHint"), "tableur\u00A0:");
+        StringAssert.Contains(Get("fr", "TimingCsvReady"), "exporter\u00A0:");
+    }
+
+    [TestMethod]
     public void TheTextIsShortEnoughForTheRoomItHas()
     {
         foreach (var language in Languages)

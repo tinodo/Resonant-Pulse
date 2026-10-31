@@ -4,12 +4,15 @@ namespace ResonantPulse.Core;
 /// Where a keyboard timing check was run: the project and the rhythm it followed, and the window of the audio stream it covered.
 /// Frames are absolute audio-device frames (<see cref="StartFrame"/> is included, <see cref="EndFrame"/> is not).
 /// </summary>
-/// <param name="ProjectName">The name of the project that was playing, as it was then.</param>
+/// <param name="ProjectName">The name of the project as it was called when the check began.</param>
 /// <param name="TargetName">The name of the rhythm that was followed: a lane's name as it was then, or <see cref="TimingSession.MainBeatName"/>.</param>
 /// <param name="LaneIndex">-1 for the main beat, otherwise the lane's place (0 to 7) in the project that was playing.</param>
 /// <param name="SampleRate">Frames in a second of the audio stream.</param>
-/// <param name="StartFrame">The first frame of the check.</param>
-/// <param name="EndFrame">The frame after the last one of the check.</param>
+/// <param name="StartFrame">The audio frame the app had processed when the check began.</param>
+/// <param name="EndFrame">
+/// The frame after the last one of the check: <paramref name="StartFrame"/> plus the time the check lasted, counted by the system timer,
+/// at the sample rate, or the frame where a program or a practice limit ended it first. It is not necessarily a frame the audio had reached.
+/// </param>
 /// <param name="IncludesSilentTargets">Whether clicks that are not played (gaps, muted layers, chance) were followed too.</param>
 public sealed record TimingSessionContext(string ProjectName, string TargetName, int LaneIndex,
     int SampleRate, long StartFrame, long EndFrame, bool IncludesSilentTargets);

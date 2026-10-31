@@ -59,7 +59,7 @@ public static class TimingCsvExporter
         yield return Fact("metadata", "limitation",
             "Key presses as the app received them, compared with the scheduled clicks. Keyboard, system, speaker and device delays are not corrected for. Not a recording.");
         yield return Fact("metadata", "clock_reference",
-            "start_frame and end_frame are audio device frames the app had processed (not a calibrated acoustic position); observed_seconds come from the system timer, counted from the start of the check.");
+            "start_frame is the audio frame the app had processed when the check began. end_frame is start_frame plus the time the system timer counted until the check ended, at the sample rate, or the frame where a program or a practice limit ended it first. Neither is a calibrated acoustic position. observed_seconds come from the system timer, counted from the start of the check.");
         yield return Fact("metadata", "index_base", "0");
         yield return Fact("metadata", "window_policy",
             "start frame included, end frame excluded; expected_seconds and observed_seconds are counted from the start of the check.");
@@ -104,7 +104,7 @@ public static class TimingCsvExporter
 
     private static string[] Fact(string type, string name, string value) => [type, "", "", "", "", "", name, value];
 
-    /// <summary>Every digit needed to read the number back exactly, with a decimal point whatever the language, and no negative zero.</summary>
+    /// <summary>Every digit needed to read the number back exactly, with a point as the decimal separator whatever the language, and no negative zero.</summary>
     private static string Number(double value) =>
         value == 0 ? "0" : value.ToString("R", CultureInfo.InvariantCulture);
 }
