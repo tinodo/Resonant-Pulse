@@ -166,7 +166,7 @@ Windows file-integrity job runs its file-sharing cases. The first-use verifier o
 400x720 and 320x900 and in Dutch and requires the four commands to be whole, inside the window and at least 10 DIP inside their card (the card
 cuts what is wider than its slot, so a rectangle that reaches its edge is one that was cut), at least as large as they are
 (Begin 100 by 40 DIP, Hit 70 by 40, Finish 150 by 40, Export 100 by 40), not overlapping, with Export after Finish, and the hint to be whole,
-at least 150 by 14 DIP, inside the card's padding and below Export; on a run with audio it finishes a check and requires Export to come on, the ready
+at least 150 by 14 DIP, inside the card's padding and below Export, with Export still whole while the hint is on screen; on a run with audio it finishes a check and requires Export to come on, the ready
 line to name the project and the rhythm, a new check, a Stop during a check, a project renamed after a check and a project renamed while it plays to behave
 as above. Each of those checks was shown to fail on a build with that one thing broken, except one that cannot fail alone: a new check taking the old
 result away when it starts (ending a check clears the result too, so the gate sees it only when both are missing; docs/DELIVERY.md summarises the
