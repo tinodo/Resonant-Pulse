@@ -234,7 +234,7 @@ public sealed partial class MainWindow
         _tapIdle?.Stop();
         _tapIdle?.Start();
         RefreshTapControls();
-        if (TempoEdits.TryApplyTap(_tempoRequested ?? _document.Settings.Tempo, estimate, out var proposed))
+        if (TempoEdits.TryApplyTap(_tempoNudges.Requested ?? _document.Settings.Tempo, estimate, out var proposed))
             RequestTempo(proposed);
     }
 
@@ -342,10 +342,10 @@ public sealed partial class MainWindow
         RefreshSnapshot();
         try
         {
-            // The tempo is committed by a pump that submits one step at a time and keeps the newest request outside the edit queue
+            // The tempo is committed by a loop (TempoNudges) that submits one step at a time and keeps the newest request outside the edit queue
             // until the step being committed is done: a tempo that was nudged just before the taps could still be on its way and
-            // land after the tapped one. A start by hand waits for it first, and so does this one, so the tapped tempo is the last.
-            await _tempoPump.WaitAsync(wait.Token);
+            // land after the tapped one. A start by hand waits for it first, and so does this one (and Done in the Tempo panel), so the tapped tempo is the last.
+            await _tempoNudges.Settled.WaitAsync(wait.Token);
             if (!Wanted()) return;
             await CommitAsync(document =>
             {

@@ -19,7 +19,6 @@ public sealed partial class MainWindow
     private ClickGrid? _clickGrid;
     private Button? _tempoEdit;
     private string _tempoEditName = "";
-    private double? _tempoRequested;
 
     private static Style ResonantStyle(string key) => (Style)Application.Current.Resources[key];
 
@@ -28,7 +27,7 @@ public sealed partial class MainWindow
         var settings = _document.Settings;
         // A program carries its own tempo and meter per section; the single-tempo controls would change nothing audible.
         var followsProgram = _document.Program.Count > 0;
-        _tempoRequested = null;
+        _tempoNudges.Forget();
 
         // The metronome itself: a large dial whose BPM readout opens the exact tempo editor.
         var instrument = new PulseInstrument
@@ -362,47 +361,30 @@ public sealed partial class MainWindow
         return button;
     }
 
-    private void NudgeTempo(double delta) => RequestTempo((_tempoRequested ?? _document.Settings.Tempo) + delta);
+    private void NudgeTempo(double delta) => RequestTempo((_tempoNudges.Requested ?? _document.Settings.Tempo) + delta);
 
-    private bool _tempoPumpRunning;
-
-    /// <summary>Completes when the tempo being submitted has been committed (closing waits for it).</summary>
-    private Task _tempoPump = Task.CompletedTask;
+    /// <summary>
+    /// The tempo that is being nudged: shown at once and committed one value at a time (see <see cref="TempoNudges"/>). What has to
+    /// come after the nudges that are on their way waits for <see cref="TempoNudges.Settled"/>.
+    /// </summary>
+    private readonly TempoNudges _tempoNudges;
 
     /// <summary>
     /// Shows the requested tempo immediately and commits it. While a commit is running, further requests only
-    /// update the wanted value; the running pump then commits the newest one directly. Holding a stepper or tapping
+    /// update the wanted value; the running loop then commits the newest one directly. Holding a stepper or tapping
     /// quickly therefore never queues a backlog, never reorders, and the last value always wins.
     /// </summary>
     private void RequestTempo(double bpm)
     {
         if (_document.Program.Count > 0 || _closeFlushing) return;
         var requested = Math.Clamp(Math.Round(bpm, 1), 1, 1000);
-        if (!TempoEdits.IsChange(_tempoRequested ?? _document.Settings.Tempo, requested)) return;
+        if (!TempoEdits.IsChange(_tempoNudges.Requested ?? _document.Settings.Tempo, requested)) return;
         // A tempo chosen by hand ends a Tap to start: the tempo its taps would save is not the one that was just asked for.
         CancelTapIn();
-        _tempoRequested = requested;
-        AnnounceTempo(requested);
-        RefreshSnapshot();
-        if (_tempoPumpRunning) return;
-        _tempoPumpRunning = true;
-        _tempoPump = GuardAsync(async () =>
+        _tempoNudges.Request(requested, () =>
         {
-            try
-            {
-                var committed = double.NaN;
-                while (_tempoRequested is { } wanted && wanted != committed)
-                {
-                    committed = wanted;
-                    await CommitAsync(doc => doc.Settings.Tempo = wanted, editorChange: EditorChangeKind.GlobalTempoOnly);
-                }
-            }
-            finally
-            {
-                _tempoPumpRunning = false;
-                _tempoRequested = null;
-                if (!_isClosed) RefreshSnapshot();
-            }
+            AnnounceTempo(requested);
+            RefreshSnapshot();
         });
     }
 

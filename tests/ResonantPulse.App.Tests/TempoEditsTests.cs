@@ -244,4 +244,58 @@ public sealed class TempoEditsTests
         Assert.AreEqual(120d, document.Setlist[0].Document.Settings.Tempo);
         Assert.AreEqual(120d, document.Program[0].StartTempo);
     }
+
+    [TestMethod]
+    public async Task ASecondPressOfDoneWhileTheFirstIsBeingAppliedDoesNothingAndLeavesThePanelOpen()
+    {
+        var applied = 0;
+        var finish = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var apply = TempoEdits.OneAtATime(async () =>
+        {
+            applied++;
+            return await finish.Task;
+        });
+
+        var first = apply();
+        var second = await apply();
+
+        Assert.IsFalse(second, "false leaves the panel open: the first press will close it");
+        Assert.AreEqual(1, applied, "the tempo is not written a second time");
+        Assert.IsFalse(first.IsCompleted);
+        finish.SetResult(true);
+        Assert.IsTrue(await first);
+    }
+
+    [TestMethod]
+    public async Task APressOfDoneAfterTheFirstHasBeenAppliedAppliesAgain()
+    {
+        var applied = 0;
+        var apply = TempoEdits.OneAtATime(() =>
+        {
+            applied++;
+            return Task.FromResult(true);
+        });
+
+        Assert.IsTrue(await apply());
+        Assert.IsTrue(await apply());
+
+        Assert.AreEqual(2, applied);
+    }
+
+    [TestMethod]
+    public async Task APressOfDoneAfterAnApplyThatFailedOrWasRefusedAppliesAgain()
+    {
+        // A change that could not be applied keeps the panel open with its message, and Done can be pressed again.
+        var applied = 0;
+        var apply = TempoEdits.OneAtATime(() =>
+        {
+            applied++;
+            return applied == 1 ? Task.FromException<bool>(new IOException("The recovery file cannot be written.")) : Task.FromResult(applied != 2);
+        });
+
+        await Assert.ThrowsExactlyAsync<IOException>(() => apply());
+        Assert.IsFalse(await apply(), "refused");
+        Assert.IsTrue(await apply());
+        Assert.AreEqual(3, applied);
+    }
 }

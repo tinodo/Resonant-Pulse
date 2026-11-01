@@ -9,6 +9,23 @@ internal static class TempoEdits
         double.IsFinite(proposed) && current != proposed;
 
     /// <summary>
+    /// Makes a second press of Done do nothing while the first is still being applied. Done waits for the nudges that are on their way
+    /// before it commits, which can take a moment on a slow machine, and a second press in that moment would write the same tempo again
+    /// (one more Undo step). The second press leaves the panel open and returns false; the first one closes it when it is done.
+    /// </summary>
+    internal static Func<Task<bool>> OneAtATime(Func<Task<bool>> apply)
+    {
+        var applying = false;
+        return async () =>
+        {
+            if (applying) return false;
+            applying = true;
+            try { return await apply(); }
+            finally { applying = false; }
+        };
+    }
+
+    /// <summary>
     /// What the Tempo panel writes when Done is pressed: only the fields that were changed in it. A field that still shows what it
     /// showed when the panel opened must not put that value over a newer one, such as the tempo that a Tap to start has saved
     /// since or a nudge that was still on its way. The tempo is compared to the tenth it is typed to.

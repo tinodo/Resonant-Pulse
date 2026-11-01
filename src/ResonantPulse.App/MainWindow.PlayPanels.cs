@@ -268,14 +268,15 @@ public sealed partial class MainWindow
         return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
-                openedTempo = _tempoRequested ?? _document.Settings.Tempo;
+                openedTempo = _tempoNudges.Requested ?? _document.Settings.Tempo;
                 openedUnit = _document.Settings.BeatUnitQuarters;
                 tempo.Value = openedTempo;
                 SelectChoice(unit, Invariant(openedUnit));
                 taps.Value = TapStartRules.ClampTaps(_preferences.TapInCount);
                 ShowGuide();
             },
-            async () =>
+            // A second press of Done while the first is still being applied (it waits for the nudges that are on their way) does nothing.
+            TempoEdits.OneAtATime(async () =>
             {
                 var bpm = Math.Round(Value(tempo), 1);
                 var unitValue = double.Parse(Selected(unit), CultureInfo.InvariantCulture);
@@ -291,6 +292,11 @@ public sealed partial class MainWindow
                     // that is still listening and would later overwrite what was chosen. A new number of taps only counts for the
                     // next one.
                     CancelTapIn();
+                    // The tempo that is nudged is committed by a loop of its own, and the edit queue is first in, first out: a commit
+                    // made now, while the loop is still committing, would be queued between two of the loop's, and the loop would then
+                    // commit its older value over this one. So the nudges asked for until now (and any made while this waits, the loop
+                    // being still at work) land first, and the tempo typed here is the last word.
+                    await _tempoNudges.Settled;
                     var applied = false;
                     await CommitAsync(doc =>
                     {
@@ -316,7 +322,7 @@ public sealed partial class MainWindow
                     await _workspace.SavePreferencesAsync(_preferences);
                 }
                 return true;
-            }, titleExtra: guide);
+            }), titleExtra: guide);
     }
 
     private OptionPanel BuildRhythmPanel()

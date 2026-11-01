@@ -140,7 +140,7 @@ public sealed partial class MainWindow
     private async Task<bool> FlushPendingEditsAsync()
     {
         // The tempo is submitted one step at a time; it is done when the newest value has been committed.
-        await _tempoPump;
+        await _tempoNudges.Settled;
         var notesSaved = await FlushStageNotesAsync();
         var projectSaved = false;
         await GuardAsync(async () =>
