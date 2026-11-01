@@ -170,6 +170,20 @@ public sealed partial class MainWindow
         _uiTestCloseHold = TimeSpan.Zero;
     }
 
+    // Holds a write in its preparation, before it asks a question or opens a dialog (a plan that is being compiled, notes that are being
+    // saved): with RESONANT_PULSE_UITEST_DIR set, a file called "slow-preparation" in that folder, holding a number of seconds, makes every
+    // write that is prepared while the file is there wait that long, so that a driver can close the window, or look at the page, meanwhile.
+    partial void HoldPreparationForUiTest(ref Task? hold)
+    {
+        var folder = Environment.GetEnvironmentVariable("RESONANT_PULSE_UITEST_DIR");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        var flag = Path.Combine(folder, "slow-preparation");
+        if (!File.Exists(flag)) return;
+        var seconds = double.TryParse(File.ReadAllText(flag).Trim(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 5;
+        hold = Task.Delay(TimeSpan.FromSeconds(seconds));
+    }
+
     // Stands in for the system's file dialog, which cannot open on a private desktop (COMException 0x80070578, "Invalid window
     // handle") and which no driver can operate. With RESONANT_PULSE_UITEST_DIR set, a file called "picker-fails" in that folder makes
     // every dialog fail the way the real one does there, "picker-cancels" makes every dialog end as if the person had cancelled it,

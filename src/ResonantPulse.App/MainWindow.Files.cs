@@ -217,6 +217,19 @@ public sealed partial class MainWindow
     // window can be driven where the system's dialog cannot open (MainWindow.UiTest.cs); shipped builds have no body.
     partial void StandInForFileDialogForUiTest(bool saving, string suggestedFile, ref bool handled, ref string? path);
 
+    /// <summary>
+    /// Where a write is prepared (before it asks a question or opens a dialog) the local verification build can hold it, so that a driver
+    /// can close the window, or look at the page, meanwhile (MainWindow.UiTest.cs); shipped builds return at once.
+    /// </summary>
+    private Task HoldPreparationAsync()
+    {
+        Task? hold = null;
+        HoldPreparationForUiTest(ref hold);
+        return hold ?? Task.CompletedTask;
+    }
+
+    partial void HoldPreparationForUiTest(ref Task? hold);
+
     private async Task<string?> PickSavePathAsync(string extension, string description, string? suggestedName = null)
     {
         var fileName = SanitizeFileName(suggestedName ?? _document.Name);
@@ -238,6 +251,7 @@ public sealed partial class MainWindow
 
     private async Task SaveProjectAsync()
     {
+        await HoldPreparationAsync();
         // The notes being typed belong to the project, so they are in the file.
         if (!await FlushStageNotesAsync()) return;
         var path = await PickSavePathAsync(".pulse", Text.Get("Save"));
@@ -321,6 +335,7 @@ public sealed partial class MainWindow
         var snapshot = LocalWorkspace.Clone(_document);
         // One length for the preflight and the export: it is the length the box shows, applied the moment it was committed.
         var bars = _preferences.ExportBars;
+        await HoldPreparationAsync();
         if (midi)
         {
             var report = await Task.Run(() => MidiExporter.Preflight(snapshot, bars));
@@ -371,6 +386,7 @@ public sealed partial class MainWindow
             var snapshot = LocalWorkspace.Clone(_document);
             var bars = _preferences.ExportBars;
             var names = snapshot.Lanes.Select(lane => lane.Name).ToArray();
+            await HoldPreparationAsync();
             var prepared = await Task.Run(() =>
             {
                 var plan = ScheduleCompiler.Compile(snapshot, 48000, bars, true);
