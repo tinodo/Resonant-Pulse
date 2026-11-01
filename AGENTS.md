@@ -30,10 +30,11 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
   under the beat numbers can be seen. Two more, `UiTestHoldEdits` and
   `UiTestReleaseEdits`, hold the edit queue and let it go, so that a test can make
   the order of edits certain whatever the speed of the machine: build with
-  `-p:UiTest=true` and run `Verify-Local.ps1 -SilentAudio -UiTestHooks`, which
-  switches the hooks on and runs the first-use checks that need them (the report's
-  `tempoTypedAfterNudges`); a shipped build has none of it and the report says
-  the check was not run. Screenshots,
+  `-p:UiTest=true` and run `Verify-Local.ps1 -SilentAudio -UiTestHooks` (about 27
+  minutes), which switches the hooks on, runs the first-use checks that need them
+  (the report's `tempoTypedAfterNudges`) and fails if one of them cannot run (no
+  hooks, no audio output); a shipped build has none of it, and the verifier on its
+  own reports the check as not run. Screenshots,
   keystrokes and audio are otherwise opt-in (`-Screenshots`, `-Keyboard`,
   `-RunAudio`) and only automatic on GitHub Actions. `-SilentAudio` runs the
   real audio scenarios (Start, live edits, counted stops, pause/resume) on the
