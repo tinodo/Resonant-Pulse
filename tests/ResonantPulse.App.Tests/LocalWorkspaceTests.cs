@@ -154,7 +154,7 @@ public sealed class LocalWorkspaceTests
     }
 
     [TestMethod]
-    public async Task SavingToTheLibraryStopsWhenItsTokenIsCancelledAndLeavesNothingBehind()
+    public async Task SavingToTheLibraryStopsWhenItsTokenIsCancelledAndNamesTheFileItWrites()
     {
         var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
         var workspace = new LocalWorkspace(root);
@@ -168,7 +168,13 @@ public sealed class LocalWorkspaceTests
             Assert.IsNotNull(stopped, "A save whose token was cancelled went on to the end.");
             Assert.AreEqual(0, Directory.GetFiles(workspace.LibraryPath).Length, "A file was left in the library folder.");
 
-            await workspace.SaveLibraryAsync(new PulseDocument { Name = "Kept" });
+            // The write is told which file it is before the file is written, so that a close that cannot stop it can name it in the log.
+            string? chosen = null;
+            await workspace.SaveLibraryAsync(new PulseDocument { Name = "Kept" }, fileChosen: file => chosen = file);
+            Assert.IsNotNull(chosen, "The file was not named.");
+            Assert.AreEqual(workspace.LibraryPath, Path.GetDirectoryName(chosen));
+            Assert.AreEqual(".pulse", Path.GetExtension(chosen));
+            Assert.IsTrue(File.Exists(chosen), "The file that was named is the one that was written.");
             Assert.AreEqual(1, Directory.GetFiles(workspace.LibraryPath, "*.pulse").Length);
             Assert.AreEqual(0, Directory.GetFiles(workspace.LibraryPath, "*.tmp").Length);
         }

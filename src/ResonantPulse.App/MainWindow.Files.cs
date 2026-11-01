@@ -62,9 +62,11 @@ public sealed partial class MainWindow
                 // Notes typed or on their way belong to the project, so they are in the saved copy.
                 if (!await FlushStageNotesAsync()) return;
                 // No question or dialog follows, so a close that was refused meanwhile does not void the person's command: it is written.
-                write.BeginWriting();
-                await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), write.Token);
+                // The write is told which file it is as soon as the library has named it.
+                await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), write.Token, write.BeginWriting);
             }
+            // A write that did not stop within the limit of a close ends after the window has gone: nobody is left to tell or to refresh.
+            if (IsWindowGoing) return;
             ShowNotice("Saved");
             await RefreshLibraryAsync();
         }, "\uE74E");
@@ -201,7 +203,8 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Every file dialog (where to save a file, which file to open) goes through here, so that all of them behave alike. None is shown
-    /// while another dialog or question is open: it ends with no file, as if it had been cancelled. The flag that says a dialog is open
+    /// while another dialog or question is open, or while the window is being closed: it ends with no file, as if it had been cancelled
+    /// (a question is held back in the same cases). The flag that says a dialog is open
     /// is raised for the whole attempt and put down again however it ends. A person who cancels the dialog is not an error: no file,
     /// no message. A dialog that cannot be opened, or fails, is reported as that and never as an audio problem (see
     /// <see cref="FileDialogFailure"/>): the cause, with its HRESULT, goes to the log, and since nothing was read or written the
@@ -209,7 +212,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<string?> ShowFileDialogAsync(bool saving, string suggestedFile, Func<Task<string?>> show)
     {
-        if (_isDialogOpen) return null;
+        if (_isDialogOpen || _closeFlushing || _isClosed) return null;
         _isDialogOpen = true;
         try
         {
@@ -275,7 +278,7 @@ public sealed partial class MainWindow
         write.Token.ThrowIfCancellationRequested();
         write.BeginWriting(path);
         await DocumentStore.SaveAsync(path, LocalWorkspace.Clone(_document), write.Token);
-        ShowNotice("Saved");
+        ShowSavedNotice();
     }
 
     private async Task OpenProjectAsync()
@@ -330,7 +333,11 @@ public sealed partial class MainWindow
             if (hold is not null) await hold;
             var replacement = LocalWorkspace.Clone(document);
             await ValidateAsync(replacement);
-            await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
+            // The project that goes is saved to the library first. That is a write of a file like the others: closing the window stops it
+            // (the replacement then does not happen; nothing was changed before this point) and waits for it. It is under the edit lock, which
+            // closing waits for first, so a close that comes now is refused after 4 seconds and the second attempt goes.
+            using (var backup = _fileWrites.Begin())
+                await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), backup.Token, backup.BeginWriting);
             SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();
@@ -374,6 +381,8 @@ public sealed partial class MainWindow
         var path = await PickSavePathAsync(midi ? ".mid" : ".wav", Text.Get(midi ? "ExportMidi" : "ExportWave"));
         if (path is null) return;
         write.Token.ThrowIfCancellationRequested();
+        // The dialog was the last thing to ask: the person has chosen the file, so from here a refused close leaves the export alone (a WAV
+        // is compiled after this point, a MIDI file is written at once).
         write.BeginWriting(path);
         try
         {
@@ -386,9 +395,9 @@ public sealed partial class MainWindow
                 // Core writes the exact schedule/meter/seed/gain companion
                 // manifest atomically. Project exchange remains a separate Save.
             }
-            ShowNotice("Saved");
+            ShowSavedNotice();
         }
-        finally { if (!_isClosed) RefreshSnapshot(); }
+        finally { if (!IsWindowGoing) RefreshSnapshot(); }
     }
 
     /// <summary>
@@ -404,14 +413,21 @@ public sealed partial class MainWindow
         if (_fileWrites.TryBeginExclusive(TracksWrite) is not { } write) return;
         // Pressed with the keyboard, the command has the focus. It goes off now, so the system moves the focus on to the next control, and
         // the question gives it back to that control when it closes: the command takes the focus back when the run has ended, unless the
-        // person has moved it meanwhile (see CommandFocus).
+        // person has moved it meanwhile (see CommandFocus). Everything that can go wrong is inside the try, so the write always ends.
         var command = _stemsButton;
-        var hadFocus = command is not null && ReferenceEquals(FocusedElement(), command);
-        var focusState = command?.FocusState ?? FocusState.Unfocused;
-        RefreshStemsButton();
-        var left = FocusedElement();
+        var hadFocus = false;
+        var focusState = FocusState.Programmatic;
+        object? left = null;
         try
         {
+            if (command is not null)
+            {
+                hadFocus = ReferenceEquals(FocusedElement(), command);
+                // Focus(Unfocused) is not allowed: a command that has the focus but says nothing about how is given it as a program would.
+                if (command.FocusState != FocusState.Unfocused) focusState = command.FocusState;
+            }
+            RefreshStemsButton();
+            left = FocusedElement();
             var snapshot = LocalWorkspace.Clone(_document);
             var bars = _preferences.ExportBars;
             var names = snapshot.Lanes.Select(lane => lane.Name).ToArray();
@@ -437,12 +453,12 @@ public sealed partial class MainWindow
                 Diagnostics.Write("Saving the tracks", error);
                 throw new UserMessageException(StemExport.NotSavedText(error));
             }
-            ShowNotice("Saved");
+            ShowSavedNotice();
         }
         finally
         {
             write.End();
-            if (!_isClosed)
+            if (!IsWindowGoing)
             {
                 RefreshStemsButton();
                 if (command is not null && CommandFocus.TakesFocusBack(hadFocus, ReferenceEquals(command, _stemsButton) && command.IsEnabled,
@@ -480,5 +496,14 @@ public sealed partial class MainWindow
     {
         if (SavingNotice.MayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational))
             ShowOngoingNotice("StemExportSaving");
+    }
+
+    /// <summary>
+    /// The Saved notice of a write that has ended. A write that did not stop within the limit of a close ends, if it ends at all, after the
+    /// window has gone: nobody is left to tell.
+    /// </summary>
+    private void ShowSavedNotice()
+    {
+        if (!IsWindowGoing) ShowNotice("Saved");
     }
 }

@@ -306,7 +306,7 @@ public sealed partial class MainWindow
         write.Token.ThrowIfCancellationRequested();
         write.BeginWriting(path);
         await Task.Run(() => TimingCsvExporter.ExportAsync(path, session, write.Token), write.Token);
-        ShowNotice("Saved");
+        ShowSavedNotice();
     }
 
     /// <summary>A program step: its name, then tempo, length, meter and how the tempo changes, in one short line.</summary>

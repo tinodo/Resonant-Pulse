@@ -335,6 +335,7 @@ public sealed partial class MainWindow : Window
         _libraryStatus = null;
         _libraryNoMatch = null;
         _libraryEmpty = null;
+        _stemsButton = null;
         _editorOperationControls.Clear();
         PageHost.Content = _view switch
         {

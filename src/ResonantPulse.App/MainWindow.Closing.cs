@@ -21,6 +21,9 @@ public sealed partial class MainWindow
     /// <summary>True while the window is being closed: nothing new starts producing edits.</summary>
     private bool _closeFlushing;
 
+    /// <summary>True once the window will go (the close has been decided) or has gone: what ends after that has nobody to tell.</summary>
+    private bool IsWindowGoing => _closeNow || _isClosed;
+
     // Lets the local verification build make the last save slow, so a driver can look at the window meanwhile
     // (MainWindow.UiTest.cs); shipped builds have no body.
     partial void HoldCloseForUiTest(ref Task? hold);
@@ -72,8 +75,12 @@ public sealed partial class MainWindow
             // (said in the log, with the destinations).
             var windowWillGo = saved || _closeAttemptFailed;
             if (!await _fileWrites.StopForCloseAsync(windowWillGo, CloseSaveLimit) && windowWillGo)
-                Diagnostics.Write($"The window closed while {_fileWrites.Count} write(s) of files had not stopped; a temporary file may be left beside the destination: " +
-                    $"{(_fileWrites.Destinations.Count == 0 ? "none had begun writing" : string.Join(", ", _fileWrites.Destinations))}");
+            {
+                var named = _fileWrites.Destinations;
+                Diagnostics.Write($"The window closed while {_fileWrites.Count} write(s) of files had not stopped" + (named.Count == 0
+                    ? "; none of them had begun writing a file, so none has left a temporary file"
+                    : $"; a temporary file may be left beside the destination: {string.Join(", ", named)}"));
+            }
         }
         catch (Exception exception) { Diagnostics.Write("Saving before the window closed", exception); }
         finally

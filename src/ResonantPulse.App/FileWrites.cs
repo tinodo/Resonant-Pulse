@@ -122,7 +122,11 @@ internal sealed class FileWrite : IDisposable
     /// <summary>Completes when the write has ended, however it went (done, refused, failed or cancelled).</summary>
     internal Task Ended => _ended.Task;
 
-    /// <summary>The file is about to be written: from here a refused close leaves the write alone. <paramref name="destination"/> is named in the log if the write does not stop.</summary>
+    /// <summary>
+    /// Everything the person was asked is answered and the file is chosen: from here a refused close leaves the write alone (what remains
+    /// is compiling a plan or writing the file). <paramref name="destination"/> is named in the log if the write does not stop: the file,
+    /// or the one that is about to be made.
+    /// </summary>
     internal void BeginWriting(string? destination = null)
     {
         if (_isEnded) return;
@@ -130,7 +134,10 @@ internal sealed class FileWrite : IDisposable
         Destination = destination;
     }
 
-    /// <summary>Ends the write, however it went. Harmless when it has ended already.</summary>
+    /// <summary>
+    /// Ends the write, however it went. Harmless when it has ended already. Call it only after whatever uses <see cref="Token"/> has
+    /// returned: the source of the token is disposed here.
+    /// </summary>
     internal void End()
     {
         if (_isEnded) return;

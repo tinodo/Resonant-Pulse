@@ -90,9 +90,10 @@ public sealed class FileDialogFailureTests
     }
 
     [TestMethod]
-    public void ARequestToStopIsNotAFailureOfTheDialog()
+    public void ACancellationThatThePickerReportsIsNotAFailureOfTheDialog()
     {
-        // Closing the window while a dialog is being opened cancels; the page swallows that and shows nothing.
+        // If the picker reports that it was cancelled, that is no failure of the dialog: it passes through unchanged, and the page's guard
+        // swallows it and shows nothing. (Closing the window does not cancel a system dialog that is open: that one is the person's to close.)
         foreach (Exception cancelled in new Exception[] { new OperationCanceledException(), new TaskCanceledException() })
             Assert.AreSame(cancelled, FileDialogFailure.ForPage(cancelled));
     }
@@ -116,7 +117,7 @@ public sealed class FileDialogFailureTests
         {
             var text = Text.Get("ErrorFileDialog");
             Assert.AreNotEqual("ErrorFileDialog", text, language);
-            Assert.IsTrue(text.Length is >= 60 and <= 200, $"{language}: {text.Length} characters (a notice is compact: it must not squeeze a page at 400 DIP)");
+            Assert.IsTrue(text.Length is >= 60 and <= 240, $"{language}: {text.Length} characters (a notice is compact: it must not squeeze a page at 400 DIP)");
             Assert.IsFalse(text.Contains('{') || text.Contains('}'), language);
             foreach (var word in new[] { "HRESULT", "exception", "handle", "dialog", "picker", "0x" })
                 Assert.IsFalse(text.Contains(word, StringComparison.OrdinalIgnoreCase), $"{language}: “{word}” is not a word for a person: {text}");
@@ -127,10 +128,40 @@ public sealed class FileDialogFailureTests
     }
 
     [TestMethod]
+    public void TheSentenceSaysThatTheEditsStayInTheWindowInTheWordsOfTheOtherFileError()
+    {
+        // A person who cannot save wants to know whether the project is lost: the sentence says what ErrorFile says, word for word.
+        InEveryLanguage(language =>
+        {
+            var stays = Text.Get("ErrorFile").Split(". ").Last().TrimEnd('.');
+            Assert.IsTrue(stays.Length > 10, language);
+            StringAssert.Contains(Text.Get("ErrorFileDialog"), stays, language);
+        });
+    }
+
+    // French typography keeps a colon, a semicolon, a question mark and an exclamation mark on the line of the word before them, with a
+    // no-break space; the other French sentences of the page do. Returns the places where one follows an ordinary space or nothing.
+    private static List<int> FrenchSpacingFaults(string text)
+    {
+        var faults = new List<int>();
+        for (var index = 1; index < text.Length; index++)
+            if ((text[index] is ':' or ';' or '?' or '!') && text[index - 1] != '\u00A0')
+                faults.Add(index);
+        return faults;
+    }
+
+    [TestMethod]
+    public void TheFrenchSpacingRuleFindsAnOrdinarySpaceBeforeAColonAndLeavesANoBreakSpaceAlone()
+    {
+        Assert.AreEqual(1, FrenchSpacingFaults("Rien n’a été enregistré : réessayez").Count);
+        Assert.AreEqual(0, FrenchSpacingFaults("Rien n’a été enregistré\u00A0: réessayez").Count);
+        Assert.AreEqual(2, FrenchSpacingFaults("Attention ! Vraiment ?").Count);
+        Assert.AreEqual(0, FrenchSpacingFaults("Pas de ponctuation à surveiller.").Count);
+    }
+
+    [TestMethod]
     public void TheFrenchSentenceKeepsItsNoBreakSpaceBeforeAColon()
     {
-        // The usual rule of French typography, kept as the other French sentences of the page keep it, so that a narrow notice never
-        // starts a line with the colon.
         var previousLanguage = Text.Language;
         var previousCulture = CultureInfo.CurrentCulture;
         var previousUiCulture = CultureInfo.CurrentUICulture;
@@ -138,9 +169,7 @@ public sealed class FileDialogFailureTests
         {
             Text.Select("fr");
             var text = Text.Get("ErrorFileDialog");
-            for (var index = 1; index < text.Length; index++)
-                if (text[index] is ':' or ';' or '?' or '!')
-                    Assert.AreEqual('\u00A0', text[index - 1], $"“{text}” has an ordinary space (or none) before “{text[index]}”");
+            Assert.AreEqual(0, FrenchSpacingFaults(text).Count, $"“{text}” has an ordinary space (or none) before a colon, semicolon, question mark or exclamation mark");
         }
         finally
         {

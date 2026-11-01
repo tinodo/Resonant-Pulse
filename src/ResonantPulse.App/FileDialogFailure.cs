@@ -11,7 +11,8 @@ internal static class FileDialogFailure
     /// The failure of a file dialog as the page reports it: a <see cref="FileDialogException"/>, which the page explains in words about
     /// the dialog, whatever the dialog failed with. Without this a failure of the operating system's window handling (a
     /// <see cref="System.Runtime.InteropServices.COMException"/>, which is what the audio code reports its failures as too) read as a
-    /// problem with the audio output. A request to stop (the window is closing) is no failure of the dialog and stays as it is.
+    /// problem with the audio output. A cancellation that the dialog reports (an <see cref="OperationCanceledException"/>) is no failure
+    /// of the dialog and stays as it is.
     /// </summary>
     internal static Exception ForPage(Exception error) =>
         error is OperationCanceledException ? error : new FileDialogException(error);

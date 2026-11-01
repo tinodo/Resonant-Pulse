@@ -280,8 +280,10 @@ Questions again, not findings; nothing here has been checked with a native speak
 (`ErrorFileDialog`) is shown when Windows' own window for choosing where to save a file, or which
 file to open, cannot be opened or fails. It used to be shown as a problem with the audio output.
 It says what happened (the window for choosing a file could not be opened), that nothing was saved
-or opened, and what to do (try again, and restart the app if it keeps happening). Below it the page
-adds the line that points to the diagnostics, as for every unexpected failure.
+or opened, that the edits remain in the window (the last sentence of the file error, word for word
+in each language, so the two read alike) and what to do (try again, and restart the app if it keeps
+happening). Below it the page adds the line that points to the diagnostics, as for every unexpected
+failure.
 
 - **The window for choosing a file** is a plain description of what Windows calls the Save As or
   Open dialog, so that no developer word (*dialog*) reaches the page: *het venster om een bestand
@@ -291,15 +293,24 @@ adds the line that points to the diagnostics, as for every unexpected failure.
   for a native reader.
 - **Nothing was saved or opened** is the same sentence for a save and for an open: *er is niets
   bewaard of geopend*, *wurde nichts gespeichert oder geöffnet*, *rien n'a été enregistré ni
-  ouvert*, *no se guardó ni se abrió nada*. Dutch says *bewaard* where the other save sentences of
-  the page do (*De sporen konden niet worden bewaard*), not *opgeslagen*, which only *Lokaal
-  opgeslagen* (the *Saved* notice) uses.
+  ouvert*, *no se guardó ni se abrió nada*. Dutch uses both *bewaard* and *opgeslagen* in the app:
+  *bewaard* in the sentences about a save that failed (*De sporen konden niet worden bewaard*, the
+  file error), *opgeslagen* in the notices and labels (*Lokaal opgeslagen*, *Project opslaan*, and the
+  line under every error, *Volledige technische details zijn lokaal opgeslagen*, which this notice
+  shows too). The new sentence follows the sentences about a failed save; whether the notice reads
+  well with both words is for a native reader.
+- **Your edits remain in this window** is the last sentence of the file error in each language
+  (*Wijzigingen blijven in dit venster*, *Änderungen bleiben im Fenster*, *Les modifications restent
+  dans la fenêtre*, *Los cambios permanecen en esta ventana*), so that the two failures say the same
+  thing about the project. It is true because a failed dialog changes nothing in the project; a
+  test holds the words equal.
 - **Restart the app** is *start de app opnieuw op*, *starten Sie die App neu*, *redémarrez
   l'application* and *reinicie la aplicación*. The advice is general: a window that cannot be
   opened is usually the system's, and the sentence does not promise that a restart helps.
 - The French sentence has no colon, semicolon or question mark, so the no-break space that the
-  other French sentences keep before them does not arise; a test fails if a later edit adds one
-  with an ordinary space in front.
+  other French sentences keep before them does not arise; a test holds the rule (and shows that it
+  finds an ordinary space), so that a later edit that adds one with an ordinary space in front fails.
+  Older French sentences of the page do not all follow the rule.
 - German, French and Spanish address the person formally (*Versuchen Sie*, *Réessayez*,
   *Inténtelo*), as the other sentences of the page do; Dutch is impersonal (*Probeer het opnieuw*),
   like the page's other imperatives.

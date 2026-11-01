@@ -70,7 +70,9 @@ lane's Solo, still has its file, silent. The files added together are not guaran
 rounded to 16 bits and held at full scale on its own. Closing the window while it saves stops it and removes the half-written
 file; closing waits up to 4 seconds for that, after its wait for the save, and an export that has not stopped by then is left
 behind (the log says so), possibly with a temporary file beside the destination. The same holds for every other file that the app
-writes when you ask (Save, Save to library, Export WAV, Export MIDI and the timing result below). The archive is described in [docs/WAV-STEMS.md](docs/WAV-STEMS.md).
+writes when you ask (Save, Save to library, Export WAV, Export MIDI and the timing result below): a file that is already there stays as
+it was. The window stays, and a file that is being written goes on, when the close is refused because the project could not be saved.
+The archive is described in [docs/WAV-STEMS.md](docs/WAV-STEMS.md).
 
 On Train, the timing check compares when each key press (F, or the Hit button)
 reached the app with when each click was due. When a check has finished, **Export
