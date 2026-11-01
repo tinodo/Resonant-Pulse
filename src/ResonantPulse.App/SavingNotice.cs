@@ -40,5 +40,6 @@ internal static class SavingNotice
     /// <see cref="MayReplace"/>): the person dismisses it and has not lost what it said. An informational notice still gives way, as it does
     /// to every notice.
     /// </summary>
-    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool closeWasRefused) => true;
+    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool closeWasRefused) =>
+        !closeWasRefused || MayReplace(noticeIsOpen, noticeIsInformational);
 }
