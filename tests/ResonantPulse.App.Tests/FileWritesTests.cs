@@ -199,6 +199,37 @@ public sealed class FileWritesTests
     }
 
     [TestMethod]
+    public void OnlyAWriteThatIsStillBeingPreparedCanBeVoided()
+    {
+        var writes = new FileWrites();
+        var writing = Begin(writes);
+        writing.BeginWriting();
+        writing.InvalidatePreparation();
+        Assert.IsFalse(writing.PreparationInvalidated, "A write that is being written is not voided, whoever asks: its file is going to be written.");
+        Assert.IsTrue(writing.StillWanted);
+        var ended = Begin(writes);
+        ended.End();
+        ended.InvalidatePreparation();
+        Assert.IsFalse(ended.PreparationInvalidated, "A write that has ended is not marked either.");
+        writing.End();
+    }
+
+    [TestMethod]
+    public void AWriteThatHasEndedStaysEndedWhateverIsDoneToItAfterwards()
+    {
+        var writes = new FileWrites();
+        var write = Begin(writes);
+        write.BeginWriting(@"C:\Music\click.wav");
+        Assert.IsTrue(write.IsWriting);
+        write.End();
+        Assert.IsFalse(write.IsWriting, "An ended write is not writing.");
+        write.BeginWriting(@"C:\Music\other.wav");
+        Assert.IsFalse(write.IsWriting, "A late call does not bring an ended write back.");
+        Assert.AreEqual(@"C:\Music\click.wav", write.Destination, "Nor does it give it another file.");
+        Assert.IsFalse(writes.AnyGoing);
+    }
+
+    [TestMethod]
     public async Task ACloseThatWasRefusedAndThenGoesStopsTheWritesThatTheFirstLeftGoing()
     {
         var writes = new FileWrites();
