@@ -254,7 +254,7 @@ public sealed class TempoEditsTests
         {
             applied++;
             return await finish.Task;
-        });
+        }, () => 1);
 
         var first = apply();
         var second = await apply().WaitAsync(TimeSpan.FromSeconds(10));
@@ -274,12 +274,48 @@ public sealed class TempoEditsTests
         {
             applied++;
             return Task.FromResult(true);
-        });
+        }, () => 1);
 
         Assert.IsTrue(await apply());
         Assert.IsTrue(await apply());
 
         Assert.AreEqual(2, applied);
+    }
+
+    [TestMethod]
+    public async Task APressOfDoneInANewOpeningOfThePanelIsAppliedWhileAnEarlierOneIsStillBeingApplied()
+    {
+        // Done was pressed, the panel was dismissed and opened again while it waited, and a tempo was typed and Done pressed again:
+        // that press is not the first one's repeat, and is neither lost nor let through twice.
+        var opening = 1;
+        var applied = new List<int>();
+        var gates = new List<TaskCompletionSource<bool>>();
+        var apply = TempoEdits.OneAtATime(async () =>
+        {
+            var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            gates.Add(gate);
+            applied.Add(opening);
+            return await gate.Task;
+        }, () => opening);
+
+        var first = apply();
+        opening = 2;
+        var second = apply();
+        var repeat = await apply().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsFalse(repeat, "a repeat of the press of the same opening is ignored");
+        CollectionAssert.AreEqual(new[] { 1, 2 }, applied, "the press of the new opening was applied");
+        gates[0].SetResult(true);
+        Assert.IsTrue(await first.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.IsFalse(await apply().WaitAsync(TimeSpan.FromSeconds(10)), "the first press ending does not release the second's");
+        Assert.AreEqual(2, applied.Count);
+        gates[1].SetResult(true);
+        Assert.IsTrue(await second.WaitAsync(TimeSpan.FromSeconds(10)));
+        gates.Clear();
+        var next = apply();
+        Assert.AreEqual(3, applied.Count, "once the second has ended a new press is applied");
+        gates[0].SetResult(true);
+        Assert.IsTrue(await next.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [TestMethod]
@@ -291,7 +327,7 @@ public sealed class TempoEditsTests
         {
             applied++;
             return applied == 1 ? Task.FromException<bool>(new IOException("The recovery file cannot be written.")) : Task.FromResult(applied != 2);
-        });
+        }, () => 1);
 
         await Assert.ThrowsExactlyAsync<IOException>(() => apply());
         Assert.IsFalse(await apply(), "refused");

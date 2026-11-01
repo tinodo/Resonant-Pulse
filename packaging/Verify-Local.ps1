@@ -40,6 +40,9 @@ if ($UiTestHooks) {
     if (-not $latin1.GetString([IO.File]::ReadAllBytes($assembly)).Contains($hookMarker)) {
         throw "-UiTestHooks needs a build made with -p:UiTest=true: ${Exe} has no UI-test hooks."
     }
+    # The checks that use the hooks play (at the inaudible gain): without -SilentAudio the verifier reports them as not run, and a run
+    # that asked for them must not pass for one that did them.
+    if (-not $SilentAudio) { throw '-UiTestHooks needs -SilentAudio: the checks that use the hooks play, at the inaudible gain.' }
 }
 $null = New-Item -ItemType Directory -Force -Path $OutputPath
 if (-not $Visible -and -not $InsidePrivateDesktop) {

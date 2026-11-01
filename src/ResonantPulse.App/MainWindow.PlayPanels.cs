@@ -17,7 +17,9 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// One consistent panel: title, optional help, scrolling fields, then [Cancel] [Done] side by side.
-    /// Done applies and closes; Cancel (or clicking away) discards. Fields are refilled from the document
+    /// Done applies and closes; Cancel (or clicking away) before Done discards. Once Done has been pressed the change is on its way, and
+    /// Cancel or clicking away only closes the panel: a change that takes a moment (the Tempo panel's waits for the nudges that are on
+    /// their way) is still applied, as one that is queued behind another edit is. Fields are refilled from the document
     /// every time the panel opens, so a cancelled draft never lingers. A <paramref name="readOnly"/> panel only shows text (Help):
     /// it has nothing to cancel, so it has Done alone, and its scrolling area is a tab stop so that a keyboard can read it.
     /// <paramref name="titleExtra"/> sits at the right of the title and wraps inside its own column. The panel's height is what its
@@ -265,9 +267,11 @@ public sealed partial class MainWindow
         // What the panel showed when it was opened (set again each time it opens): Done writes only what was changed from it.
         var openedTempo = settings.Tempo;
         var openedUnit = settings.BeatUnitQuarters;
+        var opening = 0;
         return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
+                opening++;
                 openedTempo = _tempoNudges.Requested ?? _document.Settings.Tempo;
                 openedUnit = _document.Settings.BeatUnitQuarters;
                 tempo.Value = openedTempo;
@@ -275,7 +279,8 @@ public sealed partial class MainWindow
                 taps.Value = TapStartRules.ClampTaps(_preferences.TapInCount);
                 ShowGuide();
             },
-            // A second press of Done while the first is still being applied (it waits for the nudges that are on their way) does nothing.
+            // A second press of Done in this opening of the panel, while the first is still being applied (it waits for the nudges that
+            // are on their way), does nothing.
             TempoEdits.OneAtATime(async () =>
             {
                 var bpm = Math.Round(Value(tempo), 1);
@@ -292,27 +297,40 @@ public sealed partial class MainWindow
                     // that is still listening and would later overwrite what was chosen. A new number of taps only counts for the
                     // next one.
                     CancelTapIn();
-                    // The tempo that is nudged is committed by a loop of its own, and the edit queue is first in, first out: a commit
-                    // made now, while the loop is still committing, would be queued between two of the loop's, and the loop would then
-                    // commit its older value over this one. So the nudges asked for until now (and any made while this waits, the loop
-                    // being still at work) land first, and the tempo typed here is the last word.
-                    await _tempoNudges.Settled;
+                    // The project this was typed for: it can be replaced (Open, New, a ready-made rhythm) while this waits for the nudges,
+                    // and what was typed belongs to the one that went, so nothing is written into its replacement.
+                    var typedFor = _projectGeneration;
                     var applied = false;
-                    await CommitAsync(doc =>
+                    var replaced = false;
+                    try
                     {
-                        if (tempoEdited) doc.Settings.Tempo = bpm;
-                        if (unitEdited)
+                        // The tempo that is nudged is committed by a loop of its own, and the edit queue is first in, first out: a commit
+                        // made now, while the loop is still committing, would be queued between two of the loop's, and the loop would
+                        // then commit its older value over this one. So this commit waits for the loop (and closing, Start and Tap to
+                        // start wait for it as part of the tempo being settled): what was nudged before Done was pressed lands first,
+                        // and the tempo typed here is the last word.
+                        await _tempoNudges.AfterNudgesAsync(() => CommitAsync(doc =>
                         {
-                            doc.Settings.BeatUnitQuarters = unitValue;
-                            // The split clicks' strengths are laid out per beat of the old unit.
-                            doc.Settings.SubdivisionAccents = null;
-                        }
-                        applied = true;
-                    }, editorChange: unitEdited ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly);
-                    if (!applied) return false;
+                            if (typedFor != _projectGeneration)
+                            {
+                                replaced = true;
+                                throw new OperationCanceledException();
+                            }
+                            if (tempoEdited) doc.Settings.Tempo = bpm;
+                            if (unitEdited)
+                            {
+                                doc.Settings.BeatUnitQuarters = unitValue;
+                                // The split clicks' strengths are laid out per beat of the old unit.
+                                doc.Settings.SubdivisionAccents = null;
+                            }
+                            applied = true;
+                        }, editorChange: unitEdited ? EditorChangeKind.PlayStructure : EditorChangeKind.GlobalTempoOnly));
+                    }
+                    catch (OperationCanceledException) when (replaced) { }
+                    if (!applied && !replaced) return false;
                     // The project holds the new unit now, so the page is built for it whether or not the number of taps can be
                     // remembered: a refused write of the preferences must not leave the page of the old unit behind.
-                    if (unitEdited) BuildPage();
+                    if (applied && unitEdited) BuildPage();
                 }
                 if (newTaps != TapStartRules.ClampTaps(_preferences.TapInCount))
                 {
@@ -322,7 +340,7 @@ public sealed partial class MainWindow
                     await _workspace.SavePreferencesAsync(_preferences);
                 }
                 return true;
-            }), titleExtra: guide);
+            }, () => opening), titleExtra: guide);
     }
 
     private OptionPanel BuildRhythmPanel()

@@ -9,19 +9,27 @@ internal static class TempoEdits
         double.IsFinite(proposed) && current != proposed;
 
     /// <summary>
-    /// Makes a second press of Done do nothing while the first is still being applied. Done waits for the nudges that are on their way
-    /// before it commits, which can take a moment on a slow machine, and a second press in that moment would write the same tempo again
-    /// (one more Undo step). The second press leaves the panel open and returns false; the first one closes it when it is done.
+    /// Makes a second press of Done in the same opening of the panel do nothing while the first is still being applied. Done waits for the
+    /// nudges that are on their way before it commits, which can take a moment on a slow machine, and a second press in that moment would
+    /// write the same tempo again (one more Undo step). The second press leaves the panel open and returns false; the first one closes
+    /// it when it is done and has applied something. A press in a later opening (the panel was dismissed and opened again while the
+    /// first was being applied) has typed something of its own and is applied as usual, after the first.
     /// </summary>
-    internal static Func<Task<bool>> OneAtATime(Func<Task<bool>> apply)
+    /// <param name="opening">The number of this opening of the panel; it changes each time the panel opens.</param>
+    internal static Func<Task<bool>> OneAtATime(Func<Task<bool>> apply, Func<int> opening)
     {
-        var applying = false;
+        var applyingIn = -1;
         return async () =>
         {
-            if (applying) return false;
-            applying = true;
+            var mine = opening();
+            if (applyingIn == mine) return false;
+            applyingIn = mine;
             try { return await apply(); }
-            finally { applying = false; }
+            finally
+            {
+                // An apply of an earlier opening that ends now must not release the one that is running.
+                if (applyingIn == mine) applyingIn = -1;
+            }
         };
     }
 

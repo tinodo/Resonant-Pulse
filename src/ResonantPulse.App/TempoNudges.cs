@@ -3,13 +3,16 @@ namespace ResonantPulse.App;
 /// <summary>
 /// The tempo that the person nudges to (a stepper, the wheel over the dial, TAP): it is shown at once and committed one value at a
 /// time. While a commit runs, further requests only change the wanted value, and the one loop then commits the newest directly, so
-/// holding a stepper or tapping quickly never queues a backlog, never reorders, and the last value asked for is the last one committed.
+/// holding a stepper or tapping quickly never queues a backlog and never reorders: the newest request is the next commit. (A commit
+/// that fails ends the loop, and what was asked for after it is dropped with it, as it always was.)
 /// <para>
-/// A tempo that is typed in the Tempo panel is not a nudge: it is an edit of its own, and it has to come after every nudge that is
-/// still on its way. The edit queue is first in, first out, so an edit made while the loop is committing is queued between two of the
-/// loop's commits, and the loop then goes on to commit its older value over it. What must come after the nudges (Done in the Tempo panel,
-/// Start, Tap to start, closing) therefore waits for <see cref="Settled"/> first, which completes when the loop has committed the
-/// newest value asked for and has nothing left to commit.
+/// A tempo that is typed in the Tempo panel is not a nudge: it is an edit of its own, and it has to come after the nudges that are on
+/// their way. The edit queue is first in, first out, so an edit made while the loop is committing is queued between two of the loop's
+/// commits, and the loop then goes on to commit its older value over it. <see cref="AfterNudgesAsync"/> makes the typed edit wait for
+/// the loop that is running, so that it is committed after every nudge asked for before it was started (and after those that the loop
+/// took on meanwhile); a nudge asked for after it has been queued is committed after it, in queue order. While it is on its way,
+/// <see cref="Settled"/> includes it, so that closing, Start and Tap to start, which wait for the tempo to settle, wait for it too and
+/// not only for the loop.
 /// </para>
 /// Pure and for the UI thread only, so every order the commits can finish in is tested without a window.
 /// </summary>
@@ -19,6 +22,8 @@ internal sealed class TempoNudges
     private readonly Func<Func<Task>, Task> _guard;
     private readonly Action _ended;
     private bool _running;
+    private Task _loop = Task.CompletedTask;
+    private Task _typed = Task.CompletedTask;
 
     /// <param name="commit">Commits one tempo to the project (it waits in the edit queue, so it finishes later).</param>
     /// <param name="guard">Runs the loop and reports what goes wrong in it, without letting it escape (the window's error handling).</param>
@@ -34,10 +39,12 @@ internal sealed class TempoNudges
     internal double? Requested { get; private set; }
 
     /// <summary>
-    /// Completes when the loop that is running (or the last one that ran) has ended: every tempo asked for before the moment this is
-    /// read has been committed or refused, and nothing older can be committed after it. Closing, Start and Tap to start wait for it.
+    /// Completes when the loop that is running (or the last one that ran) has ended, and so has the commit of a tempo typed in the
+    /// panel, if one is being applied: every tempo asked for before the moment this is read has been committed or dropped (a commit
+    /// that fails ends the loop and drops what was asked for after it, and a page that is built again forgets what was waiting, see
+    /// <see cref="Forget"/>), and nothing older can be committed after it. It never fails. Closing, Start and Tap to start wait for it.
     /// </summary>
-    internal Task Settled { get; private set; } = Task.CompletedTask;
+    internal Task Settled => Task.WhenAll(_loop, _typed);
 
     /// <summary>
     /// Asks for a tempo (already within 1 to 1000 BPM and to a tenth, and not the one asked for last) and starts the loop that commits
@@ -50,7 +57,7 @@ internal sealed class TempoNudges
         shown?.Invoke();
         if (_running) return;
         _running = true;
-        Settled = _guard(async () =>
+        _loop = _guard(async () =>
         {
             try
             {
@@ -68,6 +75,27 @@ internal sealed class TempoNudges
                 _ended();
             }
         });
+    }
+
+    /// <summary>
+    /// Runs the commit of a tempo that was typed (Done in the Tempo panel) once the loop that is running has ended, so that it is
+    /// committed after the nudges that were asked for before it, and not between two of the loop's commits. It is part of
+    /// <see cref="Settled"/> from the moment it is called until it has ended, however it ends; what it throws goes to the caller.
+    /// Called with the edit queue not held (the loop needs it to finish).
+    /// </summary>
+    internal async Task AfterNudgesAsync(Func<Task> typed)
+    {
+        var nudges = _loop;
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Registered before anything is awaited, so no waiter can pass it while it is still on its way. A typed edit that has ended
+        // is not carried along, so the chain of tasks does not grow with every Done.
+        _typed = _typed.IsCompleted ? ended.Task : Task.WhenAll(_typed, ended.Task);
+        try
+        {
+            await nudges;
+            await typed();
+        }
+        finally { ended.SetResult(); }
     }
 
     /// <summary>
