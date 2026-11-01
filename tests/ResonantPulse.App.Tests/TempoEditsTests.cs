@@ -257,13 +257,13 @@ public sealed class TempoEditsTests
         });
 
         var first = apply();
-        var second = await apply();
+        var second = await apply().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.IsFalse(second, "false leaves the panel open: the first press will close it");
         Assert.AreEqual(1, applied, "the tempo is not written a second time");
         Assert.IsFalse(first.IsCompleted);
         finish.SetResult(true);
-        Assert.IsTrue(await first);
+        Assert.IsTrue(await first.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [TestMethod]
