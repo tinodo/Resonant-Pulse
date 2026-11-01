@@ -27,7 +27,13 @@ Native Windows rhythm workstation: C#/.NET 10 and WinUI 3.
   which a test must not alter on the owner's machine, and a third,
   `UiTestExpandScrollBars`, puts the beat strip's scroll bar into the expanded
   form it takes under the pointer (a private desktop cannot hover) so its room
-  under the beat numbers can be seen. Screenshots,
+  under the beat numbers can be seen. Two more, `UiTestHoldEdits` and
+  `UiTestReleaseEdits`, hold the edit queue and let it go, so that a test can make
+  the order of edits certain whatever the speed of the machine: build with
+  `-p:UiTest=true` and run `Verify-Local.ps1 -SilentAudio -UiTestHooks`, which
+  switches the hooks on and runs the first-use checks that need them (the report's
+  `tempoTypedAfterNudges`); a shipped build has none of it and the report says
+  the check was not run. Screenshots,
   keystrokes and audio are otherwise opt-in (`-Screenshots`, `-Keyboard`,
   `-RunAudio`) and only automatic on GitHub Actions. `-SilentAudio` runs the
   real audio scenarios (Start, live edits, counted stops, pause/resume) on the
