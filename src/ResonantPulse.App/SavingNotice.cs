@@ -13,7 +13,7 @@ internal enum FadedNotice
 
 /// <summary>
 /// The notice that says the tracks are being saved (<c>StemExportSaving</c>), and what shares the notice bar with it. The export of separate
-/// tracks is the one write that shows a notice while it writes: the others write in milliseconds for an ordinary project.
+/// tracks is the one write that shows a notice while it writes: the others show none (they are short for an ordinary project; see docs/DELIVERY.md).
 /// </summary>
 internal static class SavingNotice
 {

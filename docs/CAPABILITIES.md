@@ -210,30 +210,39 @@ more than 1,024 bars (not tried), whether the rendering makes the audio stutter 
 reader says, Windows text sizes above 100% on the real setting, the Contrast themes, and a musician's reading of the Dutch, German, French and Spanish
 sentences (docs/design/glossary.md lists the questions).
 
-Every file that the app writes when the person asks (Save, Save to library, Export WAV, Export MIDI, Export separate tracks and Export result
-(CSV)) is a write of one guard, `FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed, ends however the
-write goes, and has a cancellation token that the write passes to what writes the file (`DocumentStore`, `WaveExporter`, `MidiExporter`,
-`WaveStemExporter`, `TimingCsvExporter` and `LocalWorkspace.SaveLibraryAsync`). Closing the window cancels every write that is going and waits for
-all of them, at most 4 seconds, after its wait for the save; a cancelled write removes its temporary file and a file that was already at the
-destination stays as it was. Conditions: a write that does not stop when its token is cancelled (a stalled disk; the WAV export is not cancelled
-once its commit has begun, which takes milliseconds) is left behind when the window goes after the 4 seconds, with a line in the log that names its
-destination, and a temporary file may stay beside it (not seen). A close that is refused (the project could not be saved, so the window stays)
-leaves a write that is being written going, and marks one that is still being prepared (a plan is compiled, a MIDI file is looked at, notes are
-saved) void, so that no question or dialog is shown afterwards; Save to library has no question or dialog after its preparation and is not
-dropped. Writes of different commands overlap as they always could; only the export of separate tracks is one at a time, and only it shows a
-notice while it writes (the others take milliseconds for an ordinary project; the WAV of the largest project takes about a minute and shows none,
-as before). A file dialog that cannot be opened or fails (Windows' own throws, as on the private desktop of a developer machine: *Invalid window
-handle*) is reported as that in all five languages, with the cause and its HRESULT in the log, writes nothing and leaves the command usable; a
-person who cancels the dialog gets no message. Until this change every such failure was reported as a problem with the audio output (any
-`COMException` still is, where the audio path raises one). After the tracks question's Cancel, after Saved and after an error the keyboard focus is
-on the tracks command again when it was on it at the press and the person has not moved it meanwhile (the system had moved it on to the first
-ready-made rhythm of the page); Export WAV, Export MIDI, Save and Open stay on while they run and keep the focus by themselves (measured on the
-private desktop, not guaranteed by code). Held by `FileWritesTests`, `SavingNoticeTests`, `FileDialogFailureTests` and `CommandFocusTests`, by the
-verifier's check of the focus (it also runs on a hosted runner), and by runs of the real app on the private desktop with a stand-in for the file
-dialog in UI-test builds and a delay inside every write in a throwaway build (docs/DELIVERY.md). Not established: Windows' own file dialogs (the
-stand-in throws what the real one threw on the private desktop; no other failure of the real one was seen, and a close while a dialog is open was
-not run), a write that never stops, the focus with a screen reader and in a window that is the system's active window outside the hosted runner,
-and a musician's reading of the new sentence in German, French and Spanish (docs/design/glossary.md).
+Every file that the app writes for the person (Save, Save to library, Export WAV, Export MIDI, Export separate tracks, Export result (CSV), and
+the copy of the project that Open, New or a ready-made rhythm saves to the library before it replaces the project) is a write of one guard,
+`FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed, ends however the write goes, and has a cancellation
+token that the write passes to what writes the file (`DocumentStore`, `WaveExporter`, `MidiExporter`, `WaveStemExporter`, `TimingCsvExporter` and
+`LocalWorkspace.SaveLibraryAsync`). The recovery copy and the settings are not part of it: closing saves them by its own flush. When the window
+closes, every write that is going is cancelled and waited for, at most 4 seconds, after the wait for the save; a cancelled write removes its
+temporary file and a file that was already at the destination stays as it was. Conditions: a write that does not stop when its token is cancelled
+(a stalled disk; Core's WAV export is not cancelled once its commit, two file moves, has begun) is left behind when the window goes after the
+4 seconds, with a line in the log that names its destination, and a temporary file may stay beside it (it stayed in the real-window runs, where a
+delay that ignores the token stood in for a stalled disk). A close that is refused (the project could not be saved, so the window stays) leaves a
+write that is being written going, and voids one that has not yet asked its question or opened its dialog (a plan is compiled for the tracks, a
+MIDI file is looked at, notes are saved), so that no question or dialog is shown afterwards: that command is dropped without a message, as the
+tracks export was dropped before. Save to library and the backup of a replacement have no question or dialog and are not voided. A file dialog is
+not opened while a close is under way. Writes of different commands overlap as they always could; only the export of separate tracks is one at a
+time, and only it shows a notice while it writes (the others show none; what they took is in docs/DELIVERY.md).
+
+A file dialog that cannot be opened or fails (a `COMException` such as *Invalid window handle*, `0x80070578`, which Windows' own dialog throws on
+the private desktop of a developer machine) is reported as that in all five languages, with the cause and its HRESULT in the log, and the sentence
+also says that the edits remain in the window; it writes nothing and leaves the command usable, and a person who cancels the dialog gets no
+message. Before, a failure of the dialog that was a `COMException` (the only kind seen) was reported as a problem with the audio output, and any
+other exception by its type (a file, access or general problem); a `COMException` raised by the audio code still is an audio problem. After the
+tracks question's Cancel, after Saved and after an error the keyboard focus is on the tracks command again when it was on it at the press and the
+person has not moved it meanwhile (before, it was on the first ready-made rhythm of the page, where the system had moved it); Export WAV, Export
+MIDI, Save and Open stay on while they run and keep the focus by themselves (measured on the private desktop, not guaranteed by code).
+
+What holds what: `FileWritesTests`, `SavingNoticeTests`, `CommandFocusTests` and `FileDialogFailureTests` hold the decisions and the texts, and
+`LocalWorkspaceTests` the token and the file name of the library save; none of them holds the wiring in the window. The first-use gate holds the
+focus after the tracks question's Cancel only (it also runs on a hosted runner); everything else, including the focus after Saved and after an error, the close during a write and the refused close, is held by runs of
+the real app on the private desktop on throwaway builds (a stand-in for the file dialog and a hold in the preparation of a write in UI-test builds,
+a delay inside every write in a copy of Core) that are evidence, not a gate (docs/DELIVERY.md). Not established: Windows' own file dialogs (the
+stand-in throws what the real one threw on the private desktop; no other failure of the real one was seen), a close while a system dialog is open,
+a write that never stops other than as stood in for, the focus with a screen reader and in a window that is the system's active window outside
+the hosted runner, and a musician's reading of the new sentence in German, French and Spanish (docs/design/glossary.md).
 
 Live edits prepare immutable replacement revisions off the audio callback.
 Sound and beat-strength changes switch at the next audio quantum on the same
