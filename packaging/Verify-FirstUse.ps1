@@ -175,6 +175,15 @@ function Wait-Settled([string]$id, [int]$stillMilliseconds = 500, [int]$seconds 
     } while ([DateTime]::UtcNow -lt $limit)
     throw "$id did not stop moving within $seconds seconds (last position: $last)"
 }
+# The checks of what a person sees first (where the keyboard focus starts, the room a panel gives its last box, text that fits its
+# control in every language) sweep many places at once. They do not stop the run at the first thing they find: each records it here with
+# where it is and what was measured, so that one run says everything that is wrong, and the run fails at its end (see the end of the
+# script) if anything was recorded.
+$script:findings = [Collections.Generic.List[string]]::new()
+function Add-Finding([string]$where, [string]$message) {
+    $script:findings.Add("${where}: $message")
+    Write-Host "FINDING ${where}: $message"
+}
 # Layout rules a person notices at a glance. Each one failed in a shipped preview, so each is now a gate.
 function Test-SameSize([string]$what, $first, $second, [double]$tolerance = 2) {
     if ([Math]::Abs($first.Width - $second.Width) -gt $tolerance -or [Math]::Abs($first.Height - $second.Height) -gt $tolerance) {
@@ -451,6 +460,29 @@ $openedOn = Find-Control 'DestinationPlay'
 if (-not $openedOn.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected -or $null -eq (Find-Optional 'PhaseInstrument')) {
     throw 'The application did not open on Play, although the page saved last was Settings.'
 }
+# Where the keyboard focus is when the application has just started and nothing has been touched. A person who then presses Space or Tab
+# starts from there, and a focus ring drawn there is the first thing that is seen. When Windows activated the packaged application it put
+# the focus on the Settings item, the only thing the navigation held at that moment (its pages are added when the project has been read),
+# and the ring showed on Settings. The application now places the focus once, when the page is built: on Start, or on Audio while there
+# is no output to start on. A focus that is on another window (a machine that is being used) says nothing about this one: not run.
+function Test-InitialFocus {
+    $expected = if ((Find-Control 'TransportStartPause').Current.IsEnabled) { 'TransportStartPause' } else { 'AudioOptions' }
+    $limit = [DateTime]::UtcNow.AddSeconds(4)
+    do {
+        $element = [Windows.Automation.AutomationElement]::FocusedElement
+        $owned = $null -ne $element -and $element.Current.ProcessId -eq $AppProcessId
+        $id = if ($owned) { $element.Current.AutomationId } else { '' }
+        if ($owned -and $id -eq $expected) { return @{ result = 'on-the-expected-control'; expected = $expected; id = $id } }
+        Start-Sleep -Milliseconds 150
+    } while ([DateTime]::UtcNow -lt $limit)
+    if (-not $owned) { return @{ result = 'not-run-the-application-does-not-have-the-keyboard'; expected = $expected; id = '' } }
+    $name = $element.Current.Name
+    $kind = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+    $where = if ($id -like 'Destination*') { "the navigation item '$id' ('$name')" } elseif ($id) { "'$id' ('$name', $kind)" } else { "no control ($kind '$name')" }
+    Add-Finding 'Initial focus' "the keyboard focus starts on $where, not on '$expected'."
+    return @{ result = 'wrong-control'; expected = $expected; id = $id; name = $name; type = $kind }
+}
+$initialFocus = Test-InitialFocus
 $bounds = $window.Current.BoundingRectangle
 $primary = @('PhaseInstrument', 'TempoEdit', 'TempoDown', 'TapTempo', 'TempoUp', 'TapStart', 'QuickMeter', 'MainSound', 'MainAccent0',
     'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'TransportStop', 'EmergencyMute')
@@ -879,7 +911,7 @@ function Wait-TempoGuide([string[]]$names, [string]$rate, [string]$what) {
     $wanted = if ($rate) { "at $rate BPM in quarter notes" } else { 'for a tempo counted in quarter notes, without a conversion' }
     throw "${what}: the tempo guide says '$text', but it should name $($names -join ' / ') $wanted."
 }
-function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, [string]$eighth = 'Eighth note', [string]$quarter = 'Quarter note', [bool]$tapsWhole = $true) {
+function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, [string]$eighth = 'Eighth note', [string]$quarter = 'Quarter note') {
     $transportBefore = (Find-Control 'TransportStatus').Current.Name
     $dialBefore = Get-Dial
     $dialRectBefore = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
@@ -904,13 +936,12 @@ function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, 
     if ($guide.Left -lt $tempoBox.Left - 2 * $scale -or $guide.Right -gt $done.Right + 2 * $scale) {
         throw "${where}: the tempo guide is clipped sideways ($guide between $($tempoBox.Left) and $($done.Right))."
     }
-    # What it sits beside costs the panel's fields nothing: the box for the number of taps is whole above the footer. A panel is only
-    # as tall as the room under the dial's readout, and a line of its own under the note value took the lower half of this box out of
-    # view at 400x720 and at the first-use size of a hosted runner (the first version of the guide did).
-    if ($tapsWhole) {
-        if ($taps.IsEmpty -or $taps.Height -lt 40 * $scale -or $taps.Bottom -gt $done.Top + $one) {
-            throw "${where}: the box for the number of taps is not whole above Done ($taps, Done $done): the tempo guide took room from the fields of the panel."
-        }
+    # What it sits beside costs the panel's fields nothing: the box for the number of taps is whole above the footer, at every size (the
+    # panel scrolls when it does not fit, and a box that scrolls out of view is cut). A panel is only as tall as the room under the dial's
+    # readout, and a line of its own under the note value took the lower half of this box out of view at 400x720 and at the first-use
+    # size of a hosted runner (the first version of the guide did); 800x600 kept 29 of its 44 DIP in view (hosted, 100 %).
+    if ($taps.IsEmpty -or $taps.Height -lt 40 * $scale -or $taps.Bottom -gt $done.Top + $one) {
+        Add-Finding $where "the box for the number of taps is not whole above Done ($([Math]::Round($taps.Height / $scale, 1)) of its 44 DIP are inside the panel: $taps, Done $done): the panel scrolls, so the box is cut."
     }
     Test-NoApplyButtons $where
     # The project holds 120 BPM counted in quarter notes here, and 120 quarter notes a minute is where two markings meet.
@@ -1490,9 +1521,9 @@ $tempoGuideEvidence['firstUse'] = Test-TempoGuide 'Tempo guide at the first-use 
 foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 800
-    # At 800x600 the panel is only 536 DIP tall and the box for the number of taps is partly out of view with or without the guide
-    # (the panel scrolls), so that one size does not ask for it whole.
-    $tempoGuideEvidence["$($size[0])x$($size[1])"] = Test-TempoGuide "Tempo guide at $($size[0])x$($size[1])" "tempo-$($size[0])x$($size[1])" -tapsWhole ($size[0] -ne 800)
+    # The box for the number of taps is whole above Done in every one of these windows, 800x600 included: it was 29 of its 44 DIP
+    # there (hosted, 100 %) before the panel gave it its room, and a box that is cut is a box that cannot be read or reached.
+    $tempoGuideEvidence["$($size[0])x$($size[1])"] = Test-TempoGuide "Tempo guide at $($size[0])x$($size[1])" "tempo-$($size[0])x$($size[1])"
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
@@ -2603,10 +2634,15 @@ Wait-Settled 'QuickMeter'
   tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
+  initialFocus=$initialFocus;layoutFindings=@($script:findings);
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 # The report is written first, so that it says why. A caller that asked for the checks that need the hooks (-RequireUiTestHooks) does not
 # get a pass for a run in which one of them could not run (a machine with no audio output reports it as not run).
 if ($RequireUiTestHooks -and $tempoTypedAfterNudges -like 'not-run*') {
     throw "-RequireUiTestHooks: the check of a tempo typed after nudges did not run ($tempoTypedAfterNudges)."
+}
+# What the sweeping checks recorded (Add-Finding) fails the run, all of it at once.
+if ($script:findings.Count -gt 0) {
+    throw "The layout and focus checks found $($script:findings.Count) problem(s):`n$($script:findings -join "`n")"
 }
