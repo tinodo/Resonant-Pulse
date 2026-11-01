@@ -44,8 +44,8 @@ internal sealed class TempoNudges
     /// Completes when the loop that is running (or the last one that ran) has ended, and so has the commit of a tempo typed in the
     /// panel, if one is being applied: every tempo asked for before the moment this is read has been committed or dropped (a commit
     /// that fails ends the loop and drops what was asked for after it, and a page that is built again forgets what was waiting, see
-    /// <see cref="Forget"/>), and nothing older can be committed after it. It never fails. A new Start (a resume from Pause does not
-    /// wait), Tap to start and closing (for at most its four seconds) wait for it.
+    /// <see cref="Forget"/>), and nothing older can be committed after it. It never fails. A new Start (a resume from Pause or from a
+    /// fault does not wait), Tap to start and closing (for at most its four seconds) wait for it.
     /// </summary>
     internal Task Settled => Task.WhenAll(_loop, _typed);
 

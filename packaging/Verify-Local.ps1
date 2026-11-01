@@ -12,8 +12,8 @@ param(
     # checks that need them run: they hold the edit queue to make the order of edits certain, whatever the speed of the machine. A shipped
     # build has no hooks, and the verifier then reports those checks as not run. Never ship or install such a build.
     [switch]$UiTestHooks,
-    # How long the private desktop may run the verifier before it is stopped. 0 (the default) is 900 s, and 2400 s with -SilentAudio: that
-    # run plays and takes about 27 minutes on the development PC.
+    # How long the private desktop may run the verifier before it is stopped (not used with -Visible). 0 (the default) is 900 s, and
+    # 2400 s with -SilentAudio: that run plays and takes about 27 minutes on the development PC.
     [int]$TimeoutSeconds = 0,
     [switch]$InsidePrivateDesktop
 )
