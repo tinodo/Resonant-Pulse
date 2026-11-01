@@ -95,10 +95,16 @@ public sealed class LocalWorkspace
         finally { _writes.Release(); }
     }
 
-    public async Task SaveLibraryAsync(PulseDocument document)
+    /// <summary>
+    /// Saves a copy of the project to the library under a new name. <paramref name="fileChosen"/> is told the file just before it is
+    /// written, so that a write that is stopped by the window closing (or that does not stop) can name it.
+    /// </summary>
+    public async Task SaveLibraryAsync(PulseDocument document, CancellationToken cancellationToken = default, Action<string>? fileChosen = null)
     {
         Directory.CreateDirectory(LibraryPath);
-        await DocumentStore.SaveAsync(Path.Combine(LibraryPath, $"{Guid.NewGuid():N}.pulse"), document);
+        var file = Path.Combine(LibraryPath, $"{Guid.NewGuid():N}.pulse");
+        fileChosen?.Invoke(file);
+        await DocumentStore.SaveAsync(file, document, cancellationToken);
     }
 
     public async Task<LibraryReadResult> ListAsync()

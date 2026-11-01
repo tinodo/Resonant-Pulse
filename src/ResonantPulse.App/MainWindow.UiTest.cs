@@ -170,6 +170,43 @@ public sealed partial class MainWindow
         _uiTestCloseHold = TimeSpan.Zero;
     }
 
+    // Holds a write in its preparation, before it asks a question or opens a dialog (a plan that is being compiled, notes that are being
+    // saved): with RESONANT_PULSE_UITEST_DIR set, a file called "slow-preparation" in that folder, holding a number of seconds, makes every
+    // write that is prepared while the file is there wait that long, so that a driver can close the window, or look at the page, meanwhile.
+    partial void HoldPreparationForUiTest(ref Task? hold)
+    {
+        var folder = Environment.GetEnvironmentVariable("RESONANT_PULSE_UITEST_DIR");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        var flag = Path.Combine(folder, "slow-preparation");
+        if (!File.Exists(flag)) return;
+        var seconds = double.TryParse(File.ReadAllText(flag).Trim(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 5;
+        hold = Task.Delay(TimeSpan.FromSeconds(seconds));
+    }
+
+    // Stands in for the system's file dialog, which cannot open on a private desktop (COMException 0x80070578, "Invalid window
+    // handle") and which no driver can operate. With RESONANT_PULSE_UITEST_DIR set, a file called "picker-fails" in that folder makes
+    // every dialog fail the way the real one does there, "picker-cancels" makes every dialog end as if the person had cancelled it,
+    // and "save-dir" (holding the path of a folder) makes a save dialog answer with that folder plus the suggested file name. The
+    // files are looked at each time a dialog is asked for, so a driver can change its mind between two presses. With none of them the
+    // dialog is the real one.
+    partial void StandInForFileDialogForUiTest(bool saving, string suggestedFile, ref bool handled, ref string? path)
+    {
+        var folder = Environment.GetEnvironmentVariable("RESONANT_PULSE_UITEST_DIR");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        if (File.Exists(Path.Combine(folder, "picker-fails")))
+            throw new System.Runtime.InteropServices.COMException("Invalid window handle. (ui test stand-in)", unchecked((int)0x80070578));
+        if (File.Exists(Path.Combine(folder, "picker-cancels")))
+        {
+            handled = true;
+            return;
+        }
+        var saveDirectory = Path.Combine(folder, "save-dir");
+        if (!saving || !File.Exists(saveDirectory)) return;
+        handled = true;
+        path = Path.Combine(File.ReadAllText(saveDirectory).Trim(), suggestedFile);
+    }
+
     // Stands in for a larger Windows text size: with RESONANT_PULSE_UITEST_TEXTSCALE set (for example 2), every width that
     // follows the text size is worked out as if the text were that big. That is what decides whether a field fits its room or
     // gives way, which a private desktop cannot show by changing the real system setting (and must not). The hidden

@@ -202,13 +202,49 @@ inside the window and at least 10 DIP inside their card, at least as large as th
 150 by 40), not overlapping and in the order WAV, MIDI, tracks, and the hint to be whole, at least 150 by 14 DIP, under all three and to say what a ZIP
 holds; it then presses the command, requires the question to give the number of tracks, their length and their size (checked against numbers it works out
 on its own: 0:34 and 6.2 MiB for the first project, three tracks for a project with two lanes), its buttons to be at least 100 by 32 DIP (they are the
-system dialog's, which is 32 DIP high), the command to be off while the question is open and Cancel to close it with the command on again and nothing else changed. Each of those checks was shown to fail on a
+system dialog's, which is 32 DIP high), the command to be off while the question is open and Cancel to close it with the command on again, the keyboard focus on the command again (the check puts the focus on it before it presses it) and nothing else changed. Each of those checks was shown to fail on a
 build with that one thing broken (docs/DELIVERY.md summarises). Not established: the save dialog (it does not open on the private desktop of a
 developer machine, so no gate saves a file through it; runs of the real app with the dialog bypassed wrote archives that Python's `zipfile` and `wave`
 modules read), that any music software opens an archive (none has), how any track sounds (nobody has listened), archives that need ZIP64 and projects of
 more than 1,024 bars (not tried), whether the rendering makes the audio stutter on a slow machine when the metronome plays during an export, what a screen
 reader says, Windows text sizes above 100% on the real setting, the Contrast themes, and a musician's reading of the Dutch, German, French and Spanish
 sentences (docs/design/glossary.md lists the questions).
+
+Every file that the app writes for the person (Save, Save to library, Export WAV, Export MIDI, Export separate tracks, Export result (CSV), and
+the copy of the project that Open, New or a ready-made rhythm saves to the library before it replaces the project) is a write of one guard,
+`FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed (the copy of a replacement: once the replacement has the edit
+lock, before the new project is validated, and it goes on until the copy is saved), ends however the write goes, and has a cancellation token that the write passes to what
+writes the file (`DocumentStore`, `WaveExporter`, `MidiExporter`, `WaveStemExporter`, `TimingCsvExporter` and `LocalWorkspace.SaveLibraryAsync`).
+The recovery copy and the settings are not part of it: closing saves them by its own flush. When the window closes, every write that is going is
+cancelled and waited for, at most 4 seconds, after the wait for the save; a write that begins while the close waits (a replacement that was queued
+behind an edit) is cancelled as it begins and waited for too; a cancelled write removes its
+temporary file and a file that was already at the destination stays as it was. Conditions: a write that does not stop when its token is cancelled
+(a stalled disk; Core's WAV export is not cancelled once its commit, two file moves, has begun) is left behind when the window goes after the
+4 seconds, with a line in the log that names its destination, and a temporary file may stay beside it (it stayed in the real-window runs, where a
+delay that ignores the token stood in for a stalled disk). A close that is refused (the project could not be saved, so the window stays) leaves a
+write that is being written going, and voids one that has not yet asked its question or opened its dialog (the tracks export is compiling its
+plan, a MIDI export is checking the project, a save is gathering the notes being typed), so that no question or dialog is shown afterwards, and the error of that preparation (the file may not be exportable, the plan may not compile) is not shown either, since it would replace the notice that says why the window stayed (the log keeps it): that command is dropped without a message, as the
+tracks export was dropped before. (A save of the notes being typed that fails shows its own error, as it always did: it is not an error of the command.) Save to library and the backup of a replacement ask nothing, so a refused close does not drop them. A file dialog is
+not opened while a close is under way. Writes of different commands overlap as they always could; only the export of separate tracks is one at a
+time, and only it shows a notice while it writes (the others show none; what they took is in docs/DELIVERY.md).
+
+A file dialog that cannot be opened or fails (a `COMException` such as *Invalid window handle*, `0x80070578`, which Windows' own dialog throws on
+the private desktop of a developer machine) is reported as that in all five languages, with the cause and its HRESULT in the log, and the sentence
+also says that the edits remain in the window; it writes nothing and leaves the command usable, and a person who cancels the dialog gets no
+message. Before, a failure of the dialog that was a `COMException` (the only kind seen) was reported as a problem with the audio output, and any
+other exception by its type (a file, access or general problem); a `COMException` raised by the audio code still is an audio problem. After the
+tracks question's Cancel, after Saved and after an error the keyboard focus is on the tracks command again when it was on it at the press and the
+person has not moved it meanwhile (before, it was on the first ready-made rhythm of the page, where the system had moved it); Export WAV, Export
+MIDI, Save and Open stay on while they run and keep the focus by themselves (measured on the private desktop, not guaranteed by code).
+
+What holds what: `FileWritesTests`, `SavingNoticeTests`, `CommandFocusTests` and `FileDialogFailureTests` hold the decisions and the texts, and
+`LocalWorkspaceTests` the token and the file name of the library save; none of them holds the wiring in the window. The first-use gate holds the
+focus after the tracks question's Cancel only (it also runs on a hosted runner); everything else, including the focus after Saved and after an error, the close during a write, the refused close and the close during whose wait the preparation of a replacement ends, is held by runs of
+the real app on the private desktop on throwaway builds (a stand-in for the file dialog and a hold in the preparation of a write in UI-test builds,
+a delay inside every write in a copy of Core) that are evidence, not a gate (docs/DELIVERY.md). Not established: Windows' own file dialogs (the
+stand-in throws what the real one threw on the private desktop; no other failure of the real one was seen), a close while a system dialog is open,
+a write that never stops other than as stood in for, the focus with a screen reader and in a window that is the system's active window outside
+the hosted runner, and a musician's reading of the new sentence in German, French and Spanish (docs/design/glossary.md).
 
 Live edits prepare immutable replacement revisions off the audio callback.
 Sound and beat-strength changes switch at the next audio quantum on the same

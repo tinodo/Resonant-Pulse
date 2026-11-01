@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using ResonantPulse.App.Localization;
 using ResonantPulse.App.Storage;
 using ResonantPulse.Core;
@@ -14,8 +15,20 @@ public sealed partial class MainWindow
     private TextBlock? _libraryNoMatch;
     private UIElement? _libraryEmpty;
 
-    /// <summary>The export of separate tracks that is going, if any: while it is, its command is off, and closing the window stops it.</summary>
-    private readonly StemExportRun _stemExport = new();
+    /// <summary>
+    /// The writes of files that are going (Save, Save to library, Export WAV, Export MIDI, the export of separate tracks, the timing CSV).
+    /// Closing the window stops them and waits for them (see <see cref="CloseAfterSavingAsync"/>), so that, when a write stops, no temporary
+    /// file stays beside its destination. A command that is dropped because a close was refused shows nothing of its preparation, not even an
+    /// error (it would replace the notice that says why the window stayed): the log keeps the error.
+    /// </summary>
+    private readonly FileWrites _fileWrites = new()
+    {
+        DroppedError = error => Diagnostics.Write(
+            "A command was dropped because the window was being closed; the preparation that it was waiting for ended with an error, which is not shown", error)
+    };
+
+    /// <summary>The name of the export of separate tracks among the writes: only one can go at a time, and its command is off while it does.</summary>
+    private const string TracksWrite = "tracks";
 
     /// <summary>The command of the Library page that is on screen (the page is built again each time it is opened).</summary>
     private Button? _stemsButton;
@@ -48,9 +61,17 @@ public sealed partial class MainWindow
         };
         var save = ActionButton("SaveLibrary", "SaveToLibrary", async () =>
         {
-            // Notes typed or on their way belong to the project, so they are in the saved copy.
-            if (!await FlushStageNotesAsync()) return;
-            await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
+            using (var write = _fileWrites.Begin())
+            {
+                await HoldPreparationAsync();
+                // Notes typed or on their way belong to the project, so they are in the saved copy.
+                if (!await FlushStageNotesAsync()) return;
+                // No question or dialog follows, so a close that was refused meanwhile does not void the person's command: it is written.
+                // The write is told which file it is as soon as the library has named it.
+                await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), write.Token, write.BeginWriting);
+            }
+            // A write that did not stop within the limit of a close ends after the window has gone: nobody is left to tell or to refresh.
+            if (IsWindowGoing) return;
             ShowNotice("Saved");
             await RefreshLibraryAsync();
         }, "\uE74E");
@@ -73,7 +94,7 @@ public sealed partial class MainWindow
         // hint is the line under the commands, as the timing check's is. It is off while an export of tracks is going (this page may
         // have been built again meanwhile), so a second one cannot begin.
         var stems = ActionButton("ExportStems", "ExportWavStems", ExportStemsAsync, "\uE896");
-        stems.IsEnabled = !_stemExport.IsRunning;
+        stems.IsEnabled = !_fileWrites.IsGoing(TracksWrite);
         _stemsButton = stems;
         var stemsHint = Note("StemExportHint");
         Identify(stemsHint, "StemExportHint", stemsHint.Text);
@@ -185,19 +206,61 @@ public sealed partial class MainWindow
             _libraryNoMatch.Visibility = _libraryScanned && !empty && _libraryList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// Every file dialog (where to save a file, which file to open) goes through here, so that all of them behave alike. None is shown
+    /// while another dialog or question is open, or while the window is being closed: it ends with no file, as if it had been cancelled
+    /// (a question is held back in the same cases). The flag that says a dialog is open
+    /// is raised for the whole attempt and put down again however it ends. A person who cancels the dialog is not an error: no file,
+    /// no message. A dialog that cannot be opened, or fails, is reported as that and never as an audio problem (see
+    /// <see cref="FileDialogFailure"/>): the cause, with its HRESULT, goes to the log, and since nothing was read or written the
+    /// command can be used again at once.
+    /// </summary>
+    private async Task<string?> ShowFileDialogAsync(bool saving, string suggestedFile, Func<Task<string?>> show)
+    {
+        if (_isDialogOpen || _closeFlushing || _isClosed) return null;
+        _isDialogOpen = true;
+        try
+        {
+            string? standIn = null;
+            var handled = false;
+            StandInForFileDialogForUiTest(saving, suggestedFile, ref handled, ref standIn);
+            return handled ? standIn : await show();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Diagnostics.Write(saving ? "The window for choosing where to save a file could not be used" : "The window for choosing a file to open could not be used", error);
+            throw FileDialogFailure.ForPage(error);
+        }
+        finally { _isDialogOpen = false; }
+    }
+
+    // Lets the local verification build stand in for the file dialog (it fails, is cancelled, or answers with a path), so that the real
+    // window can be driven where the system's dialog cannot open (MainWindow.UiTest.cs); shipped builds have no body.
+    partial void StandInForFileDialogForUiTest(bool saving, string suggestedFile, ref bool handled, ref string? path);
+
+    /// <summary>
+    /// Where a write is prepared (before it asks a question or opens a dialog) the local verification build can hold it, so that a driver
+    /// can close the window, or look at the page, meanwhile (MainWindow.UiTest.cs); shipped builds return at once.
+    /// </summary>
+    private Task HoldPreparationAsync()
+    {
+        Task? hold = null;
+        HoldPreparationForUiTest(ref hold);
+        return hold ?? Task.CompletedTask;
+    }
+
+    partial void HoldPreparationForUiTest(ref Task? hold);
+
     private async Task<string?> PickSavePathAsync(string extension, string description, string? suggestedName = null)
     {
-        if (_isDialogOpen) return null;
-        var picker = new FileSavePicker
+        var fileName = SanitizeFileName(suggestedName ?? _document.Name);
+        return await ShowFileDialogAsync(saving: true, fileName + extension, async () =>
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = SanitizeFileName(suggestedName ?? _document.Name)
-        };
-        picker.FileTypeChoices.Add(description, [extension]);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-        _isDialogOpen = true;
-        try { return (await picker.PickSaveFileAsync())?.Path; }
-        finally { _isDialogOpen = false; }
+            var picker = new FileSavePicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary, SuggestedFileName = fileName };
+            picker.FileTypeChoices.Add(description, [extension]);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            return (await picker.PickSaveFileAsync())?.Path;
+        });
     }
 
     private static string SanitizeFileName(string value)
@@ -209,26 +272,33 @@ public sealed partial class MainWindow
 
     private async Task SaveProjectAsync()
     {
-        // The notes being typed belong to the project, so they are in the file.
-        if (!await FlushStageNotesAsync()) return;
+        using var write = _fileWrites.Begin();
+        await HoldPreparationAsync();
+        // The notes being typed belong to the project, so they are in the file. A close that was refused while they were being saved: the person
+        // was closing the window, so the dialog is not opened now, and an error of this preparation is only logged (a notes save that failed has
+        // shown its own error).
+        var (wanted, notesSaved) = await write.PrepareAsync(FlushStageNotesAsync);
+        if (!wanted || !notesSaved) return;
         var path = await PickSavePathAsync(".pulse", Text.Get("Save"));
         if (path is null) return;
-        await DocumentStore.SaveAsync(path, LocalWorkspace.Clone(_document));
-        ShowNotice("Saved");
+        write.Token.ThrowIfCancellationRequested();
+        write.BeginWriting(path);
+        await DocumentStore.SaveAsync(path, LocalWorkspace.Clone(_document), write.Token);
+        ShowSavedNotice();
     }
 
     private async Task OpenProjectAsync()
     {
         if (_isDialogOpen) return;
         if (_isLocked) { ShowNotice("Locked"); return; }
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        picker.FileTypeFilter.Add(".pulse");
-        picker.FileTypeFilter.Add(".json");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-        _isDialogOpen = true;
-        string? path;
-        try { path = (await picker.PickSingleFileAsync())?.Path; }
-        finally { _isDialogOpen = false; }
+        var path = await ShowFileDialogAsync(saving: false, "", async () =>
+        {
+            var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+            picker.FileTypeFilter.Add(".pulse");
+            picker.FileTypeFilter.Add(".json");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            return (await picker.PickSingleFileAsync())?.Path;
+        });
         if (path is not null) await LoadProjectAsync(path);
     }
 
@@ -264,12 +334,20 @@ public sealed partial class MainWindow
             // replacement and recovery in the same transaction as normal edits
             // and undo, so an older edit cannot publish after this replacement.
             if (_isLocked) { ShowNotice("Locked"); return; }
-            Task? hold = null;
-            HoldReplacementForUiTest(ref hold);
-            if (hold is not null) await hold;
+            // The project that goes is saved to the library first. That is a write of a file like the others, and it begins before the new
+            // project is validated (FileWrites.RunAsync): a close that comes meanwhile must see it, or the copy would begin to be saved after
+            // the close had counted the writes that are going and nothing would cancel it. Closing the window stops it (the replacement then
+            // does not happen; nothing was changed before this point) and waits for it. It is under the edit lock, which closing waits for
+            // first, so a close that comes now is refused after 4 seconds and the second attempt goes.
             var replacement = LocalWorkspace.Clone(document);
-            await ValidateAsync(replacement);
-            await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document));
+            await _fileWrites.RunAsync(async () =>
+            {
+                await HoldPreparationAsync();
+                Task? hold = null;
+                HoldReplacementForUiTest(ref hold);
+                if (hold is not null) await hold;
+                await ValidateAsync(replacement);
+            }, backup => _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), backup.Token, backup.BeginWriting));
             SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();
@@ -287,68 +365,104 @@ public sealed partial class MainWindow
         }, _ => { if (!_isClosed) BuildPage(); });
     }
 
+    /// <summary>
+    /// Exports the project as a WAV file (with its manifest) or a MIDI file. The MIDI export asks first (what the file can and cannot
+    /// hold), and the question comes after the file has been looked at on a background thread. Closing the window stops a write that is
+    /// going and waits for it (<see cref="FileWrites"/>), so that, when the write stops, no temporary file stays beside the destination.
+    /// </summary>
     private async Task ExportAsync(bool midi)
     {
         var snapshot = LocalWorkspace.Clone(_document);
         // One length for the preflight and the export: it is the length the box shows, applied the moment it was committed.
         var bars = _preferences.ExportBars;
+        using var write = _fileWrites.Begin();
+        await HoldPreparationAsync();
         if (midi)
         {
-            var report = await Task.Run(() => MidiExporter.Preflight(snapshot, bars));
-            if (!report.CanExport)
-                throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", report.Errors));
+            // The verdict of the check (the file cannot be exported) is part of the preparation: it is an error that is shown only while the
+            // command is still wanted. A close that was refused while the file was being looked at: the person was closing the window, so
+            // neither the question nor an error is shown now (the error is kept in the log).
+            var (wanted, report) = await write.PrepareAsync(async () =>
+            {
+                var found = await Task.Run(() => MidiExporter.Preflight(snapshot, bars), write.Token);
+                if (!found.CanExport)
+                    throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", found.Errors));
+                return found;
+            });
+            if (!wanted) return;
             if (!await ConfirmAsync(Text.Format("MidiPreflight", report.PulsesPerQuarter, report.MaximumTimingErrorSeconds * 1000)))
                 return;
         }
+        if (!write.StillWanted) return;
         var path = await PickSavePathAsync(midi ? ".mid" : ".wav", Text.Get(midi ? "ExportMidi" : "ExportWave"));
         if (path is null) return;
+        write.Token.ThrowIfCancellationRequested();
+        // The dialog was the last thing to ask: the person has chosen the file, so from here a refused close leaves the export alone (a WAV
+        // is compiled after this point, a MIDI file is written at once).
+        write.BeginWriting(path);
         try
         {
             if (midi)
-                await Task.Run(() => MidiExporter.ExportAsync(path, snapshot, bars));
+                await Task.Run(() => MidiExporter.ExportAsync(path, snapshot, bars, write.Token), write.Token);
             else
             {
-                var plan = await Task.Run(() => ScheduleCompiler.Compile(snapshot, 48000, bars, true));
-                await WaveExporter.ExportAsync(path, plan);
+                var plan = await Task.Run(() => ScheduleCompiler.Compile(snapshot, 48000, bars, true), write.Token);
+                await WaveExporter.ExportAsync(path, plan, write.Token);
                 // Core writes the exact schedule/meter/seed/gain companion
                 // manifest atomically. Project exchange remains a separate Save.
             }
-            ShowNotice("Saved");
+            ShowSavedNotice();
         }
-        finally { RefreshSnapshot(); }
+        finally { if (!IsWindowGoing) RefreshSnapshot(); }
     }
 
     /// <summary>
     /// Saves the project as separate tracks in one ZIP. The question comes first, because it says what the tracks take and cancelling
     /// must cost nothing: the plan is compiled on a background thread from a copy of the project as it is now (so what the question
     /// describes is what is saved, whatever is edited meanwhile), the question is asked, and only then is a file chosen and written.
-    /// From the press until the end the command is off. Closing the window stops the export and waits for it (see
-    /// <see cref="CloseAfterSavingAsync"/>, which waits at most 4 seconds for it, after the wait for the save), so that normally no
-    /// temporary archive stays beside the destination.
+    /// From the press until the end the command is off. Closing the window stops the export and waits for it, like every other write of
+    /// a file (<see cref="FileWrites"/>; <see cref="CloseAfterSavingAsync"/> waits at most 4 seconds for them, after the wait for the
+    /// save), so that normally no temporary archive stays beside the destination.
     /// </summary>
     private async Task ExportStemsAsync()
     {
-        if (!_stemExport.TryBegin(out var token)) return;
-        RefreshStemsButton();
+        if (_fileWrites.TryBeginExclusive(TracksWrite) is not { } write) return;
+        // Pressed with the keyboard, the command has the focus. It goes off now, so the system moves the focus on to the next control, and
+        // the question gives it back to that control when it closes: the command takes the focus back when the run has ended, unless the
+        // person has moved it meanwhile (see CommandFocus). Everything that can go wrong is inside the try, so the write always ends.
+        var command = _stemsButton;
+        var hadFocus = false;
+        var focusState = FocusState.Programmatic;
+        object? left = null;
         try
         {
+            if (command is not null)
+            {
+                hadFocus = ReferenceEquals(FocusedElement(), command);
+                // Focus(Unfocused) is not allowed: a command that has the focus but says nothing about how is given it as a program would.
+                if (command.FocusState != FocusState.Unfocused) focusState = command.FocusState;
+            }
+            RefreshStemsButton();
+            left = FocusedElement();
             var snapshot = LocalWorkspace.Clone(_document);
             var bars = _preferences.ExportBars;
             var names = snapshot.Lanes.Select(lane => lane.Name).ToArray();
-            var prepared = await Task.Run(() =>
+            await HoldPreparationAsync();
+            var (wanted, prepared) = await write.PrepareAsync(() => Task.Run(() =>
             {
                 var plan = ScheduleCompiler.Compile(snapshot, 48000, bars, true);
                 return (Plan: plan, Summary: StemExport.Summarize(plan));
-            }, token);
-            // A close that was refused while the plan was being compiled: the person was closing the window, so the question is not asked now.
-            if (_stemExport.PreparationInvalidated) return;
+            }, write.Token));
+            // A close that was refused while the plan was being compiled: the person was closing the window, so neither the question nor an
+            // error (the plan may not compile) is shown now.
+            if (!wanted) return;
             if (!await ConfirmAsync(StemExport.ConfirmText(prepared.Summary))) return;
             var path = await PickSavePathAsync(".zip", Text.Get("ExportStems"), StemExport.SuggestedFileName(snapshot.Name));
             if (path is null) return;
-            token.ThrowIfCancellationRequested();
-            _stemExport.BeginWriting();
+            write.Token.ThrowIfCancellationRequested();
+            write.BeginWriting(path);
             ShowSavingNotice();
-            try { await Task.Run(() => WaveStemExporter.ExportAsync(path, prepared.Plan, names, token), token); }
+            try { await Task.Run(() => WaveStemExporter.ExportAsync(path, prepared.Plan, names, write.Token), write.Token); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 // The file that was there is as it was (the export is atomic); the person is told so, and the cause is in the log. When the
@@ -356,22 +470,28 @@ public sealed partial class MainWindow
                 Diagnostics.Write("Saving the tracks", error);
                 throw new UserMessageException(StemExport.NotSavedText(error));
             }
-            ShowNotice("Saved");
+            ShowSavedNotice();
         }
         finally
         {
-            _stemExport.End();
-            if (!_isClosed)
+            write.End();
+            if (!IsWindowGoing)
             {
                 RefreshStemsButton();
+                if (command is not null && CommandFocus.TakesFocusBack(hadFocus, ReferenceEquals(command, _stemsButton) && command.IsEnabled,
+                        ReferenceEquals(FocusedElement(), left)))
+                    command.Focus(focusState);
                 RefreshSnapshot();
             }
         }
     }
 
+    /// <summary>The element that has the keyboard focus in this window, if any.</summary>
+    private object? FocusedElement() => FocusManager.GetFocusedElement(Root.XamlRoot);
+
     private void RefreshStemsButton()
     {
-        if (_stemsButton is not null) _stemsButton.IsEnabled = !_stemExport.IsRunning;
+        if (_stemsButton is not null) _stemsButton.IsEnabled = !_fileWrites.IsGoing(TracksWrite);
     }
 
     /// <summary>A notice that stays until something replaces it (it says what is going on, so it does not fade like "Saved").</summary>
@@ -391,7 +511,16 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShowSavingNotice()
     {
-        if (StemExportRun.SavingNoticeMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational))
+        if (SavingNotice.MayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational))
             ShowOngoingNotice("StemExportSaving");
+    }
+
+    /// <summary>
+    /// The Saved notice of a write that has ended. A write that did not stop within the limit of a close ends, if it ends at all, after the
+    /// window has gone: nobody is left to tell.
+    /// </summary>
+    private void ShowSavedNotice()
+    {
+        if (!IsWindowGoing) ShowNotice("Saved");
     }
 }

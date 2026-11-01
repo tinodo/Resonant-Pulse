@@ -154,6 +154,41 @@ public sealed class LocalWorkspaceTests
     }
 
     [TestMethod]
+    public async Task SavingToTheLibraryStopsWhenItsTokenIsCancelledAndNamesTheFileItWrites()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        var workspace = new LocalWorkspace(root);
+        try
+        {
+            using var source = new CancellationTokenSource();
+            await source.CancelAsync();
+            OperationCanceledException? stopped = null;
+            try { await workspace.SaveLibraryAsync(new PulseDocument { Name = "Cancelled" }, source.Token); }
+            catch (OperationCanceledException exception) { stopped = exception; }
+            Assert.IsNotNull(stopped, "A save whose token was cancelled went on to the end.");
+            Assert.AreEqual(0, Directory.GetFiles(workspace.LibraryPath).Length, "A file was left in the library folder.");
+
+            // The write is told which file it is before the file is written, so that a close that cannot stop it can name it in the log:
+            // the callback looks whether the file is there at the moment it is told.
+            string? chosen = null;
+            bool? existedWhenNamed = null;
+            await workspace.SaveLibraryAsync(new PulseDocument { Name = "Kept" }, fileChosen: file =>
+            {
+                chosen = file;
+                existedWhenNamed = File.Exists(file);
+            });
+            Assert.IsNotNull(chosen, "The file was not named.");
+            Assert.AreEqual(false, existedWhenNamed, "The file was named after it had been written: a write that does not stop could not be named while it wrote.");
+            Assert.AreEqual(workspace.LibraryPath, Path.GetDirectoryName(chosen));
+            Assert.AreEqual(".pulse", Path.GetExtension(chosen));
+            Assert.IsTrue(File.Exists(chosen), "The file that was named is the one that was written.");
+            Assert.AreEqual(1, Directory.GetFiles(workspace.LibraryPath, "*.pulse").Length);
+            Assert.AreEqual(0, Directory.GetFiles(workspace.LibraryPath, "*.tmp").Length);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public async Task MissingFirstLaunchLibraryIsEmptyRatherThanAnError()
     {
         var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
