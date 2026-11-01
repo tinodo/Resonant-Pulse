@@ -44,7 +44,8 @@ internal sealed class TempoNudges
     /// Completes when the loop that is running (or the last one that ran) has ended, and so has the commit of a tempo typed in the
     /// panel, if one is being applied: every tempo asked for before the moment this is read has been committed or dropped (a commit
     /// that fails ends the loop and drops what was asked for after it, and a page that is built again forgets what was waiting, see
-    /// <see cref="Forget"/>), and nothing older can be committed after it. It never fails. Closing, Start and Tap to start wait for it.
+    /// <see cref="Forget"/>), and nothing older can be committed after it. It never fails. A new Start (a resume from Pause does not
+    /// wait), Tap to start and closing (for at most its four seconds) wait for it.
     /// </summary>
     internal Task Settled => Task.WhenAll(_loop, _typed);
 
@@ -80,8 +81,9 @@ internal sealed class TempoNudges
     }
 
     /// <summary>
-    /// Runs the commit of a tempo that was typed (Done in the Tempo panel) once the loop that is running has ended, so that it is
-    /// committed after the nudges that were asked for before it, and not between two of the loop's commits. It is part of
+    /// Runs the commit of a tempo that was typed (Done in the Tempo panel) once the loop that is running has ended, and the typed
+    /// tempos that were pressed before it, so that it is committed after the nudges that were asked for before it, and not between two
+    /// of the loop's commits. It is part of
     /// <see cref="Settled"/> from the moment it is called until it has ended, however it ends; what it throws goes to the caller.
     /// Called with the edit queue not held (the loop needs it to finish).
     /// </summary>
