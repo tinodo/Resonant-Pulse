@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using ResonantPulse.App.Localization;
 using ResonantPulse.App.Storage;
 using ResonantPulse.Core;
@@ -357,7 +358,14 @@ public sealed partial class MainWindow
     private async Task ExportStemsAsync()
     {
         if (!_stemExport.TryBegin(out var token)) return;
+        // Pressed with the keyboard, the command has the focus. It goes off now, so the system moves the focus on to the next control, and
+        // the question gives it back to that control when it closes: the command takes the focus back when the run has ended, unless the
+        // person has moved it meanwhile (see CommandFocus).
+        var command = _stemsButton;
+        var hadFocus = command is not null && ReferenceEquals(FocusedElement(), command);
+        var focusState = command?.FocusState ?? FocusState.Unfocused;
         RefreshStemsButton();
+        var left = FocusedElement();
         try
         {
             var snapshot = LocalWorkspace.Clone(_document);
@@ -392,10 +400,16 @@ public sealed partial class MainWindow
             if (!_isClosed)
             {
                 RefreshStemsButton();
+                if (command is not null && CommandFocus.TakesFocusBack(hadFocus, ReferenceEquals(command, _stemsButton) && command.IsEnabled,
+                        ReferenceEquals(FocusedElement(), left)))
+                    command.Focus(focusState);
                 RefreshSnapshot();
             }
         }
     }
+
+    /// <summary>The element that has the keyboard focus in this window, if any.</summary>
+    private object? FocusedElement() => FocusManager.GetFocusedElement(Root.XamlRoot);
 
     private void RefreshStemsButton()
     {

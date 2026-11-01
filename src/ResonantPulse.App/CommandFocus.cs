@@ -9,8 +9,10 @@ namespace ResonantPulse.App;
 internal static class CommandFocus
 {
     /// <summary>
-    /// Whether the command takes the focus back when it is on again. Not decided yet: the focus stays where the system left it, as it did
-    /// before this was written down.
+    /// Whether the command takes the focus back when it is on again: it had the focus when it was pressed, it can have it now (it is the
+    /// command of the page that is on screen, and it is on), and the focus is still where the system left it when the command went off.
+    /// A focus that is anywhere else is one that the person moved (Tab, a click, a screen reader): it is theirs and is not taken from them.
     /// </summary>
-    internal static bool TakesFocusBack(bool hadFocusAtPress, bool commandCanTakeIt, bool focusIsWhereTheSystemLeftIt) => false;
+    internal static bool TakesFocusBack(bool hadFocusAtPress, bool commandCanTakeIt, bool focusIsWhereTheSystemLeftIt) =>
+        hadFocusAtPress && commandCanTakeIt && focusIsWhereTheSystemLeftIt;
 }
