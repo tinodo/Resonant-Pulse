@@ -536,6 +536,7 @@ public sealed class TempoNudgesTests
         rig.Nudges.Request(121);
         await rig.StartedAsync(1);
         var done = rig.DoneAsync(90);
+        Assert.AreEqual(1, rig.Asked, "Done waits for the loop even though the commit that the loop is at will fail");
 
         rig.Fail(new IOException("The project cannot be validated."));
         await rig.StartedAsync(2);

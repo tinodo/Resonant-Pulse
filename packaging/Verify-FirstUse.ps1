@@ -10,13 +10,17 @@ param(
     [switch]$Keyboard,
     [switch]$NoAudio,
     [switch]$NoScreenshots,
-    [switch]$NoKeyboard
+    [switch]$NoKeyboard,
+    # The caller (Verify-Local.ps1 -UiTestHooks) asked for the checks that need the UI-test hooks of a -p:UiTest=true build: if one of them
+    # cannot run (no hooks, no audio, no output), the run fails instead of reporting it as not run.
+    [switch]$RequireUiTestHooks
 )
 $ErrorActionPreference = 'Stop'
 $onCi = $env:GITHUB_ACTIONS -eq 'true'
 $playAudio = (-not $NoAudio) -and ($RunAudio -or $onCi)
 $takeScreenshots = (-not $NoScreenshots) -and ($Screenshots -or $onCi)
 $sendKeys = (-not $NoKeyboard) -and ($Keyboard -or $onCi)
+if ($RequireUiTestHooks -and -not $playAudio) { throw '-RequireUiTestHooks needs the audio checks (-RunAudio): the checks that use the hooks play, at an inaudible gain.' }
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type @'
@@ -1906,11 +1910,16 @@ function Test-TapStartWithOutput {
 # machine, so this check does not wait for a slow one: a build with the UI-test hooks (-p:UiTest=true, started by Verify-Local.ps1
 # -UiTestHooks) holds the edit queue, the nudges and Done are made, and only then is the queue let go, so the commits run in the order they
 # were asked for however slow UI Automation is. A shipped build has no hooks and a hosted runner no output, and the report then says that
-# this was not run. The check plays, because the audio is part of what must end on the typed tempo, and is repeated with a changed note
-# value, which Done commits as one change with the tempo.
+# this was not run (a caller that asked for the hooks, -RequireUiTestHooks, gets a failure instead). The first round plays, because the
+# audio is part of what must end on the typed tempo; the second is made with the transport stopped, with a changed note value, which Done
+# commits as one change with the tempo (so the dial and the project, not the audio, are what it checks).
 function Test-TempoTypedAfterNudges {
     $script:tempoNudgeDone = [System.Collections.Generic.List[string]]::new()
-    if ($null -eq (Find-Optional 'UiTestHoldEdits') -or $null -eq (Find-Optional 'UiTestReleaseEdits')) {
+    if ($RequireUiTestHooks) {
+        # Asked for: the hooks have to be there, and are waited for like any control, not reported as not run.
+        $null = Find-Control 'UiTestHoldEdits'
+        $null = Find-Control 'UiTestReleaseEdits'
+    } elseif ($null -eq (Find-Optional 'UiTestHoldEdits') -or $null -eq (Find-Optional 'UiTestReleaseEdits')) {
         $script:tempoNudgeDone.Add('not-run-no-ui-test-hooks')
         return
     }
@@ -2589,3 +2598,8 @@ Wait-Settled 'QuickMeter'
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
+# The report is written first, so that it says why. A caller that asked for the checks that need the hooks (-RequireUiTestHooks) does not
+# get a pass for a run in which one of them could not run (a machine with no audio output reports it as not run).
+if ($RequireUiTestHooks -and $tempoTypedAfterNudges -like 'not-run*') {
+    throw "-RequireUiTestHooks: the check of a tempo typed after nudges did not run ($tempoTypedAfterNudges)."
+}
