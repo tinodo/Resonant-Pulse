@@ -185,19 +185,47 @@ public sealed partial class MainWindow
             _libraryNoMatch.Visibility = _libraryScanned && !empty && _libraryList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task<string?> PickSavePathAsync(string extension, string description, string? suggestedName = null)
+    /// <summary>
+    /// Every file dialog (where to save a file, which file to open) goes through here, so that all of them behave alike. None is shown
+    /// while another dialog or question is open: it ends with no file, as if it had been cancelled. The flag that says a dialog is open
+    /// is raised for the whole attempt and put down again however it ends. A person who cancels the dialog is not an error: no file,
+    /// no message. A dialog that cannot be opened, or fails, is reported as that and never as an audio problem (see
+    /// <see cref="FileDialogFailure"/>): the cause, with its HRESULT, goes to the log, and since nothing was read or written the
+    /// command can be used again at once.
+    /// </summary>
+    private async Task<string?> ShowFileDialogAsync(bool saving, string suggestedFile, Func<Task<string?>> show)
     {
         if (_isDialogOpen) return null;
-        var picker = new FileSavePicker
-        {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = SanitizeFileName(suggestedName ?? _document.Name)
-        };
-        picker.FileTypeChoices.Add(description, [extension]);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
         _isDialogOpen = true;
-        try { return (await picker.PickSaveFileAsync())?.Path; }
+        try
+        {
+            string? standIn = null;
+            var handled = false;
+            StandInForFileDialogForUiTest(saving, suggestedFile, ref handled, ref standIn);
+            return handled ? standIn : await show();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Diagnostics.Write(saving ? "The window for choosing where to save a file could not be used" : "The window for choosing a file to open could not be used", error);
+            throw FileDialogFailure.ForPage(error);
+        }
         finally { _isDialogOpen = false; }
+    }
+
+    // Lets the local verification build stand in for the file dialog (it fails, is cancelled, or answers with a path), so that the real
+    // window can be driven where the system's dialog cannot open (MainWindow.UiTest.cs); shipped builds have no body.
+    partial void StandInForFileDialogForUiTest(bool saving, string suggestedFile, ref bool handled, ref string? path);
+
+    private async Task<string?> PickSavePathAsync(string extension, string description, string? suggestedName = null)
+    {
+        var fileName = SanitizeFileName(suggestedName ?? _document.Name);
+        return await ShowFileDialogAsync(saving: true, fileName + extension, async () =>
+        {
+            var picker = new FileSavePicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary, SuggestedFileName = fileName };
+            picker.FileTypeChoices.Add(description, [extension]);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            return (await picker.PickSaveFileAsync())?.Path;
+        });
     }
 
     private static string SanitizeFileName(string value)
@@ -221,14 +249,14 @@ public sealed partial class MainWindow
     {
         if (_isDialogOpen) return;
         if (_isLocked) { ShowNotice("Locked"); return; }
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        picker.FileTypeFilter.Add(".pulse");
-        picker.FileTypeFilter.Add(".json");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-        _isDialogOpen = true;
-        string? path;
-        try { path = (await picker.PickSingleFileAsync())?.Path; }
-        finally { _isDialogOpen = false; }
+        var path = await ShowFileDialogAsync(saving: false, "", async () =>
+        {
+            var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+            picker.FileTypeFilter.Add(".pulse");
+            picker.FileTypeFilter.Add(".json");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            return (await picker.PickSingleFileAsync())?.Path;
+        });
         if (path is not null) await LoadProjectAsync(path);
     }
 
