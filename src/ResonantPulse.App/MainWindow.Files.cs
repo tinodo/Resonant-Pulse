@@ -17,8 +17,8 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The writes of files that are going (Save, Save to library, Export WAV, Export MIDI, the export of separate tracks, the timing CSV).
-    /// Closing the window stops them and waits for them (see <see cref="CloseAfterSavingAsync"/>), so that no temporary file stays beside a
-    /// destination.
+    /// Closing the window stops them and waits for them (see <see cref="CloseAfterSavingAsync"/>), so that, when a write stops, no temporary
+    /// file stays beside its destination.
     /// </summary>
     private readonly FileWrites _fileWrites = new();
 
@@ -358,7 +358,7 @@ public sealed partial class MainWindow
     /// <summary>
     /// Exports the project as a WAV file (with its manifest) or a MIDI file. The MIDI export asks first (what the file can and cannot
     /// hold), and the question comes after the file has been looked at on a background thread. Closing the window stops a write that is
-    /// going and waits for it (<see cref="FileWrites"/>), so that no temporary file stays beside the destination.
+    /// going and waits for it (<see cref="FileWrites"/>), so that, when the write stops, no temporary file stays beside the destination.
     /// </summary>
     private async Task ExportAsync(bool midi)
     {

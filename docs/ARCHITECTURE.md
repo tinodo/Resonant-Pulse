@@ -55,10 +55,11 @@ sizes and recursive setlists before scheduling. Write user files atomically and
 preserve the previous target on cancellation/failure. Every write that a person
 asks for has a cancellation token that closing the window cancels; the window
 waits for the writes to stop (4 seconds at most, after its wait for the save),
-so that no temporary file is left beside a destination, and names in the log a
-write that has not stopped by then. (A close that is refused, because the
-project could not be saved, leaves a write that is going alone; Core's WAV
-export is not cancelled once its commit, two file moves, has begun.)
+so that, when a write stops, no temporary file is left beside its destination,
+and names in the log a write that has not stopped by then. (A close that is
+refused, because the project could not be saved, leaves a write that is going
+alone; Core's WAV export is not cancelled once its commit, two file moves, has
+begun.)
 Do not deserialize runtime types from user-controlled metadata.
 
 The product avoids an account/cloud dependency for musical functionality.

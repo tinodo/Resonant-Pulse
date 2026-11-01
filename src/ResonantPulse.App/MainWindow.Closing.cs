@@ -67,12 +67,12 @@ public sealed partial class MainWindow
             timedOut = finished != flush;
             saved = !timedOut && await flush;
             // Every write of a file that is going (Save, Save to library, Export WAV, Export MIDI, the tracks, the timing CSV) is stopped and
-            // waited for (at most the same limit again, after the one for the save), so that no temporary file is left beside its
-            // destination. Only when the window will go: a close that is refused leaves a write that is being written going. One that waits
-            // at its question was answered No by BlockEditing above, and one that is still being prepared (a plan is compiled) is told that its
-            // preparation is void (FileWrites.StopForCloseAsync): the page looks at that before it asks, so after the preparation it ends
-            // without a question. If a write has not stopped when the limit passes the window goes anyway, and its temporary file may stay
-            // (said in the log, with the destinations).
+            // waited for (at most the same limit again, after the one for the save), so that, when a write stops, no temporary file is left
+            // beside its destination. Only when the window will go: a close that is refused leaves a write that is being written going.
+            // One that waits at its question was answered No by BlockEditing above, and one that is still being prepared (a plan is compiled) is
+            // told that its preparation is void (FileWrites.StopForCloseAsync): the page looks at that before it asks, so after the preparation
+            // it ends without a question. If a write has not stopped when the limit passes the window goes anyway, and its temporary file may
+            // stay (said in the log, with the destinations).
             var windowWillGo = saved || _closeAttemptFailed;
             if (!await _fileWrites.StopForCloseAsync(windowWillGo, CloseSaveLimit) && windowWillGo)
             {
