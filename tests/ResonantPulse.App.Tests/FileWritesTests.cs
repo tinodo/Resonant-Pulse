@@ -12,7 +12,7 @@ public sealed class FileWritesTests
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
     private static FileWrite Begin(FileWrites writes, string? exclusiveName = null) =>
-        writes.Begin(exclusiveName) ?? throw new AssertFailedException("The write was refused.");
+        exclusiveName is null ? writes.Begin() : writes.TryBeginExclusive(exclusiveName) ?? throw new AssertFailedException("The write was refused.");
 
     [TestMethod]
     public void AWriteIsGoingFromItsBeginUntilItsEnd()
@@ -54,13 +54,13 @@ public sealed class FileWritesTests
         var tracks = Begin(writes, "tracks");
         Assert.IsTrue(writes.IsGoing("tracks"));
         Assert.IsFalse(writes.IsGoing("other"));
-        Assert.IsNull(writes.Begin("tracks"), "A second export of tracks cannot begin while one is going.");
+        Assert.IsNull(writes.TryBeginExclusive("tracks"), "A second export of tracks cannot begin while one is going.");
         Assert.AreEqual(1, writes.Count, "Refusing it does not add a write, and does not end the first.");
         Assert.IsNotNull(writes.Begin(), "A write with no name is never refused.");
-        Assert.IsNotNull(writes.Begin("other"), "Another name is another command.");
+        Assert.IsNotNull(writes.TryBeginExclusive("other"), "Another name is another command.");
         tracks.End();
         Assert.IsFalse(writes.IsGoing("tracks"));
-        var again = writes.Begin("tracks");
+        var again = writes.TryBeginExclusive("tracks");
         Assert.IsNotNull(again, "Once the first has ended another can begin.");
         Assert.IsFalse(again.Token.IsCancellationRequested, "A new write has a token of its own, not the cancelled one of the write before.");
     }
@@ -79,7 +79,7 @@ public sealed class FileWritesTests
         var named = Begin(writes, "tracks");
         named.End();
         named.End();
-        Assert.IsNotNull(writes.Begin("tracks"), "Ending twice did not leave a write behind.");
+        Assert.IsNotNull(writes.TryBeginExclusive("tracks"), "Ending twice did not leave a write behind.");
     }
 
     [TestMethod]

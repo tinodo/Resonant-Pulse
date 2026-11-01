@@ -95,10 +95,10 @@ public sealed class LocalWorkspace
         finally { _writes.Release(); }
     }
 
-    public async Task SaveLibraryAsync(PulseDocument document)
+    public async Task SaveLibraryAsync(PulseDocument document, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(LibraryPath);
-        await DocumentStore.SaveAsync(Path.Combine(LibraryPath, $"{Guid.NewGuid():N}.pulse"), document);
+        await DocumentStore.SaveAsync(Path.Combine(LibraryPath, $"{Guid.NewGuid():N}.pulse"), document, cancellationToken);
     }
 
     public async Task<LibraryReadResult> ListAsync()

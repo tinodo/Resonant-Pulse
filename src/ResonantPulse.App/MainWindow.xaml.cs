@@ -94,7 +94,7 @@ public sealed partial class MainWindow : Window
         _noticeTimer.Tick += (_, _) =>
         {
             _noticeTimer.Stop();
-            switch (_stemExport.WhenTransientNoticeFades(Notice.Severity == InfoBarSeverity.Informational))
+            switch (SavingNotice.WhenTransientNoticeFades(Notice.Severity == InfoBarSeverity.Informational, _fileWrites.IsWriting(TracksWrite)))
             {
                 case FadedNotice.Close: Notice.IsOpen = false; break;
                 // The notice that said the tracks are being saved was replaced by the one that has just faded.
@@ -105,7 +105,7 @@ public sealed partial class MainWindow : Window
         // the notice comes back. (A notice that is closed by the code, or the informational notices, are handled by the timer.)
         Notice.Closed += (_, args) =>
         {
-            if (args.Reason == InfoBarCloseReason.CloseButton && Notice.Severity != InfoBarSeverity.Informational && _stemExport.IsWriting)
+            if (args.Reason == InfoBarCloseReason.CloseButton && Notice.Severity != InfoBarSeverity.Informational && _fileWrites.IsWriting(TracksWrite))
                 ShowSavingNotice();
         };
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);

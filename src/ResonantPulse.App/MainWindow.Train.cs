@@ -298,10 +298,14 @@ public sealed partial class MainWindow
         var session = _lastTimingSession;
         if (!TimingExport.CanExport(_isTimingArmed, session))
             throw new InvalidOperationException(Text.Get("TimingCsvUnavailable"));
+        using var write = _fileWrites.Begin();
         await HoldPreparationAsync();
+        if (!write.StillWanted) return;
         var path = await PickSavePathAsync(".csv", Text.Get("ExportTimingCsv"), TimingExport.SuggestedFileName(session!.Context.ProjectName));
         if (path is null) return;
-        await Task.Run(() => TimingCsvExporter.ExportAsync(path, session));
+        write.Token.ThrowIfCancellationRequested();
+        write.BeginWriting(path);
+        await Task.Run(() => TimingCsvExporter.ExportAsync(path, session, write.Token), write.Token);
         ShowNotice("Saved");
     }
 
