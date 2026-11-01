@@ -52,8 +52,11 @@ output-only practice.
 
 Documents and exports are untrusted input. Validate version, ranges, collection
 sizes and recursive setlists before scheduling. Write user files atomically and
-preserve the previous target on cancellation/failure. Do not deserialize runtime
-types from user-controlled metadata.
+preserve the previous target on cancellation/failure. Every write that a person
+asks for has a cancellation token that closing the window cancels; the window
+waits for the writes to stop (4 seconds at most), so that no temporary file is
+left beside a destination, and names in the log a write that has not stopped by
+then. Do not deserialize runtime types from user-controlled metadata.
 
 The product avoids an account/cloud dependency for musical functionality.
 External sync, device integrations, proprietary DSP and licensed sound libraries

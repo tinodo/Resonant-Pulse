@@ -122,6 +122,12 @@ is specified in `metronome-design.md` and is not changed here.
   replace a warning or an error that is open, and comes back when the person dismisses one that hid it), and closing the window stops it once the file is being written (it waits for
   that for at most 4 seconds, after the wait for the save; a question that is open when closing begins is answered No, and a plan that is
   still being compiled when a close is refused is not asked about afterwards). docs/WAV-STEMS.md is the specification.
+  Every other file the app writes when asked (*Save as file*, *Save current to library*, *Export WAV*, *Export MIDI*, the timing
+  result's CSV) is stopped in the same way when the window closes while it is being written, and its temporary file is removed;
+  they show no notice while they write (they take milliseconds for an ordinary project). A file dialog that cannot be opened is
+  said to be that ("The window for choosing a file could not be opened, so nothing was saved or opened ..."), never an audio problem,
+  and the command is usable again; cancelling a dialog is silent. After the tracks question's *Cancel*, after *Saved* and after an
+  error the keyboard focus is on the command again if it was on it when it was pressed and the person has not moved it.
 - **Ready-made rhythms:** tiles with a name, one plain sentence and a meta line computed from the preset (meter, layers,
   program steps). Choosing one asks first ("Replace the current project?") and says the current project stays in the undo
   history.

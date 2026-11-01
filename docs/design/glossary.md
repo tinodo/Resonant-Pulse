@@ -273,3 +273,33 @@ person gets, *separate tracks*, and the file type in brackets, as *Export result
   *tijdelijk bestand*, *temporäre Datei*, *fichier temporaire* (French keeps the no-break space
   before the colon) and *archivo temporal*, the words the app's WAV-export sentence about leftover
   files already uses. German, French and Spanish are drafts like the rest and are in the questions.
+
+## The file dialog that could not be opened
+
+Questions again, not findings; nothing here has been checked with a native speaker. The sentence
+(`ErrorFileDialog`) is shown when Windows' own window for choosing where to save a file, or which
+file to open, cannot be opened or fails. It used to be shown as a problem with the audio output.
+It says what happened (the window for choosing a file could not be opened), that nothing was saved
+or opened, and what to do (try again, and restart the app if it keeps happening). Below it the page
+adds the line that points to the diagnostics, as for every unexpected failure.
+
+- **The window for choosing a file** is a plain description of what Windows calls the Save As or
+  Open dialog, so that no developer word (*dialog*) reaches the page: *het venster om een bestand
+  te kiezen*, *das Fenster zur Dateiauswahl*, *la fenêtre de choix du fichier*, *la ventana para
+  elegir un archivo*. Windows' own words are *dialoogvenster*, *Dialogfeld*, *boîte de dialogue* and
+  *cuadro de diálogo*; whether a person who is not technical finds the plain description clearer is
+  for a native reader.
+- **Nothing was saved or opened** is the same sentence for a save and for an open: *er is niets
+  bewaard of geopend*, *wurde nichts gespeichert oder geöffnet*, *rien n'a été enregistré ni
+  ouvert*, *no se guardó ni se abrió nada*. Dutch says *bewaard* where the other save sentences of
+  the page do (*De sporen konden niet worden bewaard*), not *opgeslagen*, which only *Lokaal
+  opgeslagen* (the *Saved* notice) uses.
+- **Restart the app** is *start de app opnieuw op*, *starten Sie die App neu*, *redémarrez
+  l'application* and *reinicie la aplicación*. The advice is general: a window that cannot be
+  opened is usually the system's, and the sentence does not promise that a restart helps.
+- The French sentence has no colon, semicolon or question mark, so the no-break space that the
+  other French sentences keep before them does not arise; a test fails if a later edit adds one
+  with an ordinary space in front.
+- German, French and Spanish address the person formally (*Versuchen Sie*, *Réessayez*,
+  *Inténtelo*), as the other sentences of the page do; Dutch is impersonal (*Probeer het opnieuw*),
+  like the page's other imperatives.

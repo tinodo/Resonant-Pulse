@@ -79,7 +79,9 @@ Eight columns: `record_type`, `expected_index`, `observed_index`, `expected_seco
 
 The file is written atomically: to a temporary file next to the destination, then moved over it. If anything goes wrong (the file is open
 in another program, it is read-only, the disk is full, the export is cancelled) the file that was there stays as it was, and the error is
-shown. A check of more than 100,000 clicks or presses, or of more than four million comparisons (the clicks plus one, times the presses
+shown. Closing the window while the file is written cancels the write, which removes the temporary file (closing waits for that for at
+most 4 seconds, after its wait for the save; a write that has not stopped by then is left behind, with a line in the log, and a temporary file may stay beside the destination).
+A check of more than 100,000 clicks or presses, or of more than four million comparisons (the clicks plus one, times the presses
 plus one), cannot be analysed, and then there is no result to export.
 
 ## What has not been tried
