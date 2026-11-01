@@ -72,7 +72,7 @@ internal sealed class TempoNudges
    /// The newest tempo that was asked for and that the project does not hold yet; null while nothing is on its way, and for a request that
    /// was asked for a project that has been replaced since.
    /// </summary>
-   internal double? Requested => _requested;
+   internal double? Requested => _requested is { } && _requestedFor == _project() ? _requested : null;
 
     /// <summary>
     /// Completes when the loop that is running (or the last one that ran) has ended, and so has the commit of a tempo typed in the
@@ -102,11 +102,11 @@ internal sealed class TempoNudges
                 var committed = double.NaN;
                 var committedFor = 0;
                 // The same number asked for another project is another request, so both are compared.
-                while (Requested is { } wanted && wanted != committed)
+                while (Requested is { } wanted && (wanted != committed || _requestedFor != committedFor))
                 {
                     committed = wanted;
                     var asked = committedFor = _requestedFor;
-                    bool StillTheProject() => true;
+                    bool StillTheProject() => asked == _project();
                     try { await _commit(wanted, StillTheProject); }
                     // The project it was asked for has been replaced: the commit left nothing behind, which is not an error. What was
                     // asked for after it (for the project that is there now) is still committed.

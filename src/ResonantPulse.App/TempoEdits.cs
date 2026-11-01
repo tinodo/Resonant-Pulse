@@ -36,7 +36,7 @@ internal static class TempoEdits
             try
             {
                 var applied = await apply();
-                if (applied && opening() != mine) { }
+                if (applied && opening() != mine) landedAfterReopening?.Invoke();
                 return applied && opening() == mine;
             }
             finally
