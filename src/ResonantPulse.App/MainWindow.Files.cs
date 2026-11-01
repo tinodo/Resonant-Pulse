@@ -275,7 +275,8 @@ public sealed partial class MainWindow
         using var write = _fileWrites.Begin();
         await HoldPreparationAsync();
         // The notes being typed belong to the project, so they are in the file. A close that was refused while they were being saved: the person
-        // was closing the window, so the dialog is not opened now, and nothing is said if saving the notes failed.
+        // was closing the window, so the dialog is not opened now, and an error of this preparation is only logged (a notes save that failed has
+        // shown its own error).
         var (wanted, notesSaved) = await write.PrepareAsync(FlushStageNotesAsync);
         if (!wanted || !notesSaved) return;
         var path = await PickSavePathAsync(".pulse", Text.Get("Save"));
