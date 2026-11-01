@@ -138,10 +138,13 @@ public sealed class FileWritesTests
         var writes = new FileWrites();
         Assert.IsTrue(await writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
         Assert.IsTrue(await writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
-        var write = Begin(writes);
+        // A write that ended before the close is neither waited for nor cancelled (a registry of its own: after a close that goes, a write
+        // that begins is cancelled as it begins).
+        var before = new FileWrites();
+        var write = Begin(before);
         var token = write.Token;
         write.End();
-        Assert.IsTrue(await writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30)).WaitAsync(Limit), "A write that has ended is not waited for.");
+        Assert.IsTrue(await before.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30)).WaitAsync(Limit), "A write that has ended is not waited for.");
         Assert.IsFalse(token.IsCancellationRequested, "A write that had ended was not cancelled afterwards.");
     }
 
@@ -323,5 +326,104 @@ public sealed class FileWritesTests
             Assert.IsFalse(writes.AnyGoing, "The write has ended, so its command is on again.");
             if (close == "goes") Assert.IsTrue(await closing.WaitAsync(Limit));
         }
+    }
+
+    [TestMethod]
+    public async Task AWriteThatBeginsAfterTheCloseHasBegunToStopTheWritesIsStoppedFromTheStart()
+    {
+        // A command that was still on its way when the window began to close (queued behind an edit, or being prepared) begins its write after
+        // the close has counted the writes that are going: nothing would cancel it, and the window would go while it saved its file.
+        var writes = new FileWrites();
+        var other = Begin(writes);
+        var closing = writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+        using var late = Begin(writes);
+        Assert.IsTrue(late.Token.IsCancellationRequested, "A write that begins while the close waits for the others is told to stop as it begins.");
+        Assert.IsFalse(late.StillWanted);
+        var exclusive = writes.TryBeginExclusive("tracks");
+        Assert.IsNotNull(exclusive);
+        Assert.IsTrue(exclusive.Token.IsCancellationRequested, "A write of one at a time is told the same.");
+        exclusive.End();
+        other.End();
+        await Task.Delay(100);
+        Assert.IsFalse(closing.IsCompleted, "The close waits for the write that began while it waited, too.");
+        late.End();
+        Assert.IsTrue(await closing.WaitAsync(Limit));
+        Assert.IsFalse(writes.AnyGoing);
+    }
+
+    [TestMethod]
+    public async Task AWriteThatBeginsAfterACloseWithNothingGoingIsStoppedFromTheStartToo()
+    {
+        var writes = new FileWrites();
+        Assert.IsTrue(await writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+        using var late = Begin(writes);
+        Assert.IsTrue(late.Token.IsCancellationRequested, "The window is going even though no write was going when the close counted them.");
+    }
+
+    [TestMethod]
+    public async Task ACloseThatIsRefusedDoesNotStopTheWritesThatBeginAfterIt()
+    {
+        // The window stays: what begins now is an ordinary write.
+        var writes = new FileWrites();
+        var going = Begin(writes);
+        going.BeginWriting();
+        Assert.IsFalse(await writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+        using var later = Begin(writes);
+        Assert.IsFalse(later.Token.IsCancellationRequested);
+        Assert.IsTrue(later.StillWanted);
+        going.End();
+    }
+
+    [TestMethod]
+    public async Task AWriteThatIsPreparedBeforeItSavesIsGoingFromTheStartSoACloseDuringThePreparationStopsItAndWaitsForIt()
+    {
+        // The copy of the project that a replacement saves to the library is saved after the new project has been validated. The close can come
+        // meanwhile, and the preparation can end while the close waits for another write: the save must begin with a token that the close
+        // has cancelled, and the close must wait for the save to end.
+        var writes = new FileWrites();
+        var other = Begin(writes);
+        var preparation = new TaskCompletionSource();
+        var saveBegan = false;
+        var cancelledWhenTheSaveBegan = false;
+        var saveMayEnd = new TaskCompletionSource();
+        var run = writes.RunAsync(() => preparation.Task, async write =>
+        {
+            saveBegan = true;
+            cancelledWhenTheSaveBegan = write.Token.IsCancellationRequested;
+            write.BeginWriting(@"C:\Music\Library\copy.pulse");
+            await saveMayEnd.Task;
+        });
+        Assert.AreEqual(2, writes.Count, "The write is going from the start of its preparation, so that a close counts it.");
+        Assert.IsFalse(saveBegan);
+        var closing = writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+        preparation.SetResult();
+        await Task.Delay(100);
+        Assert.IsTrue(saveBegan, "The preparation ended while the close waited for the other write.");
+        Assert.IsTrue(cancelledWhenTheSaveBegan, "The save began with a token that nobody had cancelled.");
+        other.End();
+        await Task.Delay(100);
+        Assert.IsFalse(closing.IsCompleted, "The close waits for the save as well as for the other write.");
+        saveMayEnd.SetResult();
+        await run.WaitAsync(Limit);
+        Assert.IsTrue(await closing.WaitAsync(Limit));
+        Assert.IsFalse(writes.AnyGoing);
+    }
+
+    [TestMethod]
+    public async Task APreparationOrASaveThatFailsOrIsStoppedEndsTheWriteAndTheErrorReachesTheCaller()
+    {
+        var writes = new FileWrites();
+        var failure = new InvalidOperationException("The new project is not valid.");
+        var thrown = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => writes.RunAsync(
+            () => Task.FromException(failure), _ => throw new AssertFailedException("The save began after the preparation had failed.")));
+        Assert.AreSame(failure, thrown);
+        Assert.IsFalse(writes.AnyGoing, "A preparation that failed does not leave a write going.");
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => writes.RunAsync(
+            () => Task.CompletedTask, write => throw new OperationCanceledException(write.Token)));
+        Assert.IsFalse(writes.AnyGoing, "A save that was stopped does not leave a write going.");
+        var ran = false;
+        await writes.RunAsync(() => Task.CompletedTask, write => { ran = true; Assert.AreEqual(1, writes.Count); return Task.CompletedTask; });
+        Assert.IsTrue(ran);
+        Assert.IsFalse(writes.AnyGoing, "A save that went well ended the write.");
     }
 }

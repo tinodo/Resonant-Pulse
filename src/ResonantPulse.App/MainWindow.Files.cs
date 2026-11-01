@@ -328,16 +328,20 @@ public sealed partial class MainWindow
             // replacement and recovery in the same transaction as normal edits
             // and undo, so an older edit cannot publish after this replacement.
             if (_isLocked) { ShowNotice("Locked"); return; }
-            Task? hold = null;
-            HoldReplacementForUiTest(ref hold);
-            if (hold is not null) await hold;
+            // The project that goes is saved to the library first. That is a write of a file like the others, and it begins before the new
+            // project is validated (FileWrites.RunAsync): a close that comes meanwhile must see it, or the copy would begin to be saved after
+            // the close had counted the writes that are going and nothing would cancel it. Closing the window stops it (the replacement then
+            // does not happen; nothing was changed before this point) and waits for it. It is under the edit lock, which closing waits for
+            // first, so a close that comes now is refused after 4 seconds and the second attempt goes.
             var replacement = LocalWorkspace.Clone(document);
-            await ValidateAsync(replacement);
-            // The project that goes is saved to the library first. That is a write of a file like the others: closing the window stops it
-            // (the replacement then does not happen; nothing was changed before this point) and waits for it. It is under the edit lock, which
-            // closing waits for first, so a close that comes now is refused after 4 seconds and the second attempt goes.
-            using (var backup = _fileWrites.Begin())
-                await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), backup.Token, backup.BeginWriting);
+            await _fileWrites.RunAsync(async () =>
+            {
+                await HoldPreparationAsync();
+                Task? hold = null;
+                HoldReplacementForUiTest(ref hold);
+                if (hold is not null) await hold;
+                await ValidateAsync(replacement);
+            }, backup => _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), backup.Token, backup.BeginWriting));
             SupersedeTransportIntent();
             InvalidateTiming();
             _transport.Stop();

@@ -14,6 +14,9 @@ internal sealed class FileWrites
 {
     private readonly List<FileWrite> _going = [];
 
+    /// <summary>True once the window has begun to stop the writes because it is going: from then on a write is cancelled as it begins.</summary>
+    private bool _stopping;
+
     /// <summary>True while a write is going: from <see cref="Begin"/> until its <see cref="FileWrite.End"/>.</summary>
     internal bool AnyGoing => _going.Count > 0;
 
@@ -32,10 +35,26 @@ internal sealed class FileWrites
     /// </summary>
     internal FileWrite? TryBeginExclusive(string name) => IsGoing(name) ? null : Add(name);
 
+    /// <summary>
+    /// Runs a write whose file is saved after a preparation that takes time (the copy of the project that a replacement saves to the
+    /// library is saved after the new project has been validated). The write begins before the preparation and goes on until the save has
+    /// ended, however it ends, so that a close that comes at any moment in between sees it: it cancels it and waits for it. Registered
+    /// only when the save began, the write would not be among those that the close has already counted.
+    /// </summary>
+    internal async Task RunAsync(Func<Task> prepare, Func<FileWrite, Task> save)
+    {
+        using var write = Begin();
+        await prepare();
+        await save(write);
+    }
+
     private FileWrite Add(string? name)
     {
         var write = new FileWrite(this, name);
         _going.Add(write);
+        // A command that was still on its way when the window began to close (queued behind an edit, or being prepared) begins its write
+        // after the close has counted the writes that are going: nothing would cancel it, and the window would go while it saved.
+        if (_stopping) write.Cancel();
         return write;
     }
 
@@ -50,15 +69,22 @@ internal sealed class FileWrites
 
     /// <summary>
     /// Stops every write that is going and waits until all of them have ended, at most <paramref name="limit"/>. True when no write is going
-    /// any more, false when one was still going when the limit passed (the caller goes on without it).
+    /// any more, false when one was still going when the limit passed (the caller goes on without it). The window is going: a write that
+    /// begins from now on is cancelled as it begins.
     /// </summary>
     internal async Task<bool> CancelAllAsync(TimeSpan limit)
     {
-        var going = _going.ToArray();
-        if (going.Length == 0) return true;
-        foreach (var write in going) write.Cancel();
-        var ended = Task.WhenAll(going.Select(write => write.Ended));
-        return await Task.WhenAny(ended, Task.Delay(limit)).ConfigureAwait(true) == ended;
+        _stopping = true;
+        var timeout = Task.Delay(limit);
+        // A write that begins while the close waits is cancelled as it begins (see Add) and is waited for too: the loop looks again.
+        while (_going.Count > 0)
+        {
+            var going = _going.ToArray();
+            foreach (var write in going) write.Cancel();
+            var ended = Task.WhenAll(going.Select(write => write.Ended));
+            if (await Task.WhenAny(ended, timeout).ConfigureAwait(true) != ended) return false;
+        }
+        return true;
     }
 
     /// <summary>
