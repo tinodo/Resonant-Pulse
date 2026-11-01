@@ -426,4 +426,64 @@ public sealed class FileWritesTests
         Assert.IsTrue(ran);
         Assert.IsFalse(writes.AnyGoing, "A save that went well ended the write.");
     }
+
+    [TestMethod]
+    public async Task APreparationThatIsStillWantedHandsOverItsResultOrItsError()
+    {
+        var writes = new FileWrites();
+        using var write = Begin(writes);
+        var (wanted, result) = await write.PrepareAsync(() => Task.FromResult(42));
+        Assert.IsTrue(wanted);
+        Assert.AreEqual(42, result);
+        var failure = new ArgumentException("MIDI export preflight failed.");
+        var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(() => write.PrepareAsync<int>(() => Task.FromException<int>(failure)));
+        Assert.AreSame(failure, thrown, "An error of a preparation that is still wanted is for the person to see.");
+    }
+
+    [TestMethod]
+    public async Task APreparationThatEndsAfterACloseWasRefusedIsDroppedSilentlyWhetherItWentWellOrFailed()
+    {
+        // The notice that says why the window stayed must not be replaced by the error of a command that was being dropped: the file that
+        // MIDI looks at may not be exportable, the plan of the tracks may not compile, the notes may not be saved.
+        foreach (var fails in new[] { false, true })
+        {
+            var writes = new FileWrites();
+            using var write = Begin(writes);
+            var preparation = new TaskCompletionSource<int>();
+            var preparing = write.PrepareAsync(() => preparation.Task);
+            Assert.IsFalse(await writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+            if (fails) preparation.SetException(new ArgumentException("The preflight says that the file cannot be exported."));
+            else preparation.SetResult(7);
+            var (wanted, _) = await preparing.WaitAsync(Limit);
+            Assert.IsFalse(wanted, fails ? "The error of a preparation that was voided was shown." : "The result of a preparation that was voided was used.");
+        }
+    }
+
+    [TestMethod]
+    public async Task APreparationThatEndsAfterTheWindowWasToldToGoIsDroppedSilently()
+    {
+        var writes = new FileWrites();
+        using var write = Begin(writes);
+        var preparation = new TaskCompletionSource<int>();
+        var preparing = write.PrepareAsync(() => preparation.Task);
+        var closing = writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+        preparation.SetException(new OperationCanceledException(write.Token));
+        var (wanted, _) = await preparing.WaitAsync(Limit);
+        Assert.IsFalse(wanted);
+        write.End();
+        Assert.IsTrue(await closing.WaitAsync(Limit));
+    }
+
+    [TestMethod]
+    public async Task TheRefusedCloseThatDroppedOneWritesPreparationDoesNotHideTheErrorOfTheNextWrite()
+    {
+        var writes = new FileWrites();
+        using (var first = Begin(writes))
+        {
+            _ = writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30));
+            Assert.IsTrue(first.PreparationInvalidated);
+        }
+        using var next = Begin(writes);
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => next.PrepareAsync<int>(() => Task.FromException<int>(new ArgumentException("A real error."))));
+    }
 }

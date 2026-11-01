@@ -150,6 +150,26 @@ internal sealed class FileWrite : IDisposable
     internal Task Ended => _ended.Task;
 
     /// <summary>
+    /// Runs the preparation of a write: a file is looked at, a plan is compiled, notes are saved, before the write asks its question or opens
+    /// its dialog. <c>Wanted</c> is false when, by the time the preparation ends, a close was refused meanwhile or the window is going: the
+    /// person was closing the window, so the command ends silently, whether the preparation went well or failed (an error of the
+    /// preparation is not shown either, it would replace the notice that says why the window stayed). An error of a preparation that is
+    /// still wanted goes to the caller.
+    /// </summary>
+    internal async Task<(bool Wanted, T Result)> PrepareAsync<T>(Func<Task<T>> prepare)
+    {
+        try
+        {
+            var result = await prepare();
+            return (StillWanted, result);
+        }
+        catch when (!StillWanted)
+        {
+            return (false, default!);
+        }
+    }
+
+    /// <summary>
     /// Everything the person was asked is answered and the file is chosen: from here a refused close leaves the write alone (what remains
     /// is compiling a plan or writing the file). <paramref name="destination"/> is named in the log if the write does not stop: the file,
     /// or the one that is about to be made.

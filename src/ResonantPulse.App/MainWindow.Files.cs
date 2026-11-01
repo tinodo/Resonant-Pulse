@@ -269,10 +269,10 @@ public sealed partial class MainWindow
     {
         using var write = _fileWrites.Begin();
         await HoldPreparationAsync();
-        // The notes being typed belong to the project, so they are in the file.
-        if (!await FlushStageNotesAsync()) return;
-        // A close that was refused while the notes were being saved: the person was closing the window, so the dialog is not opened now.
-        if (!write.StillWanted) return;
+        // The notes being typed belong to the project, so they are in the file. A close that was refused while they were being saved: the person
+        // was closing the window, so the dialog is not opened now, and nothing is said if saving the notes failed.
+        var (wanted, notesSaved) = await write.PrepareAsync(FlushStageNotesAsync);
+        if (!wanted || !notesSaved) return;
         var path = await PickSavePathAsync(".pulse", Text.Get("Save"));
         if (path is null) return;
         write.Token.ThrowIfCancellationRequested();
@@ -373,11 +373,12 @@ public sealed partial class MainWindow
         await HoldPreparationAsync();
         if (midi)
         {
-            var report = await Task.Run(() => MidiExporter.Preflight(snapshot, bars), write.Token);
+            var (wanted, report) = await write.PrepareAsync(() => Task.Run(() => MidiExporter.Preflight(snapshot, bars), write.Token));
+            // A close that was refused while the file was being looked at: the person was closing the window, so neither the question nor an
+            // error (the file may not be exportable) is shown now.
+            if (!wanted) return;
             if (!report.CanExport)
                 throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", report.Errors));
-            // A close that was refused while the file was being looked at: the person was closing the window, so the question is not asked now.
-            if (!write.StillWanted) return;
             if (!await ConfirmAsync(Text.Format("MidiPreflight", report.PulsesPerQuarter, report.MaximumTimingErrorSeconds * 1000)))
                 return;
         }
@@ -436,13 +437,14 @@ public sealed partial class MainWindow
             var bars = _preferences.ExportBars;
             var names = snapshot.Lanes.Select(lane => lane.Name).ToArray();
             await HoldPreparationAsync();
-            var prepared = await Task.Run(() =>
+            var (wanted, prepared) = await write.PrepareAsync(() => Task.Run(() =>
             {
                 var plan = ScheduleCompiler.Compile(snapshot, 48000, bars, true);
                 return (Plan: plan, Summary: StemExport.Summarize(plan));
-            }, write.Token);
-            // A close that was refused while the plan was being compiled: the person was closing the window, so the question is not asked now.
-            if (!write.StillWanted) return;
+            }, write.Token));
+            // A close that was refused while the plan was being compiled: the person was closing the window, so neither the question nor an
+            // error (the plan may not compile) is shown now.
+            if (!wanted) return;
             if (!await ConfirmAsync(StemExport.ConfirmText(prepared.Summary))) return;
             var path = await PickSavePathAsync(".zip", Text.Get("ExportStems"), StemExport.SuggestedFileName(snapshot.Name));
             if (path is null) return;
