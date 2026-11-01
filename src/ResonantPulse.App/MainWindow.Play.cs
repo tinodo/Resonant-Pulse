@@ -620,15 +620,28 @@ public sealed partial class MainWindow
         return chip;
     }
 
+    /// <summary>
+    /// Applies a ready-made meter (also the repair of a unit that does not divide the bar). Choosing one can rewrite the tempo
+    /// (<see cref="MeterPresets.ApplyOneClickPerBeat"/> raises it by the old split when the click unit changes, so that the same clicks keep
+    /// coming at the same speed), so it comes after the nudges that are on their way, as Done does: a nudge that landed after the
+    /// conversion would put a number of the old unit over the converted tempo. Nothing is chosen for a project that has been replaced
+    /// meanwhile (the choice, or the repair, was made on the page of the one that went).
+    /// </summary>
     private async Task ApplyMeterPresetAsync(MeterPreset preset)
     {
         if (MeterPresets.IsApplied(_document.Settings, preset)) return;
+        var chosenFor = _projectGeneration;
         var applied = false;
-        await CommitAsync(doc =>
+        try
         {
-            MeterPresets.ApplyOneClickPerBeat(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
-            applied = true;
-        }, editorChange: EditorChangeKind.PlayStructure);
+            await _tempoNudges.AfterNudgesAsync(() => CommitAsync(doc =>
+            {
+                if (chosenFor != _projectGeneration) throw new OperationCanceledException();
+                MeterPresets.ApplyOneClickPerBeat(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
+                applied = true;
+            }, editorChange: EditorChangeKind.PlayStructure));
+        }
+        catch (OperationCanceledException) when (chosenFor != _projectGeneration) { }
         if (applied) BuildPage();
     }
 }

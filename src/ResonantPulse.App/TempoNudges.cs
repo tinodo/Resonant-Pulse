@@ -17,34 +17,62 @@ namespace ResonantPulse.App;
 /// <see cref="Settled"/> includes it, so that closing, Start and Tap to start, which wait for the tempo to settle, wait for it too and
 /// not only for the loop. (Closing waits for at most its four seconds and a second attempt leaves anyway.)
 /// </para>
+/// <para>
+/// A nudge belongs to the project that was shown when it was asked for: it is a number in that project's unit, read off its dial. The
+/// project can be replaced (Open, New, a ready-made rhythm, the next song of a setlist) while a nudge waits, or while its commit waits in
+/// the edit queue behind the replacement, and what was nudged to must never be written into the project that took its place. A request is
+/// therefore dropped from <see cref="Requested"/> the moment the project is another one (the dial shows the replacement's own tempo), the
+/// loop does not ask for a commit of it, and a commit that is already queued is told to leave nothing behind
+/// (<c>stillTheProject</c>, checked inside the edit, as Done's commit checks the project it was typed for). A commit that is dropped for
+/// that reason is not an error, and the loop goes on to what was asked for after it, for the project that is there now, even when that is
+/// the same number.
+/// </para>
 /// Pure and for the UI thread only, so every order the commits can finish in is tested without a window.
 /// </summary>
 internal sealed class TempoNudges
 {
-    private readonly Func<double, Task> _commit;
-    private readonly Func<Func<Task>, Task> _guard;
-    private readonly Action _ended;
-    private bool _running;
-    private Task _loop = Task.CompletedTask;
-    private Task _typed = Task.CompletedTask;
+   private readonly Func<double, Func<bool>, Task> _commit;
+   private readonly Func<Func<Task>, Task> _guard;
+   private readonly Action _ended;
+   private readonly Func<int> _project;
+   private bool _running;
+   private Task _loop = Task.CompletedTask;
+   private Task _typed = Task.CompletedTask;
+   private double? _requested;
+   private int _requestedFor;
 
-    /// <param name="commit">Commits one tempo to the project (it waits in the edit queue, so it finishes later).</param>
-    /// <param name="guard">Runs the loop and reports what goes wrong in it, without letting it escape (the window's error handling).</param>
-    /// <param name="ended">
-    /// Called when the loop has ended and nothing is on its way any more: the window shows the project's tempo again. It must not ask
-    /// for a tempo: a loop whose commits all finish at once (a locked project) has ended before its own task is recorded, which would
-    /// replace the task of a loop started from here. (The unit tests do ask from here, with a commit that is held, to stand for an event
-    /// that runs in the turn in which a loop ends.)
-    /// </param>
-    internal TempoNudges(Func<double, Task> commit, Func<Func<Task>, Task> guard, Action ended)
-    {
-        _commit = commit;
-        _guard = guard;
-        _ended = ended;
-    }
+   /// <summary>For a project that is never replaced.</summary>
+   internal TempoNudges(Func<double, Task> commit, Func<Func<Task>, Task> guard, Action ended)
+       : this((wanted, _) => commit(wanted), guard, ended, () => 0)
+   {
+   }
 
-    /// <summary>The newest tempo that was asked for and that the project does not hold yet; null while nothing is on its way.</summary>
-    internal double? Requested { get; private set; }
+   /// <param name="commit">
+   /// Commits one tempo to the project (it waits in the edit queue, so it finishes later). It must call the second argument inside the edit,
+   /// under the edit lock, before it changes anything, and throw <see cref="OperationCanceledException"/> when it says false: the project
+   /// that the tempo was asked for has been replaced, and the commit must leave nothing behind (no Undo step, no new project, no save).
+   /// </param>
+   /// <param name="guard">Runs the loop and reports what goes wrong in it, without letting it escape (the window's error handling).</param>
+   /// <param name="ended">
+   /// Called when the loop has ended and nothing is on its way any more: the window shows the project's tempo again. It must not ask
+   /// for a tempo: a loop whose commits all finish at once (a locked project) has ended before its own task is recorded, which would
+   /// replace the task of a loop started from here. (The unit tests do ask from here, with a commit that is held, to stand for an event
+   /// that runs in the turn in which a loop ends.)
+   /// </param>
+   /// <param name="project">Which project is the current one: a number that changes whenever the whole project is replaced.</param>
+   internal TempoNudges(Func<double, Func<bool>, Task> commit, Func<Func<Task>, Task> guard, Action ended, Func<int> project)
+   {
+       _commit = commit;
+       _guard = guard;
+       _ended = ended;
+       _project = project;
+   }
+
+   /// <summary>
+   /// The newest tempo that was asked for and that the project does not hold yet; null while nothing is on its way, and for a request that
+   /// was asked for a project that has been replaced since.
+   /// </summary>
+   internal double? Requested => _requested is { } && _requestedFor == _project() ? _requested : null;
 
     /// <summary>
     /// Completes when the loop that is running (or the last one that ran) has ended, and so has the commit of a tempo typed in the
@@ -62,7 +90,8 @@ internal sealed class TempoNudges
     /// <param name="shown">Called once the request is recorded and before anything is committed: the dial and the announcement follow it at once.</param>
     internal void Request(double bpm, Action? shown = null)
     {
-        Requested = bpm;
+        _requested = bpm;
+        _requestedFor = _project();
         shown?.Invoke();
         if (_running) return;
         _running = true;
@@ -71,16 +100,23 @@ internal sealed class TempoNudges
             try
             {
                 var committed = double.NaN;
-                while (Requested is { } wanted && wanted != committed)
+                var committedFor = 0;
+                // The same number asked for another project is another request, so both are compared.
+                while (Requested is { } wanted && (wanted != committed || _requestedFor != committedFor))
                 {
                     committed = wanted;
-                    await _commit(wanted);
+                    var asked = committedFor = _requestedFor;
+                    bool StillTheProject() => asked == _project();
+                    try { await _commit(wanted, StillTheProject); }
+                    // The project it was asked for has been replaced: the commit left nothing behind, which is not an error. What was
+                    // asked for after it (for the project that is there now) is still committed.
+                    catch (OperationCanceledException) when (!StillTheProject()) { }
                 }
             }
             finally
             {
                 _running = false;
-                Requested = null;
+                _requested = null;
                 _ended();
             }
         });
@@ -125,5 +161,5 @@ internal sealed class TempoNudges
     /// The page is built again: what was nudged to and not committed yet is dropped, and the loop ends after the commit that is running
     /// (that one still lands). A typed tempo that is waiting is not dropped: it still lands, or is refused when its project was replaced.
     /// </summary>
-    internal void Forget() => Requested = null;
+    internal void Forget() => _requested = null;
 }
