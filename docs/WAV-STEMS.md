@@ -56,7 +56,7 @@ what it says is what is saved:
   without it (the log says so), which was not seen and could leave a temporary file beside the destination. Closed earlier, while the plan is
   compiled or the question is open, nothing is written. Closing answers an open question No. When the close is refused (the project could
   not be saved) while the plan is still being compiled, that export is marked void and the page looks at the mark as soon as the compile ends, so it ends without
-  a question, and without an error if the compile failed (it would replace the notice that says why the window stayed), and the command is on again; a unit test holds the order (a compile that is held, a refused close, no question, no error). A close that is
+  a question, and without an error if the compile failed (it would replace the notice that says why the window stayed; the log keeps it), and the command is on again; a unit test holds the order (a compile that is held, a refused close, no question, no error). A close that is
   refused while the save dialog is open does not stop the export, because the person has answered Continue.
 
 ## Format
