@@ -5,6 +5,9 @@ namespace ResonantPulse.App.Tests;
 [TestClass]
 public sealed class TempoNudgesTests
 {
+    /// <summary>A test that is waiting for something that never comes fails after this long; it does not hang.</summary>
+    private static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
+
     /// <summary>
     /// The nudges, a tempo that is typed and the edit queue as the window has them: a project tempo that commits change, an edit lock that
     /// is handed out in the order it was asked for, and commits that take as long as the test says. A commit waits in the queue,
@@ -52,7 +55,7 @@ public sealed class TempoNudgesTests
             return gate.Task;
         }
 
-        /// <summary>Completes once this many commits have the lock. A test that never gets there fails after ten seconds, it does not hang.</summary>
+        /// <summary>Completes once this many commits have the lock.</summary>
         internal Task StartedAsync(int count)
         {
             lock (_lock)
@@ -60,7 +63,7 @@ public sealed class TempoNudgesTests
                 if (_gates.Count >= count) return Task.CompletedTask;
                 var source = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _waiters.Add((count, source));
-                return source.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                return source.Task.WaitAsync(Limit);
             }
         }
 
@@ -76,6 +79,9 @@ public sealed class TempoNudgesTests
             lock (_lock) _gates[_finished++].SetException(exception);
         }
 
+        /// <summary>The loop has ended: everything that was asked for has been committed or refused.</summary>
+        internal Task SettledAsync() => Nudges.Settled.WaitAsync(Limit);
+
         /// <summary>What the window's error handling does: shows the error and lets nothing escape the loop.</summary>
         private async Task Guard(Func<Task> action)
         {
@@ -87,8 +93,8 @@ public sealed class TempoNudgesTests
         /// <summary>Done in the Tempo panel with a tempo typed: it waits for the nudges that are on their way, then commits what was typed.</summary>
         internal async Task DoneAsync(double typed)
         {
-            await Nudges.Settled;
-            await Commit(typed);
+            await Nudges.Settled.WaitAsync(Limit);
+            await Commit(typed).WaitAsync(Limit);
         }
     }
 
@@ -99,7 +105,7 @@ public sealed class TempoNudgesTests
 
         Assert.IsNull(rig.Nudges.Requested);
         Assert.IsTrue(rig.Nudges.Settled.IsCompleted);
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
         Assert.AreEqual(0, rig.Started);
     }
 
@@ -122,7 +128,7 @@ public sealed class TempoNudgesTests
         Assert.AreEqual(121.0, rig.Nudges.Requested, "it stays until it is the project's");
         Assert.IsFalse(rig.Nudges.Settled.IsCompleted);
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written);
         Assert.AreEqual(121.0, rig.Tempo);
@@ -149,7 +155,7 @@ public sealed class TempoNudgesTests
         Assert.AreEqual(124.0, rig.Nudges.Requested, "the newest is still on its way while it is committed");
         Assert.IsFalse(rig.Nudges.Settled.IsCompleted);
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0, 124.0 }, rig.Written, "the one that ran, then the newest; 122 and 123 were never committed");
         Assert.AreEqual(124.0, rig.Tempo);
@@ -169,7 +175,7 @@ public sealed class TempoNudgesTests
         rig.Finish();
         await rig.StartedAsync(2);
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0, 120.0 }, rig.Written);
         Assert.AreEqual(120.0, rig.Tempo);
@@ -184,7 +190,7 @@ public sealed class TempoNudgesTests
         rig.Nudges.Request(122);
         rig.Nudges.Request(121);
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "the newest wanted value is the one that is being committed already");
         Assert.AreEqual(1, rig.Started);
@@ -208,8 +214,8 @@ public sealed class TempoNudgesTests
         rig.Finish();
         await rig.StartedAsync(3);
         rig.Finish();
-        await done;
-        await rig.Nudges.Settled;
+        await done.WaitAsync(Limit);
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0, 123.0, 90.0 }, rig.Written, "the nudges first, the typed tempo last");
         Assert.AreEqual(90.0, rig.Tempo, "the project holds what was typed");
@@ -233,8 +239,8 @@ public sealed class TempoNudgesTests
         rig.Finish();
         await rig.StartedAsync(3);
         rig.Finish();
-        await done;
-        await rig.Nudges.Settled;
+        await done.WaitAsync(Limit);
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0, 90.0, 123.0 }, rig.Written);
         Assert.AreEqual(123.0, rig.Tempo, "the typed tempo was overwritten by a nudge that was asked for before it");
@@ -249,7 +255,7 @@ public sealed class TempoNudgesTests
 
         Assert.AreEqual(1, rig.Started, "no waiting: the loop is not running");
         rig.Finish();
-        await done;
+        await done.WaitAsync(Limit);
         CollectionAssert.AreEqual(new[] { 90.0 }, rig.Written);
     }
 
@@ -264,8 +270,8 @@ public sealed class TempoNudgesTests
         rig.Finish();
         await rig.StartedAsync(2);
         rig.Finish();
-        await done;
-        await rig.Nudges.Settled;
+        await done.WaitAsync(Limit);
+        await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 90.0, 91.0 }, rig.Written, "the later request is the later commit");
         Assert.AreEqual(91.0, rig.Tempo);
@@ -279,7 +285,7 @@ public sealed class TempoNudgesTests
         await rig.StartedAsync(1);
         var first = rig.Nudges.Settled;
         rig.Finish();
-        await first;
+        await first.WaitAsync(Limit);
 
         rig.Nudges.Request(130);
         await rig.StartedAsync(2);
@@ -287,7 +293,7 @@ public sealed class TempoNudgesTests
         Assert.IsTrue(first.IsCompleted, "what waited for the first loop is not held up by the second");
         Assert.IsFalse(rig.Nudges.Settled.IsCompleted, "what waits now waits for the loop that is running");
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
         CollectionAssert.AreEqual(new[] { 121.0, 130.0 }, rig.Written);
         Assert.AreEqual(2, rig.Ended);
     }
@@ -302,7 +308,7 @@ public sealed class TempoNudgesTests
         var failure = new IOException("The recovery file cannot be written.");
 
         rig.Fail(failure);
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
 
         Assert.AreEqual(1, rig.Reported.Count);
         Assert.AreSame(failure, rig.Reported[0]);
@@ -312,7 +318,7 @@ public sealed class TempoNudgesTests
         rig.Nudges.Request(130);
         await rig.StartedAsync(2);
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
         CollectionAssert.AreEqual(new[] { 130.0 }, rig.Written);
     }
 
@@ -327,7 +333,7 @@ public sealed class TempoNudgesTests
         rig.Fail(new IOException("The recovery file cannot be written."));
         await rig.StartedAsync(2);
         rig.Finish();
-        await done;
+        await done.WaitAsync(Limit);
 
         CollectionAssert.AreEqual(new[] { 90.0 }, rig.Written);
         Assert.AreEqual(90.0, rig.Tempo);
@@ -346,7 +352,7 @@ public sealed class TempoNudgesTests
 
         Assert.IsNull(rig.Nudges.Requested);
         rig.Finish();
-        await rig.Nudges.Settled;
+        await rig.SettledAsync();
         CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "the commit that was running lands; 125 is not committed");
         Assert.AreEqual(1, rig.Started);
         Assert.AreEqual(1, rig.Ended);
