@@ -8,9 +8,17 @@ namespace ResonantPulse.App;
 internal static class FileDialogFailure
 {
     /// <summary>
-    /// The failure of a file dialog as the page reports it. Not decided yet: the failure reaches the page as it is, so the page
-    /// explains it by its type, as it did before this was written down (a failure of the operating system's window handling then reads
-    /// as a problem with the audio output).
+    /// The failure of a file dialog as the page reports it: a <see cref="FileDialogException"/>, which the page explains in words about
+    /// the dialog, whatever the dialog failed with. Without this a failure of the operating system's window handling (a
+    /// <see cref="System.Runtime.InteropServices.COMException"/>, which is what the audio code reports its failures as too) read as a
+    /// problem with the audio output. A request to stop (the window is closing) is no failure of the dialog and stays as it is.
     /// </summary>
-    internal static Exception ForPage(Exception error) => error;
+    internal static Exception ForPage(Exception error) =>
+        error is OperationCanceledException ? error : new FileDialogException(error);
 }
+
+/// <summary>
+/// A file dialog could not be opened or failed. Nothing was read or written. The exception that made it fail is the inner exception,
+/// so that the log keeps its type, its message and its HRESULT; the person is told in plain words (<c>ErrorFileDialog</c>).
+/// </summary>
+internal sealed class FileDialogException(Exception cause) : Exception("A file dialog could not be opened or failed.", cause);

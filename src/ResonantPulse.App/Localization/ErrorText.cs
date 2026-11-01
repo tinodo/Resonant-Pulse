@@ -15,6 +15,9 @@ internal static class ErrorText
     public static string Explain(Exception exception)
     {
         if (exception is UserMessageException) return exception.Message;
+        // A dialog that could not be opened is said to be that, whatever it failed with: its COMException must not read as an audio
+        // problem (below), and nothing was read or written, so no sentence about a file or about access would be true either.
+        if (exception is FileDialogException) return Text.Get("ErrorFileDialog");
         // Typed export outcomes take precedence even over a coincidentally
         // known localized Message. Recovery semantics never depend on parsing
         // Core's English diagnostics or on the generic IOException classifier.
