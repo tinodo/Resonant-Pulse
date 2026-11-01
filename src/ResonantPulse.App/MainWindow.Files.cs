@@ -18,9 +18,14 @@ public sealed partial class MainWindow
     /// <summary>
     /// The writes of files that are going (Save, Save to library, Export WAV, Export MIDI, the export of separate tracks, the timing CSV).
     /// Closing the window stops them and waits for them (see <see cref="CloseAfterSavingAsync"/>), so that, when a write stops, no temporary
-    /// file stays beside its destination.
+    /// file stays beside its destination. A command that is dropped because a close was refused shows nothing of its preparation, not even an
+    /// error (it would replace the notice that says why the window stayed): the log keeps the error.
     /// </summary>
-    private readonly FileWrites _fileWrites = new();
+    private readonly FileWrites _fileWrites = new()
+    {
+        DroppedError = error => Diagnostics.Write(
+            "A command was dropped because the window was being closed; the preparation that it was waiting for ended with an error, which is not shown", error)
+    };
 
     /// <summary>The name of the export of separate tracks among the writes: only one can go at a time, and its command is off while it does.</summary>
     private const string TracksWrite = "tracks";

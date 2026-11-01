@@ -486,4 +486,76 @@ public sealed class FileWritesTests
         using var next = Begin(writes);
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => next.PrepareAsync<int>(() => Task.FromException<int>(new ArgumentException("A real error."))));
     }
+
+    [TestMethod]
+    public async Task TheErrorOfAPreparationThatIsBeingDroppedIsKeptForTheLogAndNotShown()
+    {
+        var kept = new List<Exception>();
+        var writes = new FileWrites { DroppedError = kept.Add };
+
+        // A close was refused while the file was looked at and the preparation then failed: the command ends without a word, the log has the cause.
+        var failure = new ArgumentException("The preflight says that the file cannot be exported.");
+        using (var refused = Begin(writes))
+        {
+            var preparation = new TaskCompletionSource<int>();
+            var preparing = refused.PrepareAsync(() => preparation.Task);
+            Assert.IsFalse(await writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+            preparation.SetException(failure);
+            Assert.IsFalse((await preparing.WaitAsync(Limit)).Wanted);
+        }
+        Assert.AreEqual(1, kept.Count, "The error of a dropped preparation is kept for the log, once.");
+        Assert.AreSame(failure, kept[0]);
+
+        // The same when the window is going and the error is not the cancellation that stops a preparation.
+        var other = new IOException("The file could not be read.");
+        using (var going = Begin(writes))
+        {
+            var preparation = new TaskCompletionSource<int>();
+            var preparing = going.PrepareAsync(() => preparation.Task);
+            var closing = writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+            preparation.SetException(other);
+            Assert.IsFalse((await preparing.WaitAsync(Limit)).Wanted);
+            going.End();
+            Assert.IsTrue(await closing.WaitAsync(Limit));
+        }
+        Assert.AreEqual(2, kept.Count);
+        Assert.AreSame(other, kept[1]);
+
+        // A preparation that went well has nothing to keep (a registry of its own: the one above has been told that the window goes).
+        var calm = new FileWrites { DroppedError = kept.Add };
+        using (var refusedAgain = Begin(calm))
+        {
+            var preparation = new TaskCompletionSource<int>();
+            var preparing = refusedAgain.PrepareAsync(() => preparation.Task);
+            Assert.IsFalse(await calm.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+            preparation.SetResult(7);
+            Assert.IsFalse((await preparing.WaitAsync(Limit)).Wanted);
+        }
+        Assert.AreEqual(2, kept.Count, "Nothing failed, so nothing is kept.");
+    }
+
+    [TestMethod]
+    public async Task ACancellationThatStopsAPreparationAndTheErrorOfOneThatIsStillWantedAreNotKeptForTheLog()
+    {
+        var kept = new List<Exception>();
+        var writes = new FileWrites { DroppedError = kept.Add };
+        using (var going = Begin(writes))
+        {
+            var preparation = new TaskCompletionSource<int>();
+            var preparing = going.PrepareAsync(() => preparation.Task);
+            var closing = writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+            preparation.SetException(new OperationCanceledException(going.Token));
+            Assert.IsFalse((await preparing.WaitAsync(Limit)).Wanted);
+            going.End();
+            Assert.IsTrue(await closing.WaitAsync(Limit));
+        }
+        Assert.AreEqual(0, kept.Count, "A window that goes stops a preparation by cancelling it: that is no failure to keep.");
+
+        var stillWanted = new FileWrites { DroppedError = kept.Add };
+        using var write = Begin(stillWanted);
+        var failure = new ArgumentException("A real error.");
+        var thrown = await Assert.ThrowsExactlyAsync<ArgumentException>(() => write.PrepareAsync<int>(() => Task.FromException<int>(failure)));
+        Assert.AreSame(failure, thrown);
+        Assert.AreEqual(0, kept.Count, "The error of a command that is still wanted is shown to the person (and logged by what shows it), not kept here.");
+    }
 }

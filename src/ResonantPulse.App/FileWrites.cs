@@ -17,6 +17,13 @@ internal sealed class FileWrites
     /// <summary>True once the window has begun to stop the writes because it is going: from then on a write is cancelled as it begins.</summary>
     private bool _stopping;
 
+    /// <summary>
+    /// Told about an error that the preparation of a command that is being dropped ended with (see <see cref="FileWrite.PrepareAsync{T}"/>).
+    /// The person is told nothing, because the error would replace the notice that says why the window stayed; the owner keeps the cause in
+    /// the log, so that no error goes unreported.
+    /// </summary>
+    internal Action<Exception>? DroppedError { get; init; }
+
     /// <summary>True while a write is going: from <see cref="Begin"/> until its <see cref="FileWrite.End"/>.</summary>
     internal bool AnyGoing => _going.Count > 0;
 
@@ -38,8 +45,8 @@ internal sealed class FileWrites
     /// <summary>
     /// Runs a write whose file is saved after a preparation that takes time (the copy of the project that a replacement saves to the
     /// library is saved after the new project has been validated). The write begins before the preparation and goes on until the save has
-    /// ended, however it ends, so that a close that comes at any moment in between sees it: it cancels it and waits for it. Registered
-    /// only when the save began, the write would not be among those that the close has already counted.
+    /// ended, however it ends, so that a close that comes at any moment in between sees it: it cancels it and waits for it. Were it registered
+    /// only when the save began, it would not be among the writes that the close has already counted.
     /// </summary>
     internal async Task RunAsync(Func<Task> prepare, Func<FileWrite, Task> save)
     {
@@ -153,8 +160,9 @@ internal sealed class FileWrite : IDisposable
     /// Runs the preparation of a write: a file is looked at, a plan is compiled, notes are saved, before the write asks its question or opens
     /// its dialog. <c>Wanted</c> is false when, by the time the preparation ends, a close was refused meanwhile or the window is going: the
     /// person was closing the window, so the command ends silently, whether the preparation went well or failed (an error of the
-    /// preparation is not shown either, it would replace the notice that says why the window stayed). An error of a preparation that is
-    /// still wanted goes to the caller.
+    /// preparation is not shown either, it would replace the notice that says why the window stayed; it is given to
+    /// <see cref="FileWrites.DroppedError"/> so that the log keeps it, except a cancellation, which is how the window that goes stops a
+    /// preparation). An error of a preparation that is still wanted goes to the caller.
     /// </summary>
     internal async Task<(bool Wanted, T Result)> PrepareAsync<T>(Func<Task<T>> prepare)
     {
@@ -163,8 +171,9 @@ internal sealed class FileWrite : IDisposable
             var result = await prepare();
             return (StillWanted, result);
         }
-        catch when (!StillWanted)
+        catch (Exception error) when (!StillWanted)
         {
+            if (error is not OperationCanceledException) _owner.DroppedError?.Invoke(error);
             return (false, default!);
         }
     }
