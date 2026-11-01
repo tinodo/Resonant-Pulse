@@ -9,10 +9,9 @@ namespace ResonantPulse.App;
 /// A tempo that is typed in the Tempo panel is not a nudge: it is an edit of its own, and it has to come after the nudges that are on
 /// their way. The edit queue is first in, first out, so an edit made while the loop is committing is queued between two of the loop's
 /// commits, and the loop then goes on to commit its older value over it. <see cref="AfterNudgesAsync"/> makes the typed edit wait for
-/// the loop that is running (and for the typed tempos pressed before it), so that it is committed after every nudge asked for before
-/// it was started and after those that the loop took on meanwhile; a nudge asked for after its commit has been queued is committed
-/// after it, in queue order, and one asked for in the turn of the UI thread between the end of the loop and that moment is queued
-/// first, so the typed tempo then wins over it. While it is on its way,
+/// the typed tempos pressed before it and for the loop, until no loop is running, so that it is committed after every nudge that was
+/// asked for until the moment its commit is queued, however many loops that takes (one can start while an earlier typed tempo is being
+/// applied); a nudge asked for after its commit has been queued is committed after it, in queue order. While it is on its way,
 /// <see cref="Settled"/> includes it, so that closing, Start and Tap to start, which wait for the tempo to settle, wait for it too and
 /// not only for the loop. (Closing waits for at most its four seconds and a second attempt leaves anyway.)
 /// </para>
@@ -81,15 +80,14 @@ internal sealed class TempoNudges
     }
 
     /// <summary>
-    /// Runs the commit of a tempo that was typed (Done in the Tempo panel) once the loop that is running has ended, and the typed
-    /// tempos that were pressed before it, so that it is committed after the nudges that were asked for before it, and not between two
+    /// Runs the commit of a tempo that was typed (Done in the Tempo panel) once the typed tempos that were pressed before it have
+    /// ended and no loop is running, so that it is committed after the nudges that were asked for until then, and not between two
     /// of the loop's commits. It is part of
     /// <see cref="Settled"/> from the moment it is called until it has ended, however it ends; what it throws goes to the caller.
     /// Called with the edit queue not held (the loop needs it to finish).
     /// </summary>
     internal async Task AfterNudgesAsync(Func<Task> typed)
     {
-        var nudges = _loop;
         // The typed tempo that was pressed before this one, or a completed task. It is only ever completed, never failed, so waiting
         // for it is safe.
         var earlier = _typed;
@@ -99,10 +97,13 @@ internal sealed class TempoNudges
         _typed = ended.Task;
         try
         {
-            await nudges;
             // After the typed tempos that were pressed before this one, in the order they were pressed, whatever order the
-            // continuations of their waits for the loop are run in.
+            // continuations of their waits are run in.
             await earlier;
+            // After every nudge that was asked for until the moment this commit is queued: the loop that is running, and one that
+            // starts while this waits (a nudge made while an earlier typed tempo was being applied). Nothing is awaited between the
+            // last look at the loop and the call that queues the commit, so no nudge can come in between.
+            while (!_loop.IsCompleted) await _loop;
             await typed();
         }
         finally { ended.SetResult(); }

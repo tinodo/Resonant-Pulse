@@ -464,6 +464,33 @@ public sealed class TempoNudgesTests
     }
 
     [TestMethod]
+    public async Task ANudgeLoopThatStartsWhileATypedTempoWaitsForTheOneBeforeItIsCommittedBeforeIt()
+    {
+        // Done is pressed twice (the panel was dismissed and opened again in between) and, while the second waits for the first, the panel
+        // is dismissed and the tempo nudged: a loop that did not exist when the second Done was pressed. Whatever was asked for until the
+        // second Done's commit is queued is committed before it, as for a loop that was already running.
+        var rig = new Rig();
+        var first = rig.DoneAsync(90);
+        var second = rig.DoneAsync(80);
+        rig.Nudges.Request(121);
+        rig.Nudges.Request(122);
+
+        rig.Finish();
+        await first.WaitAsync(Limit);
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        await rig.StartedAsync(4);
+        rig.Finish();
+        await second.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 90.0, 121.0, 122.0, 80.0 }, rig.Written, "the nudges asked for before its commit was queued come first, the typed tempo last");
+        Assert.AreEqual(80.0, rig.Tempo);
+    }
+
+    [TestMethod]
     public async Task SettledOfALoopThatEndedStaysCompleteWhenAnotherLoopStarts()
     {
         var rig = new Rig();

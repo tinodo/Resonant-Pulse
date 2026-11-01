@@ -283,6 +283,28 @@ public sealed class TempoEditsTests
     }
 
     [TestMethod]
+    public async Task AnApplyThatEndsAfterThePanelWasOpenedAgainDoesNotAskForTheNewOpeningToBeClosed()
+    {
+        // Done was pressed, the panel was dismissed and opened again (with a draft of its own, on which Done has not been pressed), and the
+        // first apply ends: its change is applied, but it must not close what is open now.
+        var opening = 1;
+        var applied = 0;
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var apply = TempoEdits.OneAtATime(async () =>
+        {
+            applied++;
+            return await gate.Task;
+        }, () => opening);
+
+        var first = apply();
+        opening = 2;
+        gate.SetResult(true);
+
+        Assert.IsFalse(await first.WaitAsync(TimeSpan.FromSeconds(10)), "false leaves the panel of the new opening open, with its draft");
+        Assert.AreEqual(1, applied, "the change itself was applied");
+    }
+
+    [TestMethod]
     public async Task APressOfDoneInANewOpeningOfThePanelIsAppliedWhileAnEarlierOneIsStillBeingApplied()
     {
         // Done was pressed, the panel was dismissed and opened again while it waited, and a tempo was typed and Done pressed again:
@@ -306,7 +328,7 @@ public sealed class TempoEditsTests
         Assert.IsFalse(repeat, "a repeat of the press of the same opening is ignored");
         CollectionAssert.AreEqual(new[] { 1, 2 }, applied, "the press of the new opening was applied");
         gates[0].SetResult(true);
-        Assert.IsTrue(await first.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.IsFalse(await first.WaitAsync(TimeSpan.FromSeconds(10)), "the first is applied but does not close the panel of the new opening");
         Assert.IsFalse(await apply().WaitAsync(TimeSpan.FromSeconds(10)), "the first press ending does not release the second's");
         Assert.AreEqual(2, applied.Count);
         gates[1].SetResult(true);
