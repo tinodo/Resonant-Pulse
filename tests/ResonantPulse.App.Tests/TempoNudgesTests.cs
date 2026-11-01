@@ -504,6 +504,7 @@ public sealed class TempoNudgesTests
         // twice: a loop that did not exist when the wait began. Both nudges were asked for before Done's commit is queued, so both are
         // committed before it; the typed tempo is not committed between them.
         var rig = new Rig();
+        var asked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         rig.Nudges.Request(121);
         await rig.StartedAsync(1);
         var done = rig.DoneAsync(90);
@@ -512,9 +513,13 @@ public sealed class TempoNudgesTests
             rig.OnEnded = null;
             rig.Nudges.Request(130);
             rig.Nudges.Request(131);
+            asked.SetResult();
         };
 
         rig.Finish();
+        // The first commit of the new loop takes the lock inside the first request, so waiting for it to start alone would let this
+        // thread release it before the second request has been made.
+        await asked.Task.WaitAsync(Limit);
         await rig.StartedAsync(2);
         rig.Finish();
         await rig.StartedAsync(3);
