@@ -76,15 +76,16 @@ internal sealed class FileWrites
     {
         _stopping = true;
         var timeout = Task.Delay(limit);
-        // A write that begins while the close waits is cancelled as it begins (see Add) and is waited for too: the loop looks again.
-        while (_going.Count > 0)
+        // A write that begins while the close waits is cancelled as it begins (see Add) and is waited for too: the loop looks again. Only a
+        // write that has not ended counts, so that the loop cannot go round without ever waiting.
+        while (true)
         {
-            var going = _going.ToArray();
+            var going = _going.Where(write => !write.Ended.IsCompleted).ToArray();
+            if (going.Length == 0) return true;
             foreach (var write in going) write.Cancel();
             var ended = Task.WhenAll(going.Select(write => write.Ended));
             if (await Task.WhenAny(ended, timeout).ConfigureAwait(true) != ended) return false;
         }
-        return true;
     }
 
     /// <summary>
