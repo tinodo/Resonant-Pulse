@@ -8,6 +8,10 @@ param(
     # Also run the real audio scenarios (Start, live sound/tempo/meter edits, counted stops, pause/resume) on the Windows
     # default output, at an inaudible master gain (0.0001, about -80 dBFS) seeded into the scratch data folder.
     [switch]$SilentAudio,
+    # The build was made with -p:UiTest=true and its hooks are switched on (RESONANT_PULSE_UITEST_DIR is set for the application), so the
+    # checks that need them run: they hold the edit queue to make the order of edits certain, whatever the speed of the machine. A shipped
+    # build has no hooks, and the verifier then reports those checks as not run. Never ship or install such a build.
+    [switch]$UiTestHooks,
     [switch]$InsidePrivateDesktop
 )
 # Owner-authorised local run of the native first-use verifier against your OWN build. Nothing audible is played (see
@@ -30,11 +34,19 @@ $marker = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('RESONANT_PULSE_HO
 if (-not $latin1.GetString([IO.File]::ReadAllBytes($assembly)).Contains($marker)) {
     throw "Refusing to run ${Exe}: it does not read RESONANT_PULSE_HOME, so it would use the real data folder. Build the current source."
 }
+if ($UiTestHooks) {
+    # -UiTestHooks switches the hooks on; a build without them has nothing to switch on, which must not pass for a run that used them.
+    $hookMarker = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('UiTestHoldEdits'))
+    if (-not $latin1.GetString([IO.File]::ReadAllBytes($assembly)).Contains($hookMarker)) {
+        throw "-UiTestHooks needs a build made with -p:UiTest=true: ${Exe} has no UI-test hooks."
+    }
+}
 $null = New-Item -ItemType Directory -Force -Path $OutputPath
 if (-not $Visible -and -not $InsidePrivateDesktop) {
     $log = Join-Path $OutputPath 'verify-local.log'
     $forward = @('-Exe', $Exe, '-OutputPath', $OutputPath, '-InsidePrivateDesktop')
     if ($SilentAudio) { $forward += '-SilentAudio' }
+    if ($UiTestHooks) { $forward += '-UiTestHooks' }
     & (Join-Path $PSScriptRoot 'Invoke-OnPrivateDesktop.ps1') -Script $PSCommandPath -LogPath $log -ArgumentList $forward
     $code = $LASTEXITCODE
     Get-Content -LiteralPath $log | Select-Object -Last 25
@@ -89,6 +101,12 @@ $info = [Diagnostics.ProcessStartInfo]::new($Exe)
 $info.WorkingDirectory = Split-Path -Parent $Exe
 $info.UseShellExecute = $false
 $info.EnvironmentVariables['RESONANT_PULSE_HOME'] = $data
+if ($UiTestHooks) {
+    # The hooks of a UiTest build are off until this folder is named (nothing is captured here, the folder only has to exist).
+    $uiTestFolder = Join-Path $OutputPath 'uitest'
+    $null = New-Item -ItemType Directory -Force -Path $uiTestFolder
+    $info.EnvironmentVariables['RESONANT_PULSE_UITEST_DIR'] = $uiTestFolder
+}
 $app = [Diagnostics.Process]::Start($info)
 $exit = 1
 try {
