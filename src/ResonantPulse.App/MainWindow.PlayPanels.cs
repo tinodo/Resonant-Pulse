@@ -18,8 +18,8 @@ public sealed partial class MainWindow
     /// <summary>
     /// One consistent panel: title, optional help, scrolling fields, then [Cancel] [Done] side by side.
     /// Done applies and closes; Cancel (or clicking away) before Done discards. Once Done has been pressed the change is on its way, and
-    /// Cancel or clicking away only closes the panel: a change that takes a moment (the Tempo panel's waits for the nudges that are on
-    /// their way) is still applied, as one that is queued behind another edit is. Fields are refilled from the document
+    /// Cancel or clicking away only closes the panel: a change that takes a moment (the Done of the Tempo panel waits for the nudges that
+    /// are on their way) is still applied, as one that is queued behind another edit is. Fields are refilled from the document
     /// every time the panel opens, so a cancelled draft never lingers. A <paramref name="readOnly"/> panel only shows text (Help):
     /// it has nothing to cancel, so it has Done alone, and its scrolling area is a tab stop so that a keyboard can read it.
     /// <paramref name="titleExtra"/> sits at the right of the title and wraps inside its own column. The panel's height is what its
