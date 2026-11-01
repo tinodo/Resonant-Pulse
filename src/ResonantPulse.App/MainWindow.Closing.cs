@@ -21,7 +21,11 @@ public sealed partial class MainWindow
     /// <summary>True while the window is being closed: nothing new starts producing edits.</summary>
     private bool _closeFlushing;
 
-    /// <summary>True once the window will go (the close has been decided) or has gone: what ends after that has nobody to tell.</summary>
+    /// <summary>
+    /// True once the window will go (the close has been decided, after the writes were stopped or given up on) or has gone: what ends after
+    /// that has nobody to tell. While the close waits for the writes (at most <see cref="CloseSaveLimit"/>) a write that ends still shows
+    /// its notice on the window that is about to go; nothing is harmed by that.
+    /// </summary>
     private bool IsWindowGoing => _closeNow || _isClosed;
 
     // Lets the local verification build make the last save slow, so a driver can look at the window meanwhile

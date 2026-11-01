@@ -159,8 +159,10 @@ public sealed class FileDialogFailureTests
         Assert.AreEqual(0, FrenchSpacingFaults("Pas de ponctuation à surveiller.").Count);
     }
 
+    // The sentence has none of these marks today, so this check holds for a later edit of the sentence only; the rule itself is proven by
+    // the test above.
     [TestMethod]
-    public void TheFrenchSentenceKeepsItsNoBreakSpaceBeforeAColon()
+    public void TheFrenchSentenceHasNoOrdinarySpaceBeforeAColonSemicolonQuestionMarkOrExclamationMark()
     {
         var previousLanguage = Text.Language;
         var previousCulture = CultureInfo.CurrentCulture;

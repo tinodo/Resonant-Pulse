@@ -220,8 +220,8 @@ temporary file and a file that was already at the destination stays as it was. C
 (a stalled disk; Core's WAV export is not cancelled once its commit, two file moves, has begun) is left behind when the window goes after the
 4 seconds, with a line in the log that names its destination, and a temporary file may stay beside it (it stayed in the real-window runs, where a
 delay that ignores the token stood in for a stalled disk). A close that is refused (the project could not be saved, so the window stays) leaves a
-write that is being written going, and voids one that has not yet asked its question or opened its dialog (a plan is compiled for the tracks, a
-MIDI file is looked at, notes are saved), so that no question or dialog is shown afterwards: that command is dropped without a message, as the
+write that is being written going, and voids one that has not yet asked its question or opened its dialog (the tracks export is compiling its
+plan, a MIDI export is checking the project, a save is gathering the notes being typed), so that no question or dialog is shown afterwards: that command is dropped without a message, as the
 tracks export was dropped before. Save to library and the backup of a replacement have no question or dialog and are not voided. A file dialog is
 not opened while a close is under way. Writes of different commands overlap as they always could; only the export of separate tracks is one at a
 time, and only it shows a notice while it writes (the others show none; what they took is in docs/DELIVERY.md).
