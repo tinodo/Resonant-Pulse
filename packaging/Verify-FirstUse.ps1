@@ -10,13 +10,17 @@ param(
     [switch]$Keyboard,
     [switch]$NoAudio,
     [switch]$NoScreenshots,
-    [switch]$NoKeyboard
+    [switch]$NoKeyboard,
+    # The caller (Verify-Local.ps1 -UiTestHooks) asked for the checks that need the UI-test hooks of a -p:UiTest=true build: if one of them
+    # cannot run (no hooks, no audio, no output), the run fails instead of reporting it as not run.
+    [switch]$RequireUiTestHooks
 )
 $ErrorActionPreference = 'Stop'
 $onCi = $env:GITHUB_ACTIONS -eq 'true'
 $playAudio = (-not $NoAudio) -and ($RunAudio -or $onCi)
 $takeScreenshots = (-not $NoScreenshots) -and ($Screenshots -or $onCi)
 $sendKeys = (-not $NoKeyboard) -and ($Keyboard -or $onCi)
+if ($RequireUiTestHooks -and -not $playAudio) { throw '-RequireUiTestHooks needs the audio checks (-RunAudio): the checks that use the hooks play, at an inaudible gain.' }
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type @'
@@ -1899,6 +1903,102 @@ function Test-TapStartWithOutput {
     }
     Assert-NoErrorNotice 'Tap to start'
 }
+# The tempo that is typed in the Tempo panel is the last word. A nudge (the steppers, the wheel, TAP) is committed by a loop that takes one
+# value at a time and goes on to the newest, and a Done pressed while that loop was still committing queued its own commit between two of
+# the loop's, so the loop then committed its older value over the typed one: the project, the dial and the audio ended on a nudge, not on
+# what was typed (the 'Done did not apply the typed tempo' of a runner on which a commit is slow). How slow a commit is depends on the
+# machine, so this check does not wait for a slow one: a build with the UI-test hooks (-p:UiTest=true, started by Verify-Local.ps1
+# -UiTestHooks) holds the edit queue, the nudges and Done are made, and only then is the queue let go, so the commits run in the order they
+# were asked for however slow UI Automation is. A shipped build has no hooks and a hosted runner no output, and the report then says that
+# this was not run (a caller that asked for the hooks, -RequireUiTestHooks, gets a failure instead). The first round plays, because the
+# audio is part of what must end on the typed tempo; the second is made with the transport stopped, with a changed note value, which Done
+# commits as one change with the tempo (so the dial and the project, not the audio, are what it checks).
+function Test-TempoTypedAfterNudges {
+    $script:tempoNudgeDone = [System.Collections.Generic.List[string]]::new()
+    if ($RequireUiTestHooks) {
+        # Asked for: the hooks have to be there, and are waited for like any control, not reported as not run.
+        $null = Find-Control 'UiTestHoldEdits'
+        $null = Find-Control 'UiTestReleaseEdits'
+    } elseif ($null -eq (Find-Optional 'UiTestHoldEdits') -or $null -eq (Find-Optional 'UiTestReleaseEdits')) {
+        $script:tempoNudgeDone.Add('not-run-no-ui-test-hooks')
+        return
+    }
+    # The tempo of the status is the one the audio plays while the transport plays and the one the project holds while it is stopped.
+    function Get-StatusTempo {
+        $status = (Find-Control 'TransportStatus').Current.ItemStatus
+        if ($status -notmatch ';tempo=([0-9.]+);') { throw "The transport reports no tempo: $status" }
+        [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
+    }
+    function Get-Shown([string]$source) { "the dial shows $(Get-Dial), $source $(Get-StatusTempo)" }
+    function Assert-LastWord([string]$what, [string]$dialLike, [double]$tempo, [string]$source) {
+        try { Wait-Until { (Get-Dial) -like $dialLike -and (Get-StatusTempo) -eq $tempo } 'the typed tempo is not where it should be' 30 }
+        catch { throw "${what}: the typed tempo ($tempo) is not where the dial and the status end: $(Get-Shown $source)." }
+        # Nothing that was asked for before Done may land after it, so the state is watched for a while: a later commit would show as a change.
+        $until = [DateTime]::UtcNow.AddSeconds(4)
+        do {
+            if ((Get-Dial) -notlike $dialLike -or (Get-StatusTempo) -ne $tempo) {
+                throw "${what}: a nudge that was still on its way landed after the typed tempo ($tempo): $(Get-Shown $source)."
+            }
+            Start-Sleep -Milliseconds 250
+        } while ([DateTime]::UtcNow -lt $until)
+    }
+    # Three nudges, then the panel is opened and Done pressed, all while nothing is applied; then the queue is let go.
+    function Test-OneRound([string]$what, [string]$dialAfterNudges, [double]$typed, [string]$unitName) {
+        Invoke-Control 'UiTestHoldEdits'
+        $script:tempoEditsHeld = $true
+        foreach ($nudge in 1..3) { Invoke-Control 'TempoUp' }
+        Wait-Until { (Get-Dial) -like $dialAfterNudges } "${what}: Tempo + did not show the new tempo at once while the edit queue was held."
+        $before = Get-StatusTempo
+        Open-Panel @('TempoEdit') 'Tempo'
+        Wait-Settled 'Tempo'
+        Set-Number 'Tempo' $typed
+        if ($unitName) { Select-Combo 'TempoUnit' $unitName }
+        Invoke-Control 'TempoOptionsDone'
+        if ((Get-StatusTempo) -ne $before) { throw "${what}: something was applied although the edit queue was held ($(Get-Shown 'the status says')), so the check cannot tell what it means to." }
+        Invoke-Control 'UiTestReleaseEdits'
+        $script:tempoEditsHeld = $false
+        Wait-Condition { $null -eq (Find-Optional 'TempoOptionsDone') } "${what}: Done did not close the Tempo panel once the edit queue was let go." 60
+    }
+    $script:tempoEditsHeld = $false
+    try {
+        Select-Destination 'DestinationPlay'
+        Wait-Settled 'QuickMeter'
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') { throw 'Tempo typed after nudges: the transport is not stopped when the check begins.' }
+        if ((Get-Dial) -notlike '120*BPM*Quarter*') { throw "Tempo typed after nudges: the check begins from 120 BPM in quarter notes, not from $(Get-Dial)." }
+        # With the audio: after Done and the queue let go, the dial, the audio and (after Stop) the project all hold the typed 90.
+        Invoke-Control 'TransportStartPause'
+        $null = Wait-Transport 'Playing' $true
+        if ((Get-StatusTempo) -ne 120) { throw "Tempo typed after nudges: the audio does not begin at 120 BPM ($(Get-Shown 'the audio plays'))." }
+        Test-OneRound 'Tempo typed after nudges (playing)' '123*BPM*' 90 ''
+        Assert-LastWord 'Tempo typed after nudges (playing)' '90*BPM*' 90 'the audio plays'
+        Invoke-Control 'TransportStop'
+        $null = Wait-Transport 'Stopped'
+        Assert-LastWord 'Tempo typed after nudges (after Stop)' '90*BPM*' 90 'the project holds'
+        $script:tempoNudgeDone.Add('typed-90-after-three-held-nudges-on-the-dial-in-the-audio-and-in-the-project')
+        # With a changed note value, which the project takes as one change with the tempo (and a page that is built again).
+        Test-OneRound 'Tempo typed after nudges (note value)' '93*BPM*Quarter*' 60 'Eighth note'
+        Wait-Settled 'QuickMeter'
+        Assert-LastWord 'Tempo typed after nudges (note value)' '60*BPM*Eighth*' 60 'the project holds'
+        $script:tempoNudgeDone.Add('typed-60-in-eighth-notes-after-three-held-nudges')
+        Open-Panel @('TempoEdit') 'Tempo'
+        Wait-Settled 'Tempo'
+        Set-Number 'Tempo' 120
+        Select-Combo 'TempoUnit' 'Quarter note'
+        Invoke-Control 'TempoOptionsDone'
+        Wait-Absent 'TempoOptionsDone'
+        Wait-Until { (Get-Dial) -like '120*BPM*Quarter*' } 'The tempo and the note value did not return after the checks of a tempo typed after nudges.'
+        Assert-NoErrorNotice 'Tempo typed after nudges'
+    } finally {
+        if ($script:tempoEditsHeld) {
+            $script:tempoEditsHeld = $false
+            Invoke-Control 'UiTestReleaseEdits'
+        }
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') {
+            Invoke-Control 'TransportStop'
+            $null = Wait-Transport 'Stopped'
+        }
+    }
+}
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
@@ -1906,6 +2006,7 @@ $liveSound = 'not-run-no-output'
 $liveTempoAndMeter = 'not-run-no-output'
 $liveSplitClicks = 'not-run-no-output'
 $tapStartSwitching = 'not-run-no-output'
+$tempoTypedAfterNudges = 'not-run-no-output'
 $timingExportFlow = 'not-run-no-output'
 if (-not $playAudio) {
     $playback = 'not-run-audio-disabled'
@@ -1914,6 +2015,7 @@ if (-not $playAudio) {
     $liveTempoAndMeter = 'not-run-audio-disabled'
     $liveSplitClicks = 'not-run-audio-disabled'
     $tapStartSwitching = 'not-run-audio-disabled'
+    $tempoTypedAfterNudges = 'not-run-audio-disabled'
     $timingExportFlow = 'not-run-audio-disabled'
 } elseif ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
@@ -2069,6 +2171,9 @@ if (-not $playAudio) {
     }
     Test-TapStartWithOutput
     $tapStartSwitching = $script:tapStartDone -join ', '
+    # Before the export of a finished check: that check is left behind for the Dutch checks, and starting the transport (as this does) ends one.
+    Test-TempoTypedAfterNudges
+    $tempoTypedAfterNudges = $script:tempoNudgeDone -join ', '
     Test-TimingExportWithOutput
     $timingExportFlow = $script:timingExportDone -join ', '
 }
@@ -2488,8 +2593,13 @@ Wait-Settled 'QuickMeter'
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
-  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
+  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
+# The report is written first, so that it says why. A caller that asked for the checks that need the hooks (-RequireUiTestHooks) does not
+# get a pass for a run in which one of them could not run (a machine with no audio output reports it as not run).
+if ($RequireUiTestHooks -and $tempoTypedAfterNudges -like 'not-run*') {
+    throw "-RequireUiTestHooks: the check of a tempo typed after nudges did not run ($tempoTypedAfterNudges)."
+}

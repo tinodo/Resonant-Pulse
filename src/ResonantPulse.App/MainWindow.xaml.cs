@@ -68,6 +68,13 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         Diagnostics.Write("MainWindow XAML initialization beginning");
+        _tempoNudges = new TempoNudges(
+            wanted => CommitAsync(doc => doc.Settings.Tempo = wanted, editorChange: EditorChangeKind.GlobalTempoOnly),
+            GuardAsync,
+            () =>
+            {
+                if (!_isClosed) RefreshSnapshot();
+            });
         InitializeComponent();
         Diagnostics.Write("MainWindow XAML initialization completed");
         Title = "Resonant Pulse";
@@ -380,7 +387,7 @@ public sealed partial class MainWindow : Window
                 {
                     // The tempo is submitted one step at a time and the newest request waits outside the queue until the one
                     // being committed is done, so it is waited for first, as closing does.
-                    await _tempoPump.WaitAsync(wait.Token);
+                    await _tempoNudges.Settled.WaitAsync(wait.Token);
                     await WaitForPendingEditsAsync(wait.Token);
                 }
                 catch (OperationCanceledException) { return; }

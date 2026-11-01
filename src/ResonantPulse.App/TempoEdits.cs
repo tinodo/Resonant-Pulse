@@ -9,6 +9,40 @@ internal static class TempoEdits
         double.IsFinite(proposed) && current != proposed;
 
     /// <summary>
+    /// Makes a second press of Done in the same opening of the panel do nothing while the first is still being applied. Done waits for the
+    /// nudges that are on their way before it commits, which can take a moment on a slow machine, and a second press in that moment would
+    /// write the same tempo again (one more Undo step). The second press leaves the panel open and returns false. A press in a later
+    /// opening (the panel was dismissed and opened again while the first was being applied) has typed something of its own and is
+    /// applied: it starts at once, and a tempo or unit change in it is committed after the first one's, through
+    /// <see cref="TempoNudges.AfterNudgesAsync"/>. What an apply returns tells the panel whether to close (false: the change was
+    /// refused, so the panel stays open with what was typed); it is passed on only while the opening that was pressed is still the open
+    /// one. An apply that ends after the panel was opened again is still applied, but it returns false, so that it does not close the
+    /// new opening, which has a draft of its own (filled in before the first apply landed and not refreshed by it; Done there writes only
+    /// what was changed in it). For the UI thread: the state is a captured variable.
+    /// </summary>
+    /// <param name="opening">The number of this opening of the panel; it changes each time the panel opens.</param>
+    internal static Func<Task<bool>> OneAtATime(Func<Task<bool>> apply, Func<int> opening)
+    {
+        var applyingIn = -1;
+        return async () =>
+        {
+            var mine = opening();
+            if (applyingIn == mine) return false;
+            applyingIn = mine;
+            try
+            {
+                var applied = await apply();
+                return applied && opening() == mine;
+            }
+            finally
+            {
+                // An apply of an earlier opening that ends now must not release the one that is running.
+                if (applyingIn == mine) applyingIn = -1;
+            }
+        };
+    }
+
+    /// <summary>
     /// What the Tempo panel writes when Done is pressed: only the fields that were changed in it. A field that still shows what it
     /// showed when the panel opened must not put that value over a newer one, such as the tempo that a Tap to start has saved
     /// since or a nudge that was still on its way. The tempo is compared to the tenth it is typed to.

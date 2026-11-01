@@ -53,7 +53,7 @@ public sealed partial class MainWindow
         var cardBlind = !cardIdle && blind;
         // The readout shows what the player asked for while nothing plays a program; otherwise the audible tempo, so a
         // running program (or a running open-ended revision) is not misreported after a Studio edit changes the document.
-        var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoRequested,
+        var tempo = TempoReadout.Select(active.Program.Count > 0, _document.Program.Count > 0, _tempoNudges.Requested,
             _document.Settings.Tempo, position?.Tempo, settings.Tempo);
         // While Tap to start listens, the dial shows the tempo the taps have so far (to the tenth, as a plain tap rounds it), so the
         // person sees what they are about to start at. It is not the project's tempo until the last tap has saved it.
