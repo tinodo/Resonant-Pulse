@@ -357,4 +357,67 @@ public sealed class TempoEditsTests
         Assert.IsTrue(await apply());
         Assert.AreEqual(3, applied);
     }
+
+    [TestMethod]
+    public async Task AnApplyThatEndsAfterThePanelWasOpenedAgainTellsTheNewOpeningOnceThatItHasLanded()
+    {
+        // Done was pressed, the panel was dismissed and opened again before the change was in the project: the draft of the new opening was
+        // filled in before that, so it is told when the change has landed, and by then the project holds what was written.
+        var opening = 1;
+        var project = 120;
+        var projectWhenTold = 0;
+        var told = 0;
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var apply = TempoEdits.OneAtATime(async () =>
+        {
+            var result = await gate.Task;
+            project = 90;
+            return result;
+        }, () => opening, () =>
+        {
+            told++;
+            projectWhenTold = project;
+        });
+
+        var first = apply();
+        opening = 2;
+        Assert.AreEqual(0, told, "nothing has landed yet, so the draft is still true");
+        gate.SetResult(true);
+
+        Assert.IsFalse(await first.WaitAsync(TimeSpan.FromSeconds(10)), "it does not close the new opening");
+        Assert.AreEqual(1, told, "the new opening is told once");
+        Assert.AreEqual(90, projectWhenTold, "after the change is in the project, so that the draft can follow it");
+    }
+
+    [TestMethod]
+    public async Task AnApplyThatEndsInItsOwnOpeningDoesNotTellAnyoneToFollowTheProject()
+    {
+        var told = 0;
+        var apply = TempoEdits.OneAtATime(() => Task.FromResult(true), () => 1, () => told++);
+
+        Assert.IsTrue(await apply());
+
+        Assert.AreEqual(0, told, "the panel closes: there is no other opening whose draft is behind");
+    }
+
+    [TestMethod]
+    public async Task AnApplyThatWasRefusedOrFailedAfterThePanelWasOpenedAgainTellsNoOne()
+    {
+        // Nothing landed, so the draft of the new opening, which shows the project as it is, is still true.
+        var opening = 1;
+        var told = 0;
+        var applied = 0;
+        var apply = TempoEdits.OneAtATime(() =>
+        {
+            applied++;
+            opening++;
+            return applied == 1 ? Task.FromResult(false) : Task.FromException<bool>(new IOException("The recovery file cannot be written."));
+        }, () => opening, () => told++);
+
+        Assert.IsFalse(await apply(), "refused");
+        await Assert.ThrowsExactlyAsync<IOException>(() => apply());
+
+        Assert.AreEqual(2, applied);
+        Assert.AreEqual(0, told);
+    }
 }

@@ -268,6 +268,27 @@ public sealed partial class MainWindow
         var openedTempo = settings.Tempo;
         var openedUnit = settings.BeatUnitQuarters;
         var opening = 0;
+        // An earlier Done that lands after the panel was opened again (it was dismissed while Done waited for the nudges, and opened again
+        // before the change was in the project): the draft of this opening was filled in before that, so a field that the person has not
+        // changed since follows the project, and what was changed is left alone. The opened values move with it, so that Done still writes
+        // only what was changed.
+        void FollowProject()
+        {
+            var current = _document.Settings;
+            var shownUnit = unit.SelectedItem is Choice choice ? double.Parse(choice.Value, CultureInfo.InvariantCulture) : openedUnit;
+            var (tempoEdited, unitEdited) = TempoEdits.PanelEdits(openedTempo, openedUnit, Math.Round(tempo.Value, 1), shownUnit);
+            if (!tempoEdited)
+            {
+                openedTempo = _tempoNudges.Requested ?? current.Tempo;
+                tempo.Value = openedTempo;
+            }
+            if (!unitEdited)
+            {
+                openedUnit = current.BeatUnitQuarters;
+                SelectChoice(unit, Invariant(openedUnit));
+            }
+            ShowGuide();
+        }
         return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
@@ -341,7 +362,7 @@ public sealed partial class MainWindow
                     await _workspace.SavePreferencesAsync(_preferences);
                 }
                 return true;
-            }, () => opening), titleExtra: guide);
+            }, () => opening, FollowProject), titleExtra: guide);
     }
 
     private OptionPanel BuildRhythmPanel()

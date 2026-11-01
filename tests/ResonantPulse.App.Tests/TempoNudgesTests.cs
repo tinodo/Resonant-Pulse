@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Tests;
 
@@ -115,6 +116,91 @@ public sealed class TempoNudgesTests
 
         /// <summary>Done in the Tempo panel with a tempo typed: its commit waits for the nudges that are on their way.</summary>
         internal Task DoneAsync(double typed) => Nudges.AfterNudgesAsync(() => Commit(typed));
+
+        /// <summary>The project that is current: another one once <see cref="ReplaceAsync"/> has been finished.</summary>
+        internal int Project;
+
+        /// <summary>Run when a replacement has been published, still under the edit lock.</summary>
+        internal Action? OnReplaced;
+
+        /// <summary>
+        /// A rig in which the project can be replaced. Its commits check, under the edit lock and before anything else, that the project is
+        /// still the one the tempo was asked for, and leave nothing behind when it is not, as the window's commit does.
+        /// </summary>
+        internal static Rig WithProjects() => new(true);
+
+        private Rig(bool replaceable) => Nudges = new TempoNudges(CommitFor, Guard, () =>
+        {
+            Ended++;
+            OnEnded?.Invoke();
+        }, () => Project);
+
+        /// <summary>One commit of a tempo that was asked for the project that was current then.</summary>
+        internal Task CommitFor(double bpm, Func<bool> stillTheProject)
+        {
+            Interlocked.Increment(ref _asked);
+            return DocumentPublication.RunAsync(_edits, async published =>
+            {
+                if (!stillTheProject()) throw new OperationCanceledException();
+                var failure = await Gate();
+                Tempo = bpm;
+                Written.Add(bpm);
+                published();
+                if (failure is not null) throw failure;
+            }, _ => { });
+        }
+
+        /// <summary>
+        /// The project is replaced (Open, New, a ready-made rhythm, the next song): the replacement takes its place in the edit queue like
+        /// a commit, and once it has been finished the project is another one, with a tempo of its own.
+        /// </summary>
+        internal Task ReplaceAsync(double tempo) => DocumentPublication.RunAsync(_edits, async published =>
+        {
+            await Gate();
+            Project++;
+            Tempo = tempo;
+            published();
+            OnReplaced?.Invoke();
+        }, _ => { });
+
+        /// <summary>
+        /// A ready-made meter that changes the click unit, as the window applies it: under the edit lock it reads the tempo and writes it
+        /// converted (4/4 in quarter notes with every beat split in two, to 6/8: the same clicks at twice the number).
+        /// </summary>
+        internal Task ConvertNow()
+        {
+            Interlocked.Increment(ref _asked);
+            return DocumentPublication.RunAsync(_edits, async published =>
+            {
+                var failure = await Gate();
+                var settings = new PulseSettings { Tempo = Tempo, BeatUnitQuarters = 1, Subdivision = 2 };
+                MeterPresets.ApplyOneClickPerBeat(settings, 6, 8, [3, 3]);
+                Tempo = settings.Tempo;
+                Written.Add(Tempo);
+                published();
+                if (failure is not null) throw failure;
+            }, _ => { });
+        }
+
+        /// <summary>The same ready-made meter, which waits for the nudges that are on their way, as Done does.</summary>
+        internal Task ConvertAsync() => Nudges.AfterNudgesAsync(ConvertNow);
+
+        /// <summary>
+        /// Finishes the commits that have the lock, one after the other, until the loop and what waits for it have ended, so that a test that
+        /// expects a commit to be dropped fails on what was written, not on a wait that never ends.
+        /// </summary>
+        internal async Task FinishUntilSettledAsync()
+        {
+            var deadline = DateTime.UtcNow + Limit;
+            while (!Nudges.Settled.IsCompleted)
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException("The loop did not end.");
+                bool waiting;
+                lock (_lock) waiting = _finished < _gates.Count;
+                if (waiting) Finish();
+                else await Task.Delay(5);
+            }
+        }
     }
 
     [TestMethod]
@@ -635,5 +721,170 @@ public sealed class TempoNudgesTests
         CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "the commit that was running lands; 125 is not committed");
         Assert.AreEqual(1, rig.Asked);
         Assert.AreEqual(1, rig.Ended);
+    }
+
+    [TestMethod]
+    public async Task ANudgeWhoseCommitIsQueuedBehindAReplacementOfTheProjectIsNotCommittedIntoTheReplacement()
+    {
+        // The loop is committing 121 and 122 is its newest request when the project is replaced (Open, New, a ready-made rhythm, the next
+        // song): the replacement takes its place in the edit queue behind the commit that runs, and the loop's next commit behind it.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        var replacement = rig.ReplaceAsync(120);
+
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await replacement.WaitAsync(Limit);
+        await rig.FinishUntilSettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "122 was asked for the project that went: its commit leaves nothing behind");
+        Assert.AreEqual(120.0, rig.Tempo, "the replacement keeps its own tempo");
+        Assert.AreEqual(2, rig.Asked, "the commit of 122 was asked for, queued behind the replacement, and dropped there");
+        Assert.AreEqual(0, rig.Reported.Count, "a nudge that is dropped because its project is gone is not an error");
+        Assert.IsNull(rig.Nudges.Requested, "so the dial shows the replacement's own tempo");
+        Assert.AreEqual(1, rig.Ended);
+    }
+
+    [TestMethod]
+    public async Task ANudgeAskedForTheReplacementIsCommittedEvenWhenItIsTheSameNumberAsTheOneThatWasDropped()
+    {
+        // The person nudges the replacement to 122 the moment it is published, while the loop's commit of the 122 that was asked for the
+        // project that went is still queued behind it. The loop drops that one and then commits the new one: it is not "the same
+        // request again", it is another project's.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        rig.OnReplaced = () => rig.Nudges.Request(122);
+        var replacement = rig.ReplaceAsync(120);
+
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        await replacement.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 121.0, 122.0 }, rig.Written, "the 122 of the project that went was dropped, the 122 of the replacement was committed");
+        Assert.AreEqual(122.0, rig.Tempo);
+        Assert.AreEqual(3, rig.Asked, "121, the dropped 122 and the replacement's own 122");
+        Assert.AreEqual(0, rig.Reported.Count);
+        Assert.IsNull(rig.Nudges.Requested);
+        Assert.AreEqual(1, rig.Ended, "one loop for all of it");
+    }
+
+    [TestMethod]
+    public async Task TheRequestOfAProjectThatWasReplacedIsNotShownAndNotCommitted()
+    {
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        Assert.AreEqual(122.0, rig.Nudges.Requested);
+
+        rig.Project++;
+
+        Assert.IsNull(rig.Nudges.Requested, "the dial shows the replacement's own tempo, not what was asked for the project that went");
+        rig.Finish();
+        await rig.FinishUntilSettledAsync();
+        CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "the commit that was running lands; 122 is not committed");
+        Assert.AreEqual(1, rig.Asked, "the loop does not ask for a commit of what was asked for another project");
+        Assert.AreEqual(1, rig.Ended);
+    }
+
+    [TestMethod]
+    public async Task ACommitThatIsCancelledForAnyOtherReasonStillEndsTheLoopAndDropsWhatWasAskedAfterIt()
+    {
+        // Only a commit that was dropped because its project is gone is passed over; the project is the current one here.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+
+        rig.Fail(new OperationCanceledException());
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(Array.Empty<double>(), rig.Written);
+        Assert.AreEqual(1, rig.Asked, "122 is not asked for: the loop ended with the cancelled commit, as it always did");
+        Assert.IsNull(rig.Nudges.Requested);
+        Assert.AreEqual(1, rig.Ended);
+    }
+
+    [TestMethod]
+    public async Task ATempoTypedAfterADroppedNudgeStillWaitsForTheLoopAndThenCommitsIntoTheReplacement()
+    {
+        // Done in the replacement's panel while the loop's last commit, for the project that went, is still queued behind the replacement.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        var replacement = rig.ReplaceAsync(120);
+        rig.Finish();
+        await rig.StartedAsync(2);
+        var done = rig.DoneAsync(90);
+        Assert.AreEqual(2, rig.Asked, "Done waits for the loop, which has the dropped commit of 122 to go through");
+
+        rig.Finish();
+        await replacement.WaitAsync(Limit);
+        await rig.FinishUntilSettledAsync();
+        await done.WaitAsync(Limit);
+
+        CollectionAssert.AreEqual(new[] { 121.0, 90.0 }, rig.Written, "the nudge of the project that went was dropped; what was typed is committed");
+        Assert.AreEqual(90.0, rig.Tempo);
+    }
+
+    [TestMethod]
+    public async Task AReadyMadeMeterThatConvertsTheTempoIsCommittedAfterTheNudgesThatAreOnTheirWay()
+    {
+        // 4/4 in quarter notes with every beat split in two, to 6/8: the click unit becomes an eighth, so the tempo is doubled (the same clicks
+        // at the same speed). The meter is chosen while the loop commits 121 and 123 is its newest request.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        rig.Nudges.Request(123);
+
+        var meter = rig.ConvertAsync();
+        Assert.IsFalse(meter.IsCompleted);
+        Assert.AreEqual(1, rig.Asked, "the meter has not asked for its commit: it waits for the nudges, it does not queue behind the one that runs");
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        await meter.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 121.0, 123.0, 246.0 }, rig.Written, "the nudges first, then the meter, which converts the tempo that was nudged to");
+        Assert.AreEqual(246.0, rig.Tempo, "123 quarter notes are 246 eighth notes");
+        Assert.IsNull(rig.Nudges.Requested);
+    }
+
+    [TestMethod]
+    public async Task WithoutWaitingAReadyMadeMeterIsCommittedBetweenTheLoopsCommitsAndItsConversionIsLost()
+    {
+        // What choosing a meter did before it waited: its commit is queued behind the one that runs, and the loop's next commit (its newest,
+        // older request, in the old unit) behind that. Kept so that the test above cannot pass because this rig has no race.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        rig.Nudges.Request(123);
+
+        var meter = rig.ConvertNow();
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        await meter.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 121.0, 242.0, 123.0 }, rig.Written);
+        Assert.AreEqual(123.0, rig.Tempo, "the converted tempo was overwritten by a nudge that was asked for before it, in the old unit");
     }
 }

@@ -69,12 +69,19 @@ public sealed partial class MainWindow : Window
     {
         Diagnostics.Write("MainWindow XAML initialization beginning");
         _tempoNudges = new TempoNudges(
-            wanted => CommitAsync(doc => doc.Settings.Tempo = wanted, editorChange: EditorChangeKind.GlobalTempoOnly),
+            (wanted, stillTheProject) => CommitAsync(doc =>
+            {
+                // The project can be replaced (Open, New, a ready-made rhythm, the next song) while this waits in the edit queue, behind
+                // the replacement: what was nudged to belongs to the project that went, so nothing is written into its replacement.
+                if (!stillTheProject()) throw new OperationCanceledException();
+                doc.Settings.Tempo = wanted;
+            }, editorChange: EditorChangeKind.GlobalTempoOnly),
             GuardAsync,
             () =>
             {
                 if (!_isClosed) RefreshSnapshot();
-            });
+            },
+            () => _projectGeneration);
         InitializeComponent();
         Diagnostics.Write("MainWindow XAML initialization completed");
         Title = "Resonant Pulse";
