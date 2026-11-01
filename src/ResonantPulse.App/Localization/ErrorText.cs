@@ -30,10 +30,16 @@ internal static class ErrorText
                 WaveExportFailure.FailedCleanup => "ErrorWaveFailedCleanup",
                 _ => "ErrorFile"
             };
+            // The write of a staging file can fail with its own temporary file left too (a leftover inside the causes): it is one more file to delete.
+            var recovery = wave.RecoveryPaths.Concat(TemporaryFilesThatStay(wave)).Distinct(StringComparer.OrdinalIgnoreCase);
             return Text.Get(key) + Environment.NewLine + Environment.NewLine +
                 Text.Format("ErrorWavePaths", wave.WavePath, wave.ManifestPath,
-                    string.Join(Environment.NewLine, wave.RecoveryPaths));
+                    string.Join(Environment.NewLine, recovery));
         }
+        // A write that failed and could not remove its temporary file either (Save, Save to library, Export MIDI, the timing result's CSV, a WAV
+        // whose own staging write failed): whichever file was being written, the person is told which file stays beside the destination, so that
+        // it can be deleted. Both causes (the write and the removal) are in the log. The separate tracks say it in their own words, at their call site.
+        if (exception is TemporaryFileCleanupException leftover) return Text.Format("ErrorFileLeftover", leftover.TemporaryPath);
         // OS/provider/Core diagnostics are kept intact in the local log. They
         // are not passed off as a translated application message.
         var message = exception.Message;
@@ -72,4 +78,13 @@ internal static class ErrorText
             return Text.Get("ErrorRhythm");
         return Text.Get("ErrorGeneral");
     }
+
+    /// <summary>The temporary files that stay beside their destinations, named by <see cref="TemporaryFileCleanupException"/>s among the causes of an error.</summary>
+    private static IEnumerable<string> TemporaryFilesThatStay(Exception exception) => exception switch
+    {
+        TemporaryFileCleanupException leftover => [leftover.TemporaryPath],
+        AggregateException aggregate => aggregate.InnerExceptions.SelectMany(TemporaryFilesThatStay),
+        { InnerException: { } cause } => TemporaryFilesThatStay(cause),
+        _ => []
+    };
 }

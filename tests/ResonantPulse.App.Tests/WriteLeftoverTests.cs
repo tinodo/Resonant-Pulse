@@ -78,6 +78,53 @@ public sealed class WriteLeftoverTests
         }
     }
 
+    [TestMethod]
+    public void TheSentenceSaysWhatHappenedWhatIsUnchangedAndEndsWithThePathOfTheFile()
+    {
+        var parts = new Dictionary<string, string[]>
+        {
+            ["en"] = ["could not be saved", "temporary file", "could not be removed", "already there", "has not been changed", "delete the temporary file yourself"],
+            ["nl"] = ["niet worden bewaard", "tijdelijk bestand", "niet worden verwijderd", "er al stond", "niet gewijzigd", "zelf verwijderen"],
+            ["de"] = ["nicht gespeichert", "temporäre Datei", "nicht entfernt", "vorhandene Datei", "nicht verändert", "selbst löschen"],
+            ["fr"] = ["Impossible d’enregistrer le fichier", "fichier temporaire", "pas pu être supprimé", "déjà présent", "pas été modifié", "supprimer vous-même"],
+            ["es"] = ["No se pudo guardar el archivo", "archivo temporal", "no se pudo eliminar", "ya existía", "no se ha modificado", "eliminar usted mismo"]
+        };
+        foreach (var language in Languages)
+        {
+            var sentence = InLanguage(language, () => Text.Get("ErrorFileLeftover"));
+            foreach (var part in parts[language]) StringAssert.Contains(sentence, part, language);
+            // The path comes last, with nothing after it that could be read as part of the path, and there is only one place for it.
+            Assert.IsTrue(sentence.EndsWith("{0}", StringComparison.Ordinal), $"{language}: the path is the last thing in the sentence: '{sentence}'");
+            Assert.AreEqual(sentence.IndexOf("{0}", StringComparison.Ordinal), sentence.LastIndexOf("{0}", StringComparison.Ordinal), language);
+            Assert.IsTrue(sentence.Length <= 300, $"{language}: {sentence.Length} characters is too long for the notice bar");
+        }
+        // A colon is kept with the word before it by a no-break space in French.
+        StringAssert.Contains(InLanguage("fr", () => Text.Get("ErrorFileLeftover")), "temporaire\u00A0: {0}");
+    }
+
+    [TestMethod]
+    public void AWavWhoseOwnStagingWriteLeftItsTemporaryFileAsWellNamesThatFileAmongTheOthers()
+    {
+        const string wav = @"C:\Music\export.wav";
+        const string manifest = wav + ".manifest.json";
+        string[] candidates = [@"C:\Music\.wave-export-a.wav.tmp", @"C:\Music\.wave-export-a.json.tmp", @"C:\Music\.wave-export-a.wav.bak", @"C:\Music\.wave-export-a.json.bak"];
+        const string stays = @"C:\Music\..wave-export-a.json.tmp.0123456789abcdef0123456789abcdef.tmp";
+        // What WaveExporter throws when the write of a staging file failed (the first cause) and removing a staging file failed too.
+        var failure = new WaveExportException(WaveExportFailure.FailedCleanup, wav, manifest, candidates,
+            "WAV export did not complete and temporary/backup cleanup also failed.",
+            new AggregateException(CleanupFailed(stays), new IOException($"Could not remove export temporary/backup file '{candidates[0]}'.", new UnauthorizedAccessException())));
+        foreach (var language in Languages)
+        {
+            var text = InLanguage(language, () => ErrorText.Explain(failure));
+            foreach (var path in candidates.Append(stays).Append(wav).Append(manifest)) StringAssert.Contains(text, path, language);
+            Assert.IsTrue(text.StartsWith(InLanguage(language, () => Text.Get("ErrorWaveFailedCleanup")), StringComparison.Ordinal), language);
+            // A file that is among the candidates already is listed once.
+            var alreadyListed = new WaveExportException(WaveExportFailure.FailedCleanup, wav, manifest, [.. candidates, stays], "x", new AggregateException(CleanupFailed(stays)));
+            var listed = InLanguage(language, () => ErrorText.Explain(alreadyListed));
+            Assert.AreEqual(listed.IndexOf(stays, StringComparison.Ordinal), listed.LastIndexOf(stays, StringComparison.Ordinal), language);
+        }
+    }
+
     private static readonly DateTimeOffset Done = new(2026, 11, 2, 0, 46, 32, TimeSpan.Zero);
 
     private static PulseDocument Document() => new() { Settings = new() { CountInBars = 0 } };
