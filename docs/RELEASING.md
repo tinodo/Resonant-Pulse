@@ -66,6 +66,14 @@ another merge a Dependabot pull request is out of
 date: comment `@dependabot rebase`, or run
 `gh pr update-branch NUMBER -R tinodo/Resonant-Pulse` when Dependabot has not
 answered within about ten minutes (it did not on PR #2).
+A Dependabot pull request that changes the app project can bring a
+`packages.lock.json` with a target that only its Linux restore produces: PR #41
+(Microsoft.WindowsAppSDK 2.6.4) added `net10.0-windows10.0.26100/linux-x64` to
+`src/ResonantPulse.App/packages.lock.json`. A Windows restore removes it again and
+the workflow does not restore in locked mode, so it does no harm, and nobody
+commits to the Dependabot branch to remove it. After the merge a local Windows
+build leaves that file modified, and `src/ResonantPulse.Core/packages.lock.json`
+too (it gains a `net10.0/win-x64` target): revert both before a commit.
 A missing review or timeout fails visibly. Copilot availability/entitlement is
 account-dependent. Completion is not approval or an assertion of zero findings;
 review conversations must still be resolved before merge. `Copilot review
