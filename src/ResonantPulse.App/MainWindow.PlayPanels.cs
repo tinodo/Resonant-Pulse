@@ -306,9 +306,9 @@ public sealed partial class MainWindow
                     {
                         // The tempo that is nudged is committed by a loop of its own, and the edit queue is first in, first out: a commit
                         // made now, while the loop is still committing, would be queued between two of the loop's, and the loop would
-                        // then commit its older value over this one. So this commit waits for the loop (and closing, Start and Tap to
-                        // start wait for it as part of the tempo being settled): what was nudged before Done was pressed lands first,
-                        // and the tempo typed here is the last word.
+                        // then commit its older value over this one. So this commit waits for the loop (and for a Done pressed before
+                        // this one); Start and Tap to start wait for it as part of the tempo being settled, and closing does for at most
+                        // its four seconds: what was nudged before Done was pressed lands first, and the tempo typed here is the last word.
                         await _tempoNudges.AfterNudgesAsync(() => CommitAsync(doc =>
                         {
                             if (typedFor != _projectGeneration)

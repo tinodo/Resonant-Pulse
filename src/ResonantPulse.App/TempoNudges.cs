@@ -9,10 +9,12 @@ namespace ResonantPulse.App;
 /// A tempo that is typed in the Tempo panel is not a nudge: it is an edit of its own, and it has to come after the nudges that are on
 /// their way. The edit queue is first in, first out, so an edit made while the loop is committing is queued between two of the loop's
 /// commits, and the loop then goes on to commit its older value over it. <see cref="AfterNudgesAsync"/> makes the typed edit wait for
-/// the loop that is running, so that it is committed after every nudge asked for before it was started (and after those that the loop
-/// took on meanwhile); a nudge asked for after it has been queued is committed after it, in queue order. While it is on its way,
+/// the loop that is running (and for the typed tempos pressed before it), so that it is committed after every nudge asked for before
+/// it was started and after those that the loop took on meanwhile; a nudge asked for after its commit has been queued is committed
+/// after it, in queue order, and one asked for in the turn of the UI thread between the end of the loop and that moment is queued
+/// first, so the typed tempo then wins over it. While it is on its way,
 /// <see cref="Settled"/> includes it, so that closing, Start and Tap to start, which wait for the tempo to settle, wait for it too and
-/// not only for the loop.
+/// not only for the loop. (Closing waits for at most its four seconds and a second attempt leaves anyway.)
 /// </para>
 /// Pure and for the UI thread only, so every order the commits can finish in is tested without a window.
 /// </summary>
@@ -86,13 +88,19 @@ internal sealed class TempoNudges
     internal async Task AfterNudgesAsync(Func<Task> typed)
     {
         var nudges = _loop;
+        // The typed tempo that was pressed before this one, or a completed task. It is only ever completed, never failed, so waiting
+        // for it is safe.
+        var earlier = _typed;
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        // Registered before anything is awaited, so no waiter can pass it while it is still on its way. A typed edit that has ended
-        // is not carried along, so the chain of tasks does not grow with every Done.
-        _typed = _typed.IsCompleted ? ended.Task : Task.WhenAll(_typed, ended.Task);
+        // Registered before anything is awaited, so no waiter can pass it while it is still on its way. A typed tempo ends only after
+        // the one before it has ended (it waits for it below), so the newest stands for all of them.
+        _typed = ended.Task;
         try
         {
             await nudges;
+            // After the typed tempos that were pressed before this one, in the order they were pressed, whatever order the
+            // continuations of their waits for the loop are run in.
+            await earlier;
             await typed();
         }
         finally { ended.SetResult(); }

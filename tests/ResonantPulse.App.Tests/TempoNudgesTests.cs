@@ -388,18 +388,19 @@ public sealed class TempoNudgesTests
     }
 
     [TestMethod]
-    public async Task ATypedTempoThatEndsAtOnceDoesNotHideOneThatIsStillOnItsWay()
+    public async Task ATypedTempoThatCouldEndAtOnceStillWaitsForTheOneBeforeItSoSettledCannotPassThatOne()
     {
-        // A Done on a project that is locked ends without committing anything, while the Done before it is still being applied.
+        // A Done on a project that is locked ends without committing anything, but the Done before it is still being applied: the
+        // later one ends after the earlier one, so what waits for Settled never passes the earlier one.
         var rig = new Rig();
         var first = rig.DoneAsync(90);
         var second = rig.Nudges.AfterNudgesAsync(() => Task.CompletedTask);
 
-        await second.WaitAsync(Limit);
-
+        Assert.IsFalse(second.IsCompleted, "it waits for the first typed tempo");
         Assert.IsFalse(rig.Nudges.Settled.IsCompleted, "the first typed tempo has not been committed yet");
         rig.Finish();
         await first.WaitAsync(Limit);
+        await second.WaitAsync(Limit);
         await rig.SettledAsync();
         CollectionAssert.AreEqual(new[] { 90.0 }, rig.Written);
     }
@@ -420,6 +421,46 @@ public sealed class TempoNudgesTests
         await rig.SettledAsync();
         Assert.IsTrue(rig.Nudges.Settled.IsCompleted);
         CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "the nudge that was on its way landed");
+    }
+
+    [TestMethod]
+    public async Task ATypedTempoDoesNotAskForItsCommitBeforeTheOneTypedBeforeItHasEnded()
+    {
+        // Two presses of Done (the panel was dismissed and opened again between them) while nothing is on its way: the second waits for the
+        // first, so the order is the order they were pressed and does not depend on which wait is run first.
+        var rig = new Rig();
+        var first = rig.DoneAsync(90);
+        var second = rig.DoneAsync(80);
+
+        Assert.AreEqual(1, rig.Asked, "the second typed tempo has not asked for its commit: it waits for the first");
+        Assert.IsFalse(second.IsCompleted);
+        rig.Finish();
+        await first.WaitAsync(Limit);
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await second.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 90.0, 80.0 }, rig.Written, "in the order they were pressed");
+        Assert.AreEqual(80.0, rig.Tempo);
+    }
+
+    [TestMethod]
+    public async Task ATypedTempoThatFailsDoesNotHoldUpTheOneTypedAfterIt()
+    {
+        var rig = new Rig();
+        var first = rig.DoneAsync(90);
+        var second = rig.DoneAsync(80);
+
+        rig.Fail(new IOException("The project cannot be validated."));
+        await Assert.ThrowsExactlyAsync<IOException>(() => first.WaitAsync(Limit));
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await second.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 80.0 }, rig.Written, "the first did not write anything, and the second still ran");
+        Assert.AreEqual(80.0, rig.Tempo);
     }
 
     [TestMethod]
