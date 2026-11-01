@@ -378,12 +378,17 @@ public sealed partial class MainWindow
         await HoldPreparationAsync();
         if (midi)
         {
-            var (wanted, report) = await write.PrepareAsync(() => Task.Run(() => MidiExporter.Preflight(snapshot, bars), write.Token));
-            // A close that was refused while the file was being looked at: the person was closing the window, so neither the question nor an
-            // error (the file may not be exportable) is shown now.
+            // The verdict of the check (the file cannot be exported) is part of the preparation: it is an error that is shown only while the
+            // command is still wanted. A close that was refused while the file was being looked at: the person was closing the window, so
+            // neither the question nor an error is shown now (the error is kept in the log).
+            var (wanted, report) = await write.PrepareAsync(async () =>
+            {
+                var found = await Task.Run(() => MidiExporter.Preflight(snapshot, bars), write.Token);
+                if (!found.CanExport)
+                    throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", found.Errors));
+                return found;
+            });
             if (!wanted) return;
-            if (!report.CanExport)
-                throw new ArgumentException("MIDI export preflight failed: " + string.Join(" ", report.Errors));
             if (!await ConfirmAsync(Text.Format("MidiPreflight", report.PulsesPerQuarter, report.MaximumTimingErrorSeconds * 1000)))
                 return;
         }
