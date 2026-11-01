@@ -72,7 +72,7 @@ public sealed partial class MainWindow
             }
             // A write that did not stop within the limit of a close ends after the window has gone: nobody is left to tell or to refresh.
             if (IsWindowGoing) return;
-            ShowNotice("Saved");
+            ShowSavedNotice();
             await RefreshLibraryAsync();
         }, "\uE74E");
         var projects = Card("LibraryProjects", new StackPanel
@@ -517,10 +517,12 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The Saved notice of a write that has ended. A write that did not stop within the limit of a close ends, if it ends at all, after the
-    /// window has gone: nobody is left to tell.
+    /// window has gone: nobody is left to tell. After a close was refused the notice bar says why the window stayed, and the write that
+    /// was going meanwhile does not replace a warning or an error that is open with Saved (see <see cref="SavingNotice.SavedMayReplace"/>).
     /// </summary>
     private void ShowSavedNotice()
     {
-        if (!IsWindowGoing) ShowNotice("Saved");
+        if (!IsWindowGoing && SavingNotice.SavedMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational, _closeAttemptFailed))
+            ShowNotice("Saved");
     }
 }
