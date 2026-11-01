@@ -9,9 +9,11 @@ namespace ResonantPulse.App;
 /// A tempo that is typed in the Tempo panel is not a nudge: it is an edit of its own, and it has to come after the nudges that are on
 /// their way. The edit queue is first in, first out, so an edit made while the loop is committing is queued between two of the loop's
 /// commits, and the loop then goes on to commit its older value over it. <see cref="AfterNudgesAsync"/> makes the typed edit wait for
-/// the typed tempos pressed before it and for the loop, until no loop is running, so that it is committed after every nudge that was
-/// asked for until the moment its commit is queued, however many loops that takes (one can start while an earlier typed tempo is being
-/// applied); a nudge asked for after its commit has been queued is committed after it, in queue order. While it is on its way,
+/// the typed tempos pressed before it and for the loop, until no loop is running, so that whatever was nudged to until the moment its
+/// commit is queued is committed before it (only the newest request of a burst is committed at all, and a failed commit or a page that
+/// is built again drops the rest, as before), however many loops that takes (one can start while an earlier typed tempo is being
+/// applied, and only a person who keeps nudging can hold it up, as they could with the one loop it waited for before); a nudge asked
+/// for after its commit has been queued is committed after it, in queue order. While it is on its way,
 /// <see cref="Settled"/> includes it, so that closing, Start and Tap to start, which wait for the tempo to settle, wait for it too and
 /// not only for the loop. (Closing waits for at most its four seconds and a second attempt leaves anyway.)
 /// </para>
@@ -28,7 +30,12 @@ internal sealed class TempoNudges
 
     /// <param name="commit">Commits one tempo to the project (it waits in the edit queue, so it finishes later).</param>
     /// <param name="guard">Runs the loop and reports what goes wrong in it, without letting it escape (the window's error handling).</param>
-    /// <param name="ended">Called when the loop has ended and nothing is on its way any more: the window shows the project's tempo again.</param>
+    /// <param name="ended">
+    /// Called when the loop has ended and nothing is on its way any more: the window shows the project's tempo again. It must not ask
+    /// for a tempo: a loop whose commits all finish at once (a locked project) has ended before its own task is recorded, which would
+    /// replace the task of a loop started from here. (The unit tests do ask from here, with a commit that is held, to stand for an event
+    /// that runs in the turn in which a loop ends.)
+    /// </param>
     internal TempoNudges(Func<double, Task> commit, Func<Func<Task>, Task> guard, Action ended)
     {
         _commit = commit;
@@ -86,6 +93,11 @@ internal sealed class TempoNudges
     /// <see cref="Settled"/> from the moment it is called until it has ended, however it ends; what it throws goes to the caller.
     /// Called with the edit queue not held (the loop needs it to finish).
     /// </summary>
+    /// <param name="typed">
+    /// Starts the commit. It must take its place in the edit queue before it awaits anything, as the window's commit does (its first
+    /// await is the queue's own wait; a locked project refuses the edit and queues nothing), so that on the UI thread, where nothing
+    /// else runs in between, no nudge can be queued between the last look at the loop and the commit.
+    /// </param>
     internal async Task AfterNudgesAsync(Func<Task> typed)
     {
         // The typed tempo that was pressed before this one, or a completed task. It is only ever completed, never failed, so waiting
@@ -102,7 +114,7 @@ internal sealed class TempoNudges
             await earlier;
             // After every nudge that was asked for until the moment this commit is queued: the loop that is running, and one that
             // starts while this waits (a nudge made while an earlier typed tempo was being applied). Nothing is awaited between the
-            // last look at the loop and the call that queues the commit, so no nudge can come in between.
+            // last look at the loop and the call that queues the commit (see the parameter), so no nudge can come in between.
             while (!_loop.IsCompleted) await _loop;
             await typed();
         }
@@ -110,8 +122,8 @@ internal sealed class TempoNudges
     }
 
     /// <summary>
-    /// The page is built again: what was asked for and not committed yet is dropped, and the loop ends after the commit that is running
-    /// (that one still lands).
+    /// The page is built again: what was nudged to and not committed yet is dropped, and the loop ends after the commit that is running
+    /// (that one still lands). A typed tempo that is waiting is not dropped: it still lands, or is refused when its project was replaced.
     /// </summary>
     internal void Forget() => Requested = null;
 }

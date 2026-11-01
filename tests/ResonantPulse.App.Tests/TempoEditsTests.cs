@@ -292,8 +292,9 @@ public sealed class TempoEditsTests
         var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var apply = TempoEdits.OneAtATime(async () =>
         {
+            var result = await gate.Task;
             applied++;
-            return await gate.Task;
+            return result;
         }, () => opening);
 
         var first = apply();
@@ -301,7 +302,7 @@ public sealed class TempoEditsTests
         gate.SetResult(true);
 
         Assert.IsFalse(await first.WaitAsync(TimeSpan.FromSeconds(10)), "false leaves the panel of the new opening open, with its draft");
-        Assert.AreEqual(1, applied, "the change itself was applied");
+        Assert.AreEqual(1, applied, "the apply ran to its end, so the change was made");
     }
 
     [TestMethod]
