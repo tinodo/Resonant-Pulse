@@ -28,7 +28,14 @@ public sealed class TempoNudgesTests
         internal int Ended;
         private int _asked;
 
-        internal Rig() => Nudges = new TempoNudges(Commit, Guard, () => Ended++);
+        /// <summary>Run when a loop has ended, in the turn in which it ends, before the wait for that loop returns to its caller.</summary>
+        internal Action? OnEnded;
+
+        internal Rig() => Nudges = new TempoNudges(Commit, Guard, () =>
+        {
+            Ended++;
+            OnEnded?.Invoke();
+        });
 
         /// <summary>How many commits have the edit lock so far (each one is waiting to be finished, or has been).</summary>
         internal int Started { get { lock (_lock) return _gates.Count; } }
@@ -488,6 +495,38 @@ public sealed class TempoNudgesTests
 
         CollectionAssert.AreEqual(new[] { 90.0, 121.0, 122.0, 80.0 }, rig.Written, "the nudges asked for before its commit was queued come first, the typed tempo last");
         Assert.AreEqual(80.0, rig.Tempo);
+    }
+
+    [TestMethod]
+    public async Task ANudgeAskedForWhenTheLoopEndsIsCommittedBeforeATypedTempoThatWaitedForThatLoop()
+    {
+        // Done is pressed while the loop commits. In the turn in which that loop ends, before the wait for it returns, the tempo is nudged
+        // twice: a loop that did not exist when the wait began. Both nudges were asked for before Done's commit is queued, so both are
+        // committed before it; the typed tempo is not committed between them.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        var done = rig.DoneAsync(90);
+        rig.OnEnded = () =>
+        {
+            rig.OnEnded = null;
+            rig.Nudges.Request(130);
+            rig.Nudges.Request(131);
+        };
+
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        await rig.StartedAsync(4);
+        rig.Finish();
+        await done.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 121.0, 130.0, 131.0, 90.0 }, rig.Written, "the nudges asked for before its commit was queued come first, the typed tempo last");
+        Assert.AreEqual(90.0, rig.Tempo);
+        Assert.AreEqual(2, rig.Ended, "two loops: the one that was running and the one that started when it ended");
     }
 
     [TestMethod]
