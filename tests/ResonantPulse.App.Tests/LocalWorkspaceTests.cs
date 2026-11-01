@@ -154,6 +154,28 @@ public sealed class LocalWorkspaceTests
     }
 
     [TestMethod]
+    public async Task SavingToTheLibraryStopsWhenItsTokenIsCancelledAndLeavesNothingBehind()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
+        var workspace = new LocalWorkspace(root);
+        try
+        {
+            using var source = new CancellationTokenSource();
+            await source.CancelAsync();
+            OperationCanceledException? stopped = null;
+            try { await workspace.SaveLibraryAsync(new PulseDocument { Name = "Cancelled" }, source.Token); }
+            catch (OperationCanceledException exception) { stopped = exception; }
+            Assert.IsNotNull(stopped, "A save whose token was cancelled went on to the end.");
+            Assert.AreEqual(0, Directory.GetFiles(workspace.LibraryPath).Length, "A file was left in the library folder.");
+
+            await workspace.SaveLibraryAsync(new PulseDocument { Name = "Kept" });
+            Assert.AreEqual(1, Directory.GetFiles(workspace.LibraryPath, "*.pulse").Length);
+            Assert.AreEqual(0, Directory.GetFiles(workspace.LibraryPath, "*.tmp").Length);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public async Task MissingFirstLaunchLibraryIsEmptyRatherThanAnError()
     {
         var root = Path.Combine(Path.GetTempPath(), "ResonantPulse-AppTests-" + Guid.NewGuid().ToString("N"));
