@@ -20,7 +20,8 @@ internal sealed class FileWrites
     /// <summary>
     /// Told about an error that the preparation of a command that is being dropped ended with (see <see cref="FileWrite.PrepareAsync{T}"/>).
     /// The person is told nothing, because the error would replace the notice that says why the window stayed; the owner keeps the cause in
-    /// the log, so that no error goes unreported.
+    /// the log, so that no error goes unreported. It is called as it is, like every other write to the log in the app (the log itself
+    /// swallows the errors of the file system).
     /// </summary>
     internal Action<Exception>? DroppedError { get; init; }
 
@@ -98,8 +99,9 @@ internal sealed class FileWrites
     /// <summary>
     /// What closing the window does about the writes that are going. When the window will go, they are stopped and waited for (see
     /// <see cref="CancelAllAsync"/>). When the close is refused, a write that is writing is left to go on, and one that is not writing yet
-    /// is told that its preparation is void (see <see cref="FileWrite.PreparationInvalidated"/>): a plan that is still being compiled is not
-    /// asked about afterwards. True when no write is going any more.
+    /// is marked (see <see cref="FileWrite.PreparationInvalidated"/>): a command that asks a question or opens a dialog looks at the mark
+    /// before it does, so a plan that is still being compiled is not asked about afterwards. A command that asks nothing (Save to library,
+    /// the backup of a replacement) never looks at it and goes on. True when no write is going any more.
     /// </summary>
     internal Task<bool> StopForCloseAsync(bool windowWillGo, TimeSpan limit)
     {
@@ -141,9 +143,11 @@ internal sealed class FileWrite : IDisposable
     internal string? Destination { get; private set; }
 
     /// <summary>
-    /// True when closing the window was refused before the write began writing. The write looks at it before it asks its question or opens
-    /// its dialog: a plan that was still being compiled when the close was attempted is not asked about afterwards (the person was closing
-    /// the window). A question that was open was answered No by the close, and a save dialog that was open is left to the person.
+    /// True when closing the window was refused before the write began writing. Every such write is marked, but only a command that asks a
+    /// question or opens a dialog looks at the mark (<see cref="StillWanted"/>), right before it does: a plan that was still being compiled
+    /// when the close was attempted is not asked about afterwards (the person was closing the window). Save to library and the backup of a
+    /// replacement ask nothing and never look at it, so a refused close does not drop them. A question that was open was answered No by the
+    /// close, and a save dialog that was open is left to the person.
     /// </summary>
     internal bool PreparationInvalidated { get; private set; }
 
@@ -157,7 +161,8 @@ internal sealed class FileWrite : IDisposable
     internal Task Ended => _ended.Task;
 
     /// <summary>
-    /// Runs the preparation of a write: a file is looked at, a plan is compiled, notes are saved, before the write asks its question or opens
+    /// Runs the preparation of a write: a file is looked at, a plan is compiled, the notes being typed are saved (a notes save that fails shows
+    /// its own error, from the queue of the notes and not from the command), before the write asks its question or opens
     /// its dialog. <c>Wanted</c> is false when, by the time the preparation ends, a close was refused meanwhile or the window is going: the
     /// person was closing the window, so the command ends silently, whether the preparation went well or failed (an error of the
     /// preparation is not shown either, it would replace the notice that says why the window stayed; it is given to

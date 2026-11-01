@@ -223,8 +223,8 @@ temporary file and a file that was already at the destination stays as it was. C
 4 seconds, with a line in the log that names its destination, and a temporary file may stay beside it (it stayed in the real-window runs, where a
 delay that ignores the token stood in for a stalled disk). A close that is refused (the project could not be saved, so the window stays) leaves a
 write that is being written going, and voids one that has not yet asked its question or opened its dialog (the tracks export is compiling its
-plan, a MIDI export is checking the project, a save is gathering the notes being typed), so that no question or dialog is shown afterwards, and the error of that preparation (the file may not be exportable, the plan may not compile, the notes may not be saved) is not shown either, since it would replace the notice that says why the window stayed (the log keeps it): that command is dropped without a message, as the
-tracks export was dropped before. Save to library and the backup of a replacement have no question or dialog and are not voided. A file dialog is
+plan, a MIDI export is checking the project, a save is gathering the notes being typed), so that no question or dialog is shown afterwards, and the error of that preparation (the file may not be exportable, the plan may not compile) is not shown either, since it would replace the notice that says why the window stayed (the log keeps it): that command is dropped without a message, as the
+tracks export was dropped before. (A save of the notes being typed that fails shows its own error, as it always did: it is not an error of the command.) Save to library and the backup of a replacement ask nothing, so a refused close does not drop them. A file dialog is
 not opened while a close is under way. Writes of different commands overlap as they always could; only the export of separate tracks is one at a
 time, and only it shows a notice while it writes (the others show none; what they took is in docs/DELIVERY.md).
 
