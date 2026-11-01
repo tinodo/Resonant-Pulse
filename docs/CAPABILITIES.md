@@ -212,8 +212,8 @@ sentences (docs/design/glossary.md lists the questions).
 
 Every file that the app writes for the person (Save, Save to library, Export WAV, Export MIDI, Export separate tracks, Export result (CSV), and
 the copy of the project that Open, New or a ready-made rhythm saves to the library before it replaces the project) is a write of one guard,
-`FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed (the copy of a replacement: before the new project is
-validated, and it goes on until the copy is saved), ends however the write goes, and has a cancellation token that the write passes to what
+`FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed (the copy of a replacement: once the replacement has the edit
+lock, before the new project is validated, and it goes on until the copy is saved), ends however the write goes, and has a cancellation token that the write passes to what
 writes the file (`DocumentStore`, `WaveExporter`, `MidiExporter`, `WaveStemExporter`, `TimingCsvExporter` and `LocalWorkspace.SaveLibraryAsync`).
 The recovery copy and the settings are not part of it: closing saves them by its own flush. When the window closes, every write that is going is
 cancelled and waited for, at most 4 seconds, after the wait for the save; a write that begins while the close waits (a replacement that was queued

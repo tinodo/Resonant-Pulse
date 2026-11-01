@@ -399,7 +399,7 @@ public sealed class FileWritesTests
         preparation.SetResult();
         await Task.Delay(100);
         Assert.IsTrue(saveBegan, "The preparation ended while the close waited for the other write.");
-        Assert.IsTrue(cancelledWhenTheSaveBegan, "The save began with a token that nobody had cancelled.");
+        Assert.IsTrue(cancelledWhenTheSaveBegan, "The save began with a token that the close had not cancelled.");
         other.End();
         await Task.Delay(100);
         Assert.IsFalse(closing.IsCompleted, "The close waits for the save as well as for the other write.");
