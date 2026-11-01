@@ -28,4 +28,28 @@ public sealed class SavingNoticeTests
         Assert.IsFalse(SavingNotice.MayReplace(noticeIsOpen: true, noticeIsInformational: false),
             "A warning (a library that could not be read in full) or an error (a setting that could not be saved) that is open stays: it is a failure that still needs attention.");
     }
+
+    [TestMethod]
+    public void SavedReplacesWhateverTheBarShowsUntilACloseHasBeenRefused()
+    {
+        // As it always did: a person who tries again after an error is told that it worked, and the old error goes.
+        foreach (var open in new[] { false, true })
+            foreach (var informational in new[] { false, true })
+                Assert.IsTrue(SavingNotice.SavedMayReplace(open, informational, closeWasRefused: false), $"open: {open}, informational: {informational}");
+    }
+
+    [TestMethod]
+    public void AfterACloseWasRefusedSavedDoesNotReplaceAWarningOrAnErrorThatIsOpen()
+    {
+        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: false, noticeIsInformational: false, closeWasRefused: true), "A closed bar is free.");
+        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: false, noticeIsInformational: true, closeWasRefused: true));
+        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: true, noticeIsInformational: true, closeWasRefused: true),
+            "An informational notice (the one that says the last change is still being saved) gives way, and fades by itself.");
+        Assert.IsFalse(SavingNotice.SavedMayReplace(noticeIsOpen: true, noticeIsInformational: false, closeWasRefused: true),
+            "The error that says why the window stayed is not replaced by the end of a write that was going: the person dismisses it.");
+        foreach (var open in new[] { false, true })
+            foreach (var informational in new[] { false, true })
+                Assert.AreEqual(SavingNotice.MayReplace(open, informational), SavingNotice.SavedMayReplace(open, informational, closeWasRefused: true),
+                    $"One rule for what may replace a warning or an error that is open (open: {open}, informational: {informational}).");
+    }
 }
