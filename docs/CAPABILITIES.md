@@ -212,10 +212,12 @@ sentences (docs/design/glossary.md lists the questions).
 
 Every file that the app writes for the person (Save, Save to library, Export WAV, Export MIDI, Export separate tracks, Export result (CSV), and
 the copy of the project that Open, New or a ready-made rhythm saves to the library before it replaces the project) is a write of one guard,
-`FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed, ends however the write goes, and has a cancellation
-token that the write passes to what writes the file (`DocumentStore`, `WaveExporter`, `MidiExporter`, `WaveStemExporter`, `TimingCsvExporter` and
-`LocalWorkspace.SaveLibraryAsync`). The recovery copy and the settings are not part of it: closing saves them by its own flush. When the window
-closes, every write that is going is cancelled and waited for, at most 4 seconds, after the wait for the save; a cancelled write removes its
+`FileWrites` (`src/ResonantPulse.App/FileWrites.cs`): it begins when the command is pressed (the copy of a replacement: before the new project is
+validated, and it goes on until the copy is saved), ends however the write goes, and has a cancellation token that the write passes to what
+writes the file (`DocumentStore`, `WaveExporter`, `MidiExporter`, `WaveStemExporter`, `TimingCsvExporter` and `LocalWorkspace.SaveLibraryAsync`).
+The recovery copy and the settings are not part of it: closing saves them by its own flush. When the window closes, every write that is going is
+cancelled and waited for, at most 4 seconds, after the wait for the save; a write that begins while the close waits (a replacement that was queued
+behind an edit) is cancelled as it begins and waited for too; a cancelled write removes its
 temporary file and a file that was already at the destination stays as it was. Conditions: a write that does not stop when its token is cancelled
 (a stalled disk; Core's WAV export is not cancelled once its commit, two file moves, has begun) is left behind when the window goes after the
 4 seconds, with a line in the log that names its destination, and a temporary file may stay beside it (it stayed in the real-window runs, where a
@@ -237,7 +239,7 @@ MIDI, Save and Open stay on while they run and keep the focus by themselves (mea
 
 What holds what: `FileWritesTests`, `SavingNoticeTests`, `CommandFocusTests` and `FileDialogFailureTests` hold the decisions and the texts, and
 `LocalWorkspaceTests` the token and the file name of the library save; none of them holds the wiring in the window. The first-use gate holds the
-focus after the tracks question's Cancel only (it also runs on a hosted runner); everything else, including the focus after Saved and after an error, the close during a write and the refused close, is held by runs of
+focus after the tracks question's Cancel only (it also runs on a hosted runner); everything else, including the focus after Saved and after an error, the close during a write, the refused close and the close during whose wait the preparation of a replacement ends, is held by runs of
 the real app on the private desktop on throwaway builds (a stand-in for the file dialog and a hold in the preparation of a write in UI-test builds,
 a delay inside every write in a copy of Core) that are evidence, not a gate (docs/DELIVERY.md). Not established: Windows' own file dialogs (the
 stand-in throws what the real one threw on the private desktop; no other failure of the real one was seen), a close while a system dialog is open,
