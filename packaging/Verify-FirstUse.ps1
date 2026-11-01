@@ -1326,6 +1326,12 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     if ($shot) { $null = Save-PlayScreenshot "$shot.png" }
     # Pressing the command asks first. The question gives the number of tracks, how long each is and what they take unzipped.
     if (-not (Find-Control 'ExportWavStems').Current.IsEnabled) { throw "${where}: the command is off although no export of tracks is going." }
+    # A person who pressed the command with the keyboard had the focus on it. The command goes off at the press, so the system moves the
+    # focus on to the next control (the first ready-made rhythm) and the question gives it back to that control when it closes: the
+    # command has to take the focus back once it is on again, or a keyboard user has lost their place on the page (CommandFocus). The check
+    # puts the focus on the command first, as the person's Tab would have.
+    (Find-Control 'ExportWavStems').SetFocus()
+    Wait-Condition { (Find-Control 'ExportWavStems').Current.HasKeyboardFocus } "${where}: the command did not take the keyboard focus, so where the focus goes when the question closes cannot be seen."
     $null = Invoke-Control 'ExportWavStems'
     Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "${where}: the command did not ask for confirmation."
     $messageElement = Find-Control 'ConfirmationMessage'
@@ -1380,6 +1386,7 @@ function Test-StemExport([string]$where, [string]$shot = '', [string]$language =
     Invoke-DialogButton 'CloseButton' "${where}: the question went away before Cancel could be pressed."
     Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } "${where}: Cancel did not close the question."
     Wait-Condition { (Find-Control 'ExportWavStems').Current.IsEnabled } "${where}: the command stayed off after Cancel."
+    Wait-Condition { (Find-Control 'ExportWavStems').Current.HasKeyboardFocus } "${where}: the keyboard focus is not on the command after Cancel (it was on it when the command was pressed): a keyboard user has lost their place on the page."
     Start-Sleep -Milliseconds 500
     Assert-NoErrorNotice "${where} after Cancel"
     if ((Find-Control 'TransportStatus').Current.Name -ne $transportBefore) {
