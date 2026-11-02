@@ -41,6 +41,6 @@ internal static class SavingNotice
     /// open (the rule of <see cref="MayReplace"/>), so that the person dismisses the reason and has not lost what it said. An informational
     /// notice still gives way, as it does to every notice.
     /// </summary>
-    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool writeWasLeftGoingByARefusedClose) =>
+    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool closeIsUnderWay, bool writeWasLeftGoingByARefusedClose) =>
         !writeWasLeftGoingByARefusedClose || MayReplace(noticeIsOpen, noticeIsInformational);
 }

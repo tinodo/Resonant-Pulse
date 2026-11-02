@@ -523,7 +523,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShowSavedNotice(FileWrite write)
     {
-        if (!IsWindowGoing && SavingNotice.SavedMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational, write.LeftGoingByRefusedClose))
+        if (!IsWindowGoing && SavingNotice.SavedMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational, _closeFlushing, write.LeftGoingByRefusedClose))
             ShowNotice("Saved");
     }
 }
