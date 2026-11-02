@@ -2792,9 +2792,16 @@ function Test-StudioText([string]$code) {
         $entry = [ordered]@{ purpose = $null; howItWorks = $null; laneCommandsBottom = $null; barTop = [Math]::Round(($barTop - $windowRect.Top) / $scale, 1) }
         function Test-StudioInside($element, [string]$what) {
             $rect = $element.Current.BoundingRectangle
+            # A line that is not on the screen at all has no rectangle (its edges are infinite); where it is, is not what is asked here.
+            if ($rect.IsEmpty) { return }
             if ($rect.Left -lt $windowRect.Left - 1 * $scale -or $rect.Right -gt $windowRect.Right + 1 * $scale) {
                 Add-Finding $where "$what reaches outside the window ($rect in $windowRect), so its text is cut."
             }
+        }
+        function Get-StudioHeight($element) {
+            $rect = $element.Current.BoundingRectangle
+            if ($rect.IsEmpty) { return $null }
+            [Math]::Round($rect.Height / $scale, 1)
         }
         foreach ($id in 'StudioUndo', 'StudioRedo', 'AddLane') {
             $element = Find-Control $id
@@ -2811,7 +2818,7 @@ function Test-StudioText([string]$code) {
             # Said once for a language, not at every size.
             if ($size[0] -eq 1000) { Add-Finding $where "the page has no line that says what Studio is for: nothing carries the automation id 'StudioPurpose'." }
         } else {
-            $entry.purpose = [Math]::Round($purpose.Current.BoundingRectangle.Height / $scale, 1)
+            $entry.purpose = Get-StudioHeight $purpose
             Test-StudioInside $purpose "the line that says what Studio is for"
             if ($purpose.Current.Name -notmatch $studioTextLaneWords[$code]) {
                 Add-Finding $where "the line that says what Studio is for does not hold this language's word for a lane ('$($studioTextLaneWords[$code])'): '$($purpose.Current.Name)'."
@@ -2820,7 +2827,7 @@ function Test-StudioText([string]$code) {
         if ($null -eq $how) {
             if ($size[0] -eq 1000) { Add-Finding $where "the page has no line that says that nothing has to be saved and how a change is heard: nothing carries the automation id 'StudioHowItWorks'." }
         } else {
-            $entry.howItWorks = [Math]::Round($how.Current.BoundingRectangle.Height / $scale, 1)
+            $entry.howItWorks = Get-StudioHeight $how
             Test-StudioInside $how "the line that says how a change is heard"
             foreach ($label in $labels.Keys) {
                 if ($how.Current.Name -cnotlike "*$($labels[$label])*") {
@@ -2837,15 +2844,17 @@ function Test-StudioText([string]$code) {
         }
         # The first screen of the two wider windows keeps what a person starts with: the commands of the header and the first lane's.
         if ($size[0] -ge 800) {
-            $bottom = 0
+            $bottom = 0.0
             foreach ($id in 'StudioUndo', 'StudioRedo', 'AddLane', 'Lane0Muted', 'Lane0Solo', 'Lane0More') {
                 $element = Find-Optional $id
                 if ($null -eq $element) { continue }
                 $rect = $element.Current.BoundingRectangle
                 if ($element.Current.IsOffscreen -or $rect.IsEmpty -or $rect.Bottom -gt $barTop + 1 * $scale) {
-                    Add-Finding $where "'$id' ('$($element.Current.Name)') is not on the first screen of Studio: it ends $([Math]::Round(($rect.Bottom - $windowRect.Top) / $scale, 1)) DIP below the top of the window, the bar at the bottom starts at $([Math]::Round(($barTop - $windowRect.Top) / $scale, 1))."
+                    # An element that is scrolled out of view has no rectangle (its edges are infinite), so it is said in words.
+                    $reach = if ($rect.IsEmpty) { 'is not drawn at all: it is out of view' } else { "ends $([Math]::Round(($rect.Bottom - $windowRect.Top) / $scale, 1)) DIP below the top of the window" }
+                    Add-Finding $where "'$id' ('$($element.Current.Name)') is not on the first screen of Studio: it $reach, and the bar at the bottom starts at $([Math]::Round(($barTop - $windowRect.Top) / $scale, 1))."
                 }
-                if ($id -like 'Lane0*') { $bottom = [Math]::Max($bottom, $rect.Bottom) }
+                if ($id -like 'Lane0*' -and -not $rect.IsEmpty) { $bottom = [Math]::Max($bottom, $rect.Bottom) }
             }
             if ($bottom -gt 0) { $entry.laneCommandsBottom = [Math]::Round(($bottom - $windowRect.Top) / $scale, 1) }
         }
