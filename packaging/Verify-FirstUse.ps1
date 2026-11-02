@@ -2754,6 +2754,130 @@ $languageLayoutLanguages = @(
     @{ code = 'nl'; item = 'Nederlands'; play = 'Spelen' }, @{ code = 'de'; item = 'Deutsch'; play = 'Spielen' },
     @{ code = 'fr'; item = "Fran$([char]0x00E7)ais"; play = 'Jouer' }, @{ code = 'es'; item = "Espa$([char]0x00F1)ol"; play = 'Tocar' },
     @{ code = 'en'; item = 'English'; play = 'Play' })
+# What Studio says it is for, and that it fits (docs/design/pages-design.md, Studio). Under the title one line says what Studio is for and holds
+# the language's own word for a lane (StudioPurpose), and a second (StudioHowItWorks) says that nothing has to be saved and how a change is
+# heard, naming the Stop and Start of the bar at the bottom and the Library. A person who opened Studio in preview.12 wrote that there was no
+# save button, no play button and no clue what it does: the page said what was being edited, never what it is for. Both lines are read in
+# every language at the four window sizes that matter (1000x720 and 800x600, where the first lane's commands must still be on the first
+# screen, and the two narrow ones of the panels). They must lie between the edges of the window, wrap instead of being cut, and not lie over
+# what is below them, and the commands of the header must stay whole (a button taller than one line has broken its name). What is found is
+# recorded (Add-Finding); the heights are kept in the report (studioText), so that what the text costs the page can be read for every size.
+$studioTextSizes = @(@(1000, 720), @(800, 600), @(400, 720), @(320, 900))
+# The language's own word for a lane (the glossary's Lane), in the singular or the plural, as a pattern that its sentence has to match.
+# ASCII only, like the rest of this file.
+$studioTextLaneWords = @{ en = 'lane'; nl = 'laag|lagen'; de = 'Spur'; fr = 'piste'; es = 'pista' }
+$script:studioTextEvidence = [ordered]@{}
+function Test-StudioText([string]$code) {
+    $evidence = [ordered]@{}
+    # The labels the second line has to name are read from the application in this language, in a wide window (a narrow one folds the
+    # pages that are not selected into its menu).
+    Resize-To 1000 720
+    Start-Sleep -Milliseconds 600
+    Wait-Settled 'DestinationSettings'
+    $labels = [ordered]@{
+        Stop = (Find-Control 'TransportStop').Current.Name
+        Start = (Find-Control 'TransportStartPause').Current.Name
+        Library = (Find-Control 'DestinationLibrary').Current.Name
+    }
+    Select-Destination 'DestinationStudio'
+    Wait-Settled 'AddLane'
+    foreach ($size in $studioTextSizes) {
+        $key = "$($size[0])x$($size[1])"
+        Resize-To $size[0] $size[1]
+        Start-Sleep -Milliseconds 700
+        Wait-Settled 'AddLane'
+        $where = "$code at $key, Studio"
+        $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+        $barTop = [Math]::Min((Find-Control 'TransportStartPause').Current.BoundingRectangle.Top, (Find-Control 'TransportStop').Current.BoundingRectangle.Top)
+        $entry = [ordered]@{ purpose = $null; howItWorks = $null; laneCommandsBottom = $null; barTop = [Math]::Round(($barTop - $windowRect.Top) / $scale, 1) }
+        function Test-StudioInside($element, [string]$what) {
+            $rect = $element.Current.BoundingRectangle
+            # A line that is not on the screen at all has no rectangle (its edges are infinite); where it is, is not what is asked here.
+            if ($rect.IsEmpty) { return }
+            if ($rect.Left -lt $windowRect.Left - 1 * $scale -or $rect.Right -gt $windowRect.Right + 1 * $scale) {
+                Add-Finding $where "$what reaches outside the window ($rect in $windowRect), so its text is cut."
+            }
+        }
+        function Get-StudioHeight($element) {
+            $rect = $element.Current.BoundingRectangle
+            if ($rect.IsEmpty) { return $null }
+            [Math]::Round($rect.Height / $scale, 1)
+        }
+        # UI Automation reports the rectangle of a control, not of the text in it, so a line that is clipped where it should wrap (it was
+        # not allowed to wrap) does not lie outside the window. What shows is how much it holds: a line of 13 DIP text holds about one
+        # character for every 6 DIP of its width and never more than one for every 4.5, and a line that shows more than that on each of
+        # its lines is cut (the real lines of five languages at four sizes are at 0.82 of that at the most, hosted and local).
+        function Test-StudioWrapped($element, [string]$what) {
+            $rect = $element.Current.BoundingRectangle
+            if ($rect.IsEmpty) { return }
+            $lines = [Math]::Max(1, [Math]::Round($rect.Height / $scale / 17.3))
+            $length = $element.Current.Name.Length
+            $width = $rect.Width / $scale
+            if ($length / $lines * 4.5 -gt $width) {
+                Add-Finding $where "$what shows $length characters on $lines line(s) in $([Math]::Round($width)) DIP: its text is cut where it should wrap."
+            }
+        }
+        foreach ($id in 'StudioUndo', 'StudioRedo', 'AddLane') {
+            $element = Find-Control $id
+            Test-StudioInside $element "the command '$id' ('$($element.Current.Name)')"
+            $height = $element.Current.BoundingRectangle.Height / $scale
+            if ($height -gt 46) { Add-Finding $where "the command '$id' ('$($element.Current.Name)') is $([Math]::Round($height, 1)) DIP tall, not 44: its name is broken over several lines." }
+        }
+        $purpose = Find-Optional 'StudioPurpose'
+        $how = Find-Optional 'StudioHowItWorks'
+        # The first card is what the text must stay clear of: the first lane, or the empty state, or the note that the project is locked.
+        $card = $null
+        foreach ($id in 'StudioLocked', 'StudioEmpty', 'Lane0Card') { if ($null -eq $card) { $card = Find-Optional $id } }
+        if ($null -eq $purpose) {
+            # Said once for a language, not at every size.
+            if ($size[0] -eq 1000) { Add-Finding $where "the page has no line that says what Studio is for: nothing carries the automation id 'StudioPurpose'." }
+        } else {
+            $entry.purpose = Get-StudioHeight $purpose
+            Test-StudioInside $purpose "the line that says what Studio is for"
+            Test-StudioWrapped $purpose "the line that says what Studio is for"
+            if ($purpose.Current.Name -notmatch $studioTextLaneWords[$code]) {
+                Add-Finding $where "the line that says what Studio is for does not hold this language's word for a lane ('$($studioTextLaneWords[$code])'): '$($purpose.Current.Name)'."
+            }
+        }
+        if ($null -eq $how) {
+            if ($size[0] -eq 1000) { Add-Finding $where "the page has no line that says that nothing has to be saved and how a change is heard: nothing carries the automation id 'StudioHowItWorks'." }
+        } else {
+            $entry.howItWorks = Get-StudioHeight $how
+            Test-StudioInside $how "the line that says how a change is heard"
+            Test-StudioWrapped $how "the line that says how a change is heard"
+            foreach ($label in $labels.Keys) {
+                if ($how.Current.Name -cnotlike "*$($labels[$label])*") {
+                    Add-Finding $where "the line that says how a change is heard does not name '$($labels[$label])' (the $label of this language): '$($how.Current.Name)'."
+                }
+            }
+        }
+        if ($null -ne $purpose -and $null -ne $how -and $how.Current.BoundingRectangle.Top -lt $purpose.Current.BoundingRectangle.Bottom - 1 * $scale) {
+            Add-Finding $where "the two lines overlap: the second starts at $($how.Current.BoundingRectangle.Top), the first ends at $($purpose.Current.BoundingRectangle.Bottom)."
+        }
+        $textEnd = if ($null -ne $how) { $how } else { $purpose }
+        if ($null -ne $textEnd -and $null -ne $card -and $card.Current.BoundingRectangle.Top -lt $textEnd.Current.BoundingRectangle.Bottom - 1 * $scale) {
+            Add-Finding $where "the text runs over the first card: it ends at $($textEnd.Current.BoundingRectangle.Bottom), the card starts at $($card.Current.BoundingRectangle.Top)."
+        }
+        # The first screen of the two wider windows keeps what a person starts with: the commands of the header and the first lane's.
+        if ($size[0] -ge 800) {
+            $bottom = 0.0
+            foreach ($id in 'StudioUndo', 'StudioRedo', 'AddLane', 'Lane0Muted', 'Lane0Solo', 'Lane0More') {
+                $element = Find-Optional $id
+                if ($null -eq $element) { continue }
+                $rect = $element.Current.BoundingRectangle
+                if ($element.Current.IsOffscreen -or $rect.IsEmpty -or $rect.Bottom -gt $barTop + 1 * $scale) {
+                    # An element that is scrolled out of view has no rectangle (its edges are infinite), so it is said in words.
+                    $reach = if ($rect.IsEmpty) { 'is not drawn at all: it is out of view' } else { "ends $([Math]::Round(($rect.Bottom - $windowRect.Top) / $scale, 1)) DIP below the top of the window" }
+                    Add-Finding $where "'$id' ('$($element.Current.Name)') is not on the first screen of Studio: it $reach, and the bar at the bottom starts at $([Math]::Round(($barTop - $windowRect.Top) / $scale, 1))."
+                }
+                if ($id -like 'Lane0*' -and -not $rect.IsEmpty) { $bottom = [Math]::Max($bottom, $rect.Bottom) }
+            }
+            if ($bottom -gt 0) { $entry.laneCommandsBottom = [Math]::Round(($bottom - $windowRect.Top) / $scale, 1) }
+        }
+        $evidence[$key] = $entry
+    }
+    return $evidence
+}
 function Test-LanguageLayout {
     $evidence = [ordered]@{}
     $transportIds = 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions'
@@ -2786,6 +2910,14 @@ function Test-LanguageLayout {
             Select-Destination $page.id
             Wait-Settled $page.settle
             $pageName = $page.id -replace '^Destination', ''
+            # Every page of the kit says what it is for, in a line under its title (Play has no title: the dial is the page; Studio's lines are
+            # read by Test-StudioText below).
+            if ($pageName -notin 'Play', 'Studio') {
+                $purposeLine = Find-Optional "${pageName}Purpose"
+                if ($null -eq $purposeLine -or [string]::IsNullOrWhiteSpace($purposeLine.Current.Name)) {
+                    Add-Finding "$($language.code), $pageName" "the page has no line under its title that says what it is for (nothing carries the automation id '${pageName}Purpose')."
+                }
+            }
             foreach ($size in $sizes) {
                 # The transport bar and the status line are the same on every page, so they are read on Play only (at both sizes, and with
                 # Mute on); the Settings item is what the item of the selected page squeezes, so it is read on every page, at the narrowest size
@@ -2820,6 +2952,8 @@ function Test-LanguageLayout {
                 }
             }
         }
+        # What Studio says it is for is read in this language too, at the four sizes that matter.
+        $script:studioTextEvidence[$language.code] = Test-StudioText $language.code
         foreach ($size in $sizes) {
             $key = "$($size[0])x$($size[1])"
             $evidence["$($language.code)-$key"] = $widths[$key]
@@ -2851,7 +2985,7 @@ $languageLayoutEvidence = Test-LanguageLayout
   tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
-  initialFocus=$initialFocus;layoutFindings=@($script:findings);languageLayout=$languageLayoutEvidence;
+  initialFocus=$initialFocus;layoutFindings=@($script:findings);languageLayout=$languageLayoutEvidence;studioText=$script:studioTextEvidence;
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 # The report is written first, so that it says why. A caller that asked for the checks that need the hooks (-RequireUiTestHooks) does not

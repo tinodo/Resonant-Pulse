@@ -84,8 +84,11 @@ public sealed partial class MainWindow
             });
 
         var actions = _document.Lanes.Count == 0 ? CommandRow(undo, redo) : CommandRow(undo, redo, addLane);
-        var page = PageScaffoldText("Studio", Text.Format("StudioPurpose", TextFit.Shorten(_document.Name, 48)), actions,
-            cards.ToArray());
+        // What Studio is for comes first, then that nothing needs saving and how a change is heard. Before the first lane the empty
+        // state's own card says what a lane is, so the line above it does not say it twice.
+        var purpose = StudioLine("StudioPurpose", Text.Get(_document.Lanes.Count == 0 ? "StudioPurposeEmpty" : "StudioPurpose"));
+        var howItWorks = StudioLine("StudioHowItWorks", Text.Format("StudioHowItWorks", TextFit.Shorten(_document.Name, 48)));
+        var page = PageScaffoldLines("Studio", [purpose, howItWorks], actions, cards.ToArray());
         if (_studioFocusAfterRebuild is { } wanted)
         {
             _studioFocusAfterRebuild = null;
@@ -103,6 +106,14 @@ public sealed partial class MainWindow
         }
         if (settling) _ = GuardAsync(() => SettleStudioAsync(_pageGeneration, wantedFocus));
         return page;
+    }
+
+    /// <summary>One line of the text under the title of Studio, with the stable id that the first-use verifier reads it by.</summary>
+    private static TextBlock StudioLine(string id, string text)
+    {
+        var line = new TextBlock { Text = text, Style = ResonantStyle("NoteStyle") };
+        Identify(line, id, text);
+        return line;
     }
 
     /// <summary>

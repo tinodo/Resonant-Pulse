@@ -106,6 +106,29 @@ Also questions, not findings; none has been checked with a native speaker.
   *Active de nuevo Marcar para iniciar*. Whether a label inside a sentence reads
   better in quotation marks is a question for a native speaker.
 
+## The Studio page: what it is for, saving and hearing
+
+Questions again, not findings; none of this has been checked with a native speaker. The two lines under the title of Studio
+(`StudioPurpose` and, before the first lane, `StudioPurposeEmpty`; `StudioHowItWorks`) were written after a person who opened Studio
+found no save button, no play button and nothing that said what the page is for. They name the Stop and Start buttons, the Library
+and its *Save project* command with the labels those controls have in the language shown, so a test (`PageTextTests`) fails if a label
+is renamed and the sentence is not; the word for a lane is the one the table above gives (*laag*, *Spur*, *piste*, *pista*).
+
+- Dutch: **Opslaan is niet nodig** and **wordt bewaard terwijl u bewerkt** (the Library's own verb is *bewaren*); **kopie als bestand**
+  for the file that *Project opslaan* makes; **onderaan** for the bar at the bottom of the window. The sentence about a lane is the
+  one of the empty state (*extra reeks tikken ... die meespeelt met de hoofdmaat*).
+- German: **Speichern ist nicht nötig** and **bleibt bei jeder Änderung erhalten**; **Kopie als Datei**; **unten** for the bar. The
+  sentence about a lane is the empty state's (*zusätzliche Ebene aus Klicks ... zum Hauptschlag*).
+- French: **Pas besoin d’enregistrer** and **conservé au fil de vos modifications**; **copie en fichier**; **en bas** for the bar. The
+  colon after the first clause is avoided on purpose: Text.cs sets it off with an ordinary space, and a narrow column could start a
+  line with it.
+- Spanish: **No hace falta guardar** and **se conserva mientras lo edita**; **copia como archivo**; **abajo** for the bar.
+- *Kept* is a choice of English too: the page says "kept as you edit it", not "saved", because what the application does after each
+  change is write its own recovery copy of the project (it is read again when the application starts; a write that fails is
+  reported, and so is a copy that cannot be read), which is not a file the person can find or send; *Save project* in the Library
+  is the command that makes one.
+- A change is heard after **Stop, then Start**, not after Pause and Start: a Start that resumes a pause keeps the revision it paused on.
+
 ## The Help panel: quick start and musical reference
 
 Also questions, not findings; none of this has been checked with a native speaker.

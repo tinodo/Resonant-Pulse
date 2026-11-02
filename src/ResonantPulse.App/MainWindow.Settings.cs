@@ -58,7 +58,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(version, "AppVersion");
         var about = Card("AboutApp", new StackPanel { Spacing = 8, Children = { version, Copy("Privacy"), Copy("TimingHonesty") } },
             id: "AboutCard");
-        return PageScaffold("Settings", null, null, appearance, about);
+        return PageScaffold("Settings", "SettingsPurpose", null, appearance, about);
     }
 
     /// <summary>The release number the build was stamped with, without any source-revision suffix.</summary>

@@ -49,7 +49,7 @@ is specified in `metronome-design.md` and is not changed here.
 - A setting that belongs to the app (a preference, such as the export length) is applied at once, exactly like Theme or Language: the field shows it, the next use of it sees it, and remembering it for the next session is best effort. If that save fails the error is shown and the value stays, so the field, the setting and what is used next are never different values. The file is written from the values held when the write lock is taken, not when the save was asked for, so several overlapping saves always end with the latest value of every setting. Preferences are never rolled back: a rollback would leave a window in which another save could persist a value that is then withdrawn.
 - A value that belongs to the *project* is published only after it is accepted, and every change is queued on the UI thread in order, so a second quick edit is never dropped or refused. Structural commands (add, remove, move) wait for the queue first, and while one runs the fields of the page are off with the other commands (an edit made then would be queued with the old page and refused). A page that is built while edits are still being applied (Studio, after a quick trip to another page) stays off until they are in, its fields and its Undo, Redo and Add lane commands included, and is then built again from the project as it is, so it never changes under someone who has started to use it. A name box that is taken away with its page after the project changed under it (a step moved, a lane removed) does not commit: losing the focus because it was taken away is not the person leaving the box, and what it holds was written for whatever was at its place before. A fresh Start waits for the edits asked for before it (a tempo step that is still on its way included), so what plays includes them; Stop stays available while it waits and cancels the start at once, as do a change of output, a power transition and a replaced project. If a change is refused, the control returns to the value the project holds, or to the value of an earlier change that still waits in the queue (a blank name is refused at once, before the name typed a moment ago has been applied), and shows the reason.
 - A count is checked, never truncated: a number box *shows* 1.9 as 2 but reports 1.9, so a fractional bar count is refused with a message instead of saving 1.
-- Every setting says when it is heard: *now*, *next beat* or *after Stop, then Start*. While the metronome plays, tempo, meter, sound and beat strength follow live; lane and program edits (Studio) are saved at once and heard after Stop and Start (a Start that resumes a pause keeps the revision it paused on), and the page says so in one sentence.
+- Every setting says when it is heard: *now*, *next beat* or *after Stop, then Start*. While the metronome plays, tempo, meter, sound and beat strength follow live; lane and program edits (Studio) are saved at once and heard after Stop and Start (a Start that resumes a pause keeps the revision it paused on), and the page says so in the second of its two lines of text.
 - After a change that rebuilds part of a page, focus, caret and scroll position stay where they were; after a removal, focus moves to the neighbouring item or to the Add command.
 
 ## 4. Pages
@@ -69,6 +69,10 @@ is specified in `metronome-design.md` and is not changed here.
   opheffen*, once muted, takes a second line at 320 DIP).
 
 ### Settings
+- **Under the title,** one line says what the page is for ("Choose the interface language and the theme, and whether the display
+  moves less. Changes take effect at once."); every page of the kit has such a line (`<Page>Purpose` is its automation id, and the
+  first-use verifier checks it in five languages on Train, Stage, Library and Settings; Studio's two lines are read by their own check).
+  Settings was the one page without it.
 - **Appearance:** Language, Theme, Reduce motion (switch). Each row explains itself. Reduce motion: "The marker on the
   dial jumps from beat to beat instead of gliding, and the scrolling tape of upcoming clicks is hidden. It is also on
   whenever Windows has animation effects turned off." (The rule is: reduced if the switch is on **or** Windows says so.)
@@ -218,10 +222,25 @@ is specified in `metronome-design.md` and is not changed here.
   first screen with the whole card, so no primary control gave up its place.
 
 ### Studio
-- Header: one sentence ("Editing “name”. Changes are saved as you make them. Press Stop, then Start, to hear them.");
-  Undo and Redo as icon buttons (there are no keyboard shortcuts for them yet); *Add lane* as a menu: 4 clicks over 4
-  beats, 3 over 4 (polyrhythm), 3 over 3 (polymeter) and *Euclidean...*. While there are no lanes the one *Add lane*
-  button sits in the empty-state card instead of the header.
+- Header: the title, with Undo and Redo as icon buttons (there are no keyboard shortcuts for them yet) and *Add lane* as a menu: 4
+  clicks over 4 beats, 3 over 4 (polyrhythm), 3 over 3 (polymeter) and *Euclidean...*. While there are no lanes the one *Add lane*
+  button sits in the empty-state card instead of the header. Under the title row, across the page, two lines of text (the page
+  kit's usual line of purpose is one sentence, and a header row decides whether its actions fit beside its text from the width
+  the text would have on one line, so a text of this length in the row would send the actions under it at every window size, and
+  make it wrap in a narrower column than the page has):
+  *what Studio is for* ("Build your own rhythm here, in lanes. A lane is a layer of clicks with its own pattern, sound and volume,
+  played along with the main beat."; before the first lane only "Build your own rhythm here from lanes, and a practice program
+  from steps.", because the empty state's own card defines a lane right under it), and *how it works* ("No need to save: “name” is
+  kept as you edit it. For a copy as a file, use Save project in the Library. To hear a change, press Stop, then Start, in the bar
+  at the bottom."). The commands it names are the ones the application shows, with the labels they have in the language shown;
+  a change is heard after *Stop*, then *Start*, because a Start that resumes a pause keeps the revision it paused on. The two lines
+  have the stable automation ids `StudioPurpose` and `StudioHowItWorks`; the first-use verifier reads them in all five languages
+  at 1000x720, 800x600, 400x720 and 320x900 (a language's own word for a lane in the first, Stop, Start and the Library in the
+  second, neither cut by the window or over the first card, the header commands whole, the first lane's commands on the first
+  screen of the two wider windows), and unit tests pin the strings (`PageTextTests`). They were written because a person who
+  opened Studio in preview.12 found no save button, no play button and nothing that said what the page is for: the one line it
+  had named the project and how saving and hearing work, and the only sentence that defines a lane was shown while the project
+  had no lane.
 - **Lanes:** one card per lane: name, mute and solo, a *More* menu (rotate, invert, duplicate, remove with a
   confirmation). Three groups: *Rhythm* (the *Beat strength* strip, tap to change as on Play, then clicks per cycle,
   cycle length, start offset), *Sound* (click sound, volume, pan) and *Variation* (chance). *Custom beat positions* is an
@@ -339,7 +358,13 @@ Undo brings it back.
   start (*Start*, or *Audio* without an output), the box for the taps whole above *Done* at every window size (800x600 too), and,
   in five languages, the *Settings* tab as wide on every page at 320x900 and the transport commands on one line on *Play* at
   320x900 and 400x720, also with Mute on (a name of several words may take a second line); and, in the local gate with audio, the
-  Train page keeping its place and its focus after *Start check* and *Finish and show result*.
+  Train page keeping its place and its focus after *Start check* and *Finish and show result*. In five languages as well, at
+  1000x720, 800x600, 400x720 and 320x900: Studio's two lines of text (the ids `StudioPurpose` and `StudioHowItWorks`, the language's
+  own word for a lane, the labels of *Stop*, *Start* and the *Library*, inside the window, wrapped rather than cut (a line that shows
+  more characters on each of its lines than its width can hold is cut: UI Automation reports the rectangle of the control, not of
+  its text) and clear of the first card, the header
+  commands whole, the first lane's commands on the first screen of the two wider windows; their heights go to first-use.json as
+  `studioText`), and a line under the title of Train, Stage, Library and Settings (`<Page>Purpose`).
 
 ## 9. Delivery
 
