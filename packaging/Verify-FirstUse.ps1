@@ -109,6 +109,12 @@ function Wait-Absent([string]$id) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Control should not exist: $id"
 }
+function Select-Destination([string]$id) {
+    $item = Find-Control $id
+    $pattern = $null
+    if ($item.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select() }
+    else { $item.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke() }
+}
 function Invoke-Control([string]$id) {
     $limit = [DateTime]::UtcNow.AddSeconds(10)
     do {
@@ -798,12 +804,6 @@ function Close-ErrorNotice([string]$expected, [string]$where) {
     if ($null -eq $close) { throw "${where}: the error notice has no close button." }
     $close.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
     Wait-Absent 'StatusNotice'
-}
-function Select-Destination([string]$id) {
-    $item = Find-Control $id
-    $pattern = $null
-    if ($item.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select() }
-    else { $item.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke() }
 }
 # Help is a read-only panel on Play with a quick start and a musical reference (docs/design/pages-design.md, Play panels). It is opened
 # and read without changing anything. Whatever the window size its text stays between the edges of the text area, a step of the quick
