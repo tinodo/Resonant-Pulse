@@ -19,13 +19,13 @@ internal static class TempoEdits
     /// one. An apply that ends after the panel was opened again is still applied, but it returns false, so that it does not close the
     /// new opening, which has a draft of its own, filled in before the first apply landed: Done there writes only what was changed in it
     /// (<see cref="PanelEdits"/>), so nothing stale is written, but what the new opening shows is no longer the project's. It is told
-    /// when that apply has landed (<paramref name="landedAfterReopening"/>, once, after the change is in the project and only for an apply
-    /// that was applied), so that the fields of its draft that the person has not changed follow the project. For the UI thread: the
-    /// state is a captured variable.
+    /// when that apply has ended (<paramref name="endedAfterReopening"/>, once, however it ended: a change that was refused or that was
+    /// published before a later step failed is as much the project's state as one that went through), so that the fields of its draft
+    /// that the person has not changed follow the project. For the UI thread: the state is a captured variable.
     /// </summary>
     /// <param name="opening">The number of this opening of the panel; it changes each time the panel opens.</param>
-    /// <param name="landedAfterReopening">Called when an apply of an earlier opening has been applied, after the panel was opened again.</param>
-    internal static Func<Task<bool>> OneAtATime(Func<Task<bool>> apply, Func<int> opening, Action? landedAfterReopening = null)
+    /// <param name="endedAfterReopening">Called when an apply of an earlier opening has ended, after the panel was opened again.</param>
+    internal static Func<Task<bool>> OneAtATime(Func<Task<bool>> apply, Func<int> opening, Action? endedAfterReopening = null)
     {
         var applyingIn = -1;
         return async () =>
@@ -36,13 +36,13 @@ internal static class TempoEdits
             try
             {
                 var applied = await apply();
-                if (applied && opening() != mine) landedAfterReopening?.Invoke();
                 return applied && opening() == mine;
             }
             finally
             {
                 // An apply of an earlier opening that ends now must not release the one that is running.
                 if (applyingIn == mine) applyingIn = -1;
+                if (opening() != mine) endedAfterReopening?.Invoke();
             }
         };
     }

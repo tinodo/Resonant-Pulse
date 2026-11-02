@@ -268,7 +268,7 @@ public sealed partial class MainWindow
         var openedTempo = settings.Tempo;
         var openedUnit = settings.BeatUnitQuarters;
         var opening = 0;
-        // An earlier Done that lands after the panel was opened again (it was dismissed while Done waited for the nudges, and opened again
+        // An earlier Done that ends after the panel was opened again (it was dismissed while Done waited for the nudges, and opened again
         // before the change was in the project): the draft of this opening was filled in before that, so a field that the person has not
         // changed since follows the project, and what was changed is left alone. The opened values move with it, so that Done still writes
         // only what was changed.
@@ -277,6 +277,11 @@ public sealed partial class MainWindow
             var current = _document.Settings;
             var shownUnit = unit.SelectedItem is Choice choice ? double.Parse(choice.Value, CultureInfo.InvariantCulture) : openedUnit;
             var (tempoEdited, unitEdited) = TempoEdits.PanelEdits(openedTempo, openedUnit, Math.Round(tempo.Value, 1), shownUnit);
+            // A number box takes what is typed into it on Enter, on a spin button or when it is left, so text that is not what its value
+            // shows has been typed and not accepted yet (an emptied box too): that is a change of the field, which is left alone.
+            if (tempo.NumberFormatter is Windows.Globalization.NumberFormatting.INumberFormatter2 formatter &&
+                tempo.Text != formatter.FormatDouble(tempo.Value))
+                tempoEdited = true;
             if (!tempoEdited)
             {
                 openedTempo = _tempoNudges.Requested ?? current.Tempo;

@@ -61,6 +61,32 @@ internal static class MeterPresets
         settings.Swing = 0.5;
     }
 
+    /// <summary>
+    /// Applies a ready-made meter to the project the way the window does it: after the nudges that are on their way, because choosing it
+    /// can rewrite the tempo (<see cref="ApplyOneClickPerBeat"/>) and a nudge that landed after the conversion would put a number of the
+    /// old unit over the converted tempo, and only into the project it was chosen for: when that project has been replaced meanwhile
+    /// (Open, New, a ready-made rhythm, the next song) nothing is applied. True when the meter was applied.
+    /// </summary>
+    /// <param name="commit">Commits an edit to the project in the edit queue (the window's commit, which takes its place before it awaits).</param>
+    /// <param name="project">Which project is the current one: a number that changes whenever the whole project is replaced.</param>
+    internal static async Task<bool> ApplyAfterNudgesAsync(TempoNudges nudges, Func<int> project, Func<Action<PulseDocument>, Task> commit,
+        MeterPreset preset)
+    {
+        var chosenFor = project();
+        var applied = false;
+        try
+        {
+            await nudges.AfterNudgesAsync(() => commit(doc =>
+            {
+                if (chosenFor != project()) throw new OperationCanceledException();
+                ApplyOneClickPerBeat(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
+                applied = true;
+            }));
+        }
+        catch (OperationCanceledException) when (chosenFor != project()) { }
+        return applied;
+    }
+
     internal static Accent[] DefaultAccents(int pulses) =>
         Enumerable.Range(0, Math.Max(1, pulses)).Select(index => index == 0 ? Accent.Strong : Accent.Normal).ToArray();
 

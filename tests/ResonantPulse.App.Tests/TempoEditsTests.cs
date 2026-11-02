@@ -401,9 +401,10 @@ public sealed class TempoEditsTests
     }
 
     [TestMethod]
-    public async Task AnApplyThatWasRefusedOrFailedAfterThePanelWasOpenedAgainTellsNoOne()
+    public async Task AnApplyThatWasRefusedOrFailedAfterThePanelWasOpenedAgainStillTellsTheNewOpening()
     {
-        // Nothing landed, so the draft of the new opening, which shows the project as it is, is still true.
+        // However it ended, the project holds what it holds: a change that was refused is not in it, and one that was published before the
+        // recovery file could not be written is, so the new opening follows the project either way.
         var opening = 1;
         var told = 0;
         var applied = 0;
@@ -418,6 +419,6 @@ public sealed class TempoEditsTests
         await Assert.ThrowsExactlyAsync<IOException>(() => apply());
 
         Assert.AreEqual(2, applied);
-        Assert.AreEqual(0, told);
+        Assert.AreEqual(2, told, "told once for each apply that ended after the panel was opened again");
     }
 }

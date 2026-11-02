@@ -164,26 +164,42 @@ public sealed class TempoNudgesTests
         }, _ => { });
 
         /// <summary>
-        /// A ready-made meter that changes the click unit, as the window applies it: under the edit lock it reads the tempo and writes it
-        /// converted (4/4 in quarter notes with every beat split in two, to 6/8: the same clicks at twice the number).
+        /// The window's commit of an edit, as a ready-made meter makes it: under the edit lock the edit runs on the project (4/4 in quarter
+        /// notes with every beat split in two, at the tempo the project holds), and what it leaves is published. An edit that throws leaves
+        /// nothing behind.
         /// </summary>
-        internal Task ConvertNow()
+        internal Task CommitEdit(Action<PulseDocument> edit)
         {
             Interlocked.Increment(ref _asked);
             return DocumentPublication.RunAsync(_edits, async published =>
             {
+                var document = new PulseDocument { Settings = { Tempo = Tempo, BeatUnitQuarters = 1, Subdivision = 2 } };
+                edit(document);
                 var failure = await Gate();
-                var settings = new PulseSettings { Tempo = Tempo, BeatUnitQuarters = 1, Subdivision = 2 };
-                MeterPresets.ApplyOneClickPerBeat(settings, 6, 8, [3, 3]);
-                Tempo = settings.Tempo;
+                Tempo = document.Settings.Tempo;
                 Written.Add(Tempo);
                 published();
                 if (failure is not null) throw failure;
             }, _ => { });
         }
 
-        /// <summary>The same ready-made meter, which waits for the nudges that are on their way, as Done does.</summary>
-        internal Task ConvertAsync() => Nudges.AfterNudgesAsync(ConvertNow);
+        /// <summary>A ready-made meter that changes the click unit, 6/8, as it was applied before it waited: committed at once.</summary>
+        internal Task ConvertNow() => CommitEdit(document => MeterPresets.ApplyOneClickPerBeat(document.Settings, 6, 8, [3, 3]));
+
+        /// <summary>The same ready-made meter as the window applies it: after the nudges that are on their way, and only into the project it was chosen for.</summary>
+        internal Task<bool> ApplyMeterAsync() =>
+            MeterPresets.ApplyAfterNudgesAsync(Nudges, () => Project, CommitEdit, new MeterPreset(6, 8, [3, 3]));
+
+        /// <summary>Completes once this many commits have been asked for, whether they have the edit lock or wait for it.</summary>
+        internal async Task AskedAsync(int count)
+        {
+            var deadline = DateTime.UtcNow + Limit;
+            while (Asked < count)
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException($"Only {Asked} commits were asked for, not {count}.");
+                await Task.Delay(1);
+            }
+        }
 
         /// <summary>
         /// Finishes the commits that have the lock, one after the other, until the loop and what waits for it have ended, so that a test that
@@ -736,6 +752,7 @@ public sealed class TempoNudgesTests
 
         rig.Finish();
         await rig.StartedAsync(2);
+        await rig.AskedAsync(2);
         rig.Finish();
         await replacement.WaitAsync(Limit);
         await rig.FinishUntilSettledAsync();
@@ -744,7 +761,6 @@ public sealed class TempoNudgesTests
         Assert.AreEqual(120.0, rig.Tempo, "the replacement keeps its own tempo");
         Assert.AreEqual(2, rig.Asked, "the commit of 122 was asked for, queued behind the replacement, and dropped there");
         Assert.AreEqual(0, rig.Reported.Count, "a nudge that is dropped because its project is gone is not an error");
-        Assert.IsNull(rig.Nudges.Requested, "so the dial shows the replacement's own tempo");
         Assert.AreEqual(1, rig.Ended);
     }
 
@@ -763,6 +779,7 @@ public sealed class TempoNudgesTests
 
         rig.Finish();
         await rig.StartedAsync(2);
+        await rig.AskedAsync(2);
         rig.Finish();
         await rig.StartedAsync(3);
         rig.Finish();
@@ -825,6 +842,7 @@ public sealed class TempoNudgesTests
         var replacement = rig.ReplaceAsync(120);
         rig.Finish();
         await rig.StartedAsync(2);
+        await rig.AskedAsync(2);
         var done = rig.DoneAsync(90);
         Assert.AreEqual(2, rig.Asked, "Done waits for the loop, which has the dropped commit of 122 to go through");
 
@@ -848,7 +866,7 @@ public sealed class TempoNudgesTests
         rig.Nudges.Request(122);
         rig.Nudges.Request(123);
 
-        var meter = rig.ConvertAsync();
+        var meter = rig.ApplyMeterAsync();
         Assert.IsFalse(meter.IsCompleted);
         Assert.AreEqual(1, rig.Asked, "the meter has not asked for its commit: it waits for the nudges, it does not queue behind the one that runs");
         rig.Finish();
@@ -856,12 +874,35 @@ public sealed class TempoNudgesTests
         rig.Finish();
         await rig.StartedAsync(3);
         rig.Finish();
-        await meter.WaitAsync(Limit);
+        Assert.IsTrue(await meter.WaitAsync(Limit), "the meter was applied");
         await rig.SettledAsync();
 
         CollectionAssert.AreEqual(new[] { 121.0, 123.0, 246.0 }, rig.Written, "the nudges first, then the meter, which converts the tempo that was nudged to");
         Assert.AreEqual(246.0, rig.Tempo, "123 quarter notes are 246 eighth notes");
         Assert.IsNull(rig.Nudges.Requested);
+    }
+
+    [TestMethod]
+    public async Task AReadyMadeMeterChosenForAProjectThatWasReplacedIsNotAppliedToTheReplacement()
+    {
+        // The meter was chosen on the page of the project that goes. The loop has a commit to finish first, so the meter's commit is queued
+        // behind the replacement, and it leaves the replacement alone.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        var replacement = rig.ReplaceAsync(120);
+        var meter = rig.ApplyMeterAsync();
+
+        rig.Finish();
+        await rig.StartedAsync(2);
+        await rig.AskedAsync(2);
+        rig.Finish();
+        await replacement.WaitAsync(Limit);
+
+        Assert.IsFalse(await meter.WaitAsync(Limit), "nothing was applied");
+        CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written);
+        Assert.AreEqual(120.0, rig.Tempo, "the replacement keeps its own tempo: it was not converted");
+        Assert.AreEqual(0, rig.Reported.Count);
     }
 
     [TestMethod]
