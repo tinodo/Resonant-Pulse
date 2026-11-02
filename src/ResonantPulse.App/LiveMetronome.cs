@@ -1,6 +1,15 @@
+using System.Text;
 using ResonantPulse.App.Localization;
 
 namespace ResonantPulse.App;
+
+/// <summary>What the pinned metronome says beside its lights.</summary>
+internal enum LiveNote
+{
+    None,
+    CountIn,
+    Step
+}
 
 /// <summary>
 /// How a beat light is drawn: its size, the size of one that begins the bar or an additive group, and the space between lights.
@@ -51,6 +60,37 @@ internal static class LiveMetronome
     /// </summary>
     internal static int LitBeat(bool plays, bool cuesHidden, int beatIndex, int beats) =>
         !plays || cuesHidden || beats < 1 ? -1 : Math.Clamp(beatIndex, 0, beats - 1);
+
+    /// <summary>
+    /// What the strip says beside the lights. Nothing while nothing plays, and nothing in a silent bar of a project that hides its phase
+    /// cues in gaps: the tempo reads "Silent" there, and the step of the program and its name are a cue that Train hides in the same bar.
+    /// Otherwise "Count-in" while the metronome counts in, and the step of a program while one plays.
+    /// </summary>
+    internal static LiveNote NoteFor(bool plays, bool cuesHidden, bool countIn, bool hasProgram) =>
+        !plays || cuesHidden ? LiveNote.None : countIn ? LiveNote.CountIn : hasProgram ? LiveNote.Step : LiveNote.None;
+
+    /// <summary>
+    /// A name as one line of text: each run of white space (line breaks and other control characters included) becomes one space, and
+    /// the ends are trimmed. A step's name may be up to 256 characters with any number of line breaks, and the strip is pinned above the
+    /// page, so what it shows of a name must not be able to make it tall.
+    /// </summary>
+    internal static string OneLine(string text)
+    {
+        var line = new StringBuilder(text.Length);
+        var space = false;
+        foreach (var character in text)
+        {
+            if (char.IsWhiteSpace(character) || char.IsControl(character))
+            {
+                space = line.Length > 0;
+                continue;
+            }
+            if (space) line.Append(' ');
+            space = false;
+            line.Append(character);
+        }
+        return line.ToString();
+    }
 
     /// <summary>The beats that begin the bar or an additive group (3+2+2): they are drawn larger, as the long ticks of the dial are.</summary>
     internal static IReadOnlySet<int> Emphasized(int beats, IReadOnlyList<int> groups)

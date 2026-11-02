@@ -245,7 +245,10 @@ is specified in `metronome-design.md` and is not changed here.
   lane or a step is edited. (A person who opened Studio in preview.12 saw no metronome on it: the pulse is on Play, and the page that
   edits the rhythm showed nothing of it.) It shows the tempo and the note unit as the Stage does ("120 BPM · Quarter note · 4/4", or
   *Silent —* inside a silent gap), a light for each beat of the bar, and, while the metronome plays, *Count-in* or, for a program,
-  "Step 2 of 4: name". A light is a ring while its beat is not sounding and a filled disc while it is (the first beat of the bar and of
+  "Step 2 of 4: name". It stays on one line: a name may be 256 characters with line breaks, which are shown as spaces, and a name
+  longer than the row is cut with an ellipsis (a screen reader reads all of it), so a name can never make the pinned strip tall. In a
+  silent bar of a project that hides its phase cues in gaps it is empty, as Train hides its program status there. A light is a ring
+  while its beat is not sounding and a filled disc while it is (the first beat of the bar and of
   each additive group is drawn larger and lit in the accent colour), so the two states differ by more than colour; nothing is lit while
   nothing plays, after a program has ended, or in a silent bar of a project that hides its phase cues in gaps (*Hide all phase cues in gaps*, on by default,
   which hides the dial's marker too: a project that shows the cues keeps lighting the beats through a silent bar, as the dial keeps its

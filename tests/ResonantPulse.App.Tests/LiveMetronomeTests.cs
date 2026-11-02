@@ -59,6 +59,40 @@ public sealed class LiveMetronomeTests
     }
 
     [TestMethod]
+    public void TheNoteIsSilentWhileNothingPlaysAndInABlindGapAndOtherwiseTheCountInOrTheStep()
+    {
+        Assert.AreEqual(LiveNote.None, LiveMetronome.NoteFor(plays: false, cuesHidden: false, countIn: false, hasProgram: true), "stopped or finished");
+        Assert.AreEqual(LiveNote.None, LiveMetronome.NoteFor(plays: false, cuesHidden: false, countIn: true, hasProgram: true));
+        Assert.AreEqual(LiveNote.CountIn, LiveMetronome.NoteFor(plays: true, cuesHidden: false, countIn: true, hasProgram: true));
+        Assert.AreEqual(LiveNote.CountIn, LiveMetronome.NoteFor(plays: true, cuesHidden: false, countIn: true, hasProgram: false));
+        Assert.AreEqual(LiveNote.Step, LiveMetronome.NoteFor(plays: true, cuesHidden: false, countIn: false, hasProgram: true));
+        Assert.AreEqual(LiveNote.None, LiveMetronome.NoteFor(plays: true, cuesHidden: false, countIn: false, hasProgram: false), "no program, no step");
+        // A silent bar of a project that hides its phase cues: Train hides the program status there, so the strip hides the step as well.
+        Assert.AreEqual(LiveNote.None, LiveMetronome.NoteFor(plays: true, cuesHidden: true, countIn: false, hasProgram: true));
+        Assert.AreEqual(LiveNote.None, LiveMetronome.NoteFor(plays: true, cuesHidden: true, countIn: true, hasProgram: true));
+    }
+
+    [TestMethod]
+    public void AStepNameIsShownAsOneLineHoweverManyLineBreaksItHolds()
+    {
+        Assert.AreEqual("Verse", LiveMetronome.OneLine("Verse"));
+        Assert.AreEqual("Verse one", LiveMetronome.OneLine("Verse one"));
+        Assert.AreEqual("A B C", LiveMetronome.OneLine("A\nB\r\nC"));
+        Assert.AreEqual("A B", LiveMetronome.OneLine("A\u2028\u2029\u0085 \t\u000B\f B"), "every kind of line break and of white space");
+        Assert.AreEqual("A B", LiveMetronome.OneLine("A\u0000\u0007B"), "other control characters");
+        Assert.AreEqual("A B", LiveMetronome.OneLine("  \n A   \n\n   B \r\n "), "runs collapse and the ends are trimmed");
+        Assert.AreEqual("", LiveMetronome.OneLine(""));
+        Assert.AreEqual("", LiveMetronome.OneLine(" \n\t\r\n "));
+        Assert.AreEqual("Intro \uD83C\uDFB5 \uD83E\uDD41", LiveMetronome.OneLine("Intro \uD83C\uDFB5\n\uD83E\uDD41"), "characters outside the BMP are kept whole");
+        // The longest name the project file allows with a line break between every two characters: 128 lines become one.
+        var tall = string.Join('\n', Enumerable.Repeat("x", 128));
+        var line = LiveMetronome.OneLine(tall);
+        Assert.AreEqual(255, line.Length);
+        Assert.IsFalse(line.Any(character => character is '\n' or '\r'));
+        Assert.AreEqual(128, line.Count(character => character == 'x'));
+    }
+
+    [TestMethod]
     public void TheLiveMetronomeTextsAreTranslatedAndFillEveryPlace()
     {
         var previousLanguage = Text.Language;

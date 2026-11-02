@@ -26,7 +26,10 @@ public sealed class LiveBeatStrip : Grid
     private readonly TextBlock _unit = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _note = new()
     {
-        FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed
+        FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
+        // One line, whatever the name: the strip is pinned above the page, so a long name is cut with an ellipsis (a screen reader still
+        // reads all of it) and never wrapped into rows that would take the page.
+        TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 1
     };
     private IReadOnlySet<int> _emphasized = new HashSet<int>();
     private int _beats = -1;

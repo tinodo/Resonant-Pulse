@@ -64,9 +64,12 @@ public sealed partial class MainWindow
             var plays = snapshot.State is TransportState.Playing or TransportState.Paused;
             var lit = LiveMetronome.LitBeat(plays, blind, position?.BeatIndex ?? 0, meterBeats);
             var liveTempo = blind ? Text.Get("Silent") : PulseInstrument.FormatTempo(tempo);
-            var liveNote = position is null || !plays ? "" :
-                position.IsCountIn ? Text.Get("CountInActive") :
-                active.Program.Count > 0 ? Text.Format("LiveStep", position.ProgramStepIndex + 1, active.Program.Count, position.SectionName) : "";
+            var liveNote = position is null ? "" : LiveMetronome.NoteFor(plays, blind, position.IsCountIn, active.Program.Count > 0) switch
+            {
+                LiveNote.CountIn => Text.Get("CountInActive"),
+                LiveNote.Step => Text.Format("LiveStep", position.ProgramStepIndex + 1, active.Program.Count, LiveMetronome.OneLine(position.SectionName)),
+                _ => ""
+            };
             liveStrip.Present(meterBeats, shownSettings.Groups, lit, liveTempo,
                 blind ? "" : $"BPM · {PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}", liveNote,
                 LiveMetronome.Describe(blind ? liveTempo : $"{liveTempo} BPM", meterBeats, lit));
