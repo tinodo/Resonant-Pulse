@@ -517,9 +517,10 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The Saved notice of a write that has ended. A write that did not stop within the limit of a close ends, if it ends at all, after the
-    /// window has gone: nobody is left to tell. A write that was going when a close was refused does not replace a warning or an error that is
-    /// open with Saved, because that is the notice that says why the window stayed (see <see cref="SavingNotice.SavedMayReplace"/>); any
-    /// other write does, as it always did.
+    /// window has gone: nobody is left to tell. While a close is under way (<c>_closeFlushing</c>: from the first moment of the attempt until
+    /// the writes that are going have been marked, which comes after the flush) and for a write that was going when a close was refused, Saved
+    /// does not replace a warning or an error that is open, because that is the notice that says why the window stays (see
+    /// <see cref="SavingNotice.SavedMayReplace"/>); the Saved of any other write replaces what the bar shows, as it always did.
     /// </summary>
     private void ShowSavedNotice(FileWrite write)
     {
