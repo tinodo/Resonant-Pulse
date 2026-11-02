@@ -39,6 +39,21 @@ public sealed class CommandRowFocusTests
     }
 
     [TestMethod]
+    public void TheSearchReachesEveryCommandOfTheRowFromAnyStart()
+    {
+        // The only command that can take the focus may be the one just before the start of the search, which is the last one it looks at.
+        for (var only = 0; only < 4; only++)
+        {
+            for (var start = 0; start < 4; start++)
+            {
+                var row = new bool[4];
+                row[only] = true;
+                Assert.AreEqual(only, CommandRowFocus.After(start, row), $"Only command {only} can take the focus; the search began at {start}.");
+            }
+        }
+    }
+
+    [TestMethod]
     public void AFocusThatWasNotOnTheRowIsNotMoved()
     {
         Assert.IsNull(CommandRowFocus.After(hadFocus: null, Running));
