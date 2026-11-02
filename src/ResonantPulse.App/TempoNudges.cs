@@ -31,48 +31,48 @@ namespace ResonantPulse.App;
 /// </summary>
 internal sealed class TempoNudges
 {
-   private readonly Func<double, Func<bool>, Task> _commit;
-   private readonly Func<Func<Task>, Task> _guard;
-   private readonly Action _ended;
-   private readonly Func<int> _project;
-   private bool _running;
-   private Task _loop = Task.CompletedTask;
-   private Task _typed = Task.CompletedTask;
-   private double? _requested;
-   private int _requestedFor;
+    private readonly Func<double, Func<bool>, Task> _commit;
+    private readonly Func<Func<Task>, Task> _guard;
+    private readonly Action _ended;
+    private readonly Func<int> _project;
+    private bool _running;
+    private Task _loop = Task.CompletedTask;
+    private Task _typed = Task.CompletedTask;
+    private double? _requested;
+    private int _requestedFor;
 
-   /// <summary>For a project that is never replaced.</summary>
-   internal TempoNudges(Func<double, Task> commit, Func<Func<Task>, Task> guard, Action ended)
-       : this((wanted, _) => commit(wanted), guard, ended, () => 0)
-   {
-   }
+    /// <summary>For a project that is never replaced.</summary>
+    internal TempoNudges(Func<double, Task> commit, Func<Func<Task>, Task> guard, Action ended)
+        : this((wanted, _) => commit(wanted), guard, ended, () => 0)
+    {
+    }
 
-   /// <param name="commit">
-   /// Commits one tempo to the project (it waits in the edit queue, so it finishes later). It must call the second argument inside the edit,
-   /// under the edit lock, before it changes anything, and throw <see cref="OperationCanceledException"/> when it says false: the project
-   /// that the tempo was asked for has been replaced, and the commit must leave nothing behind (no Undo step, no new project, no save).
-   /// </param>
-   /// <param name="guard">Runs the loop and reports what goes wrong in it, without letting it escape (the window's error handling).</param>
-   /// <param name="ended">
-   /// Called when the loop has ended and nothing is on its way any more: the window shows the project's tempo again. It must not ask
-   /// for a tempo: a loop whose commits all finish at once (a locked project) has ended before its own task is recorded, which would
-   /// replace the task of a loop started from here. (The unit tests do ask from here, with a commit that is held, to stand for an event
-   /// that runs in the turn in which a loop ends.)
-   /// </param>
-   /// <param name="project">Which project is the current one: a number that changes whenever the whole project is replaced.</param>
-   internal TempoNudges(Func<double, Func<bool>, Task> commit, Func<Func<Task>, Task> guard, Action ended, Func<int> project)
-   {
-       _commit = commit;
-       _guard = guard;
-       _ended = ended;
-       _project = project;
-   }
+    /// <param name="commit">
+    /// Commits one tempo to the project (it waits in the edit queue, so it finishes later). It must call the second argument inside the edit,
+    /// under the edit lock, before it changes anything, and throw <see cref="OperationCanceledException"/> when it says false: the project
+    /// that the tempo was asked for has been replaced, and the commit must leave nothing behind (no Undo step, no new project, no save).
+    /// </param>
+    /// <param name="guard">Runs the loop and reports what goes wrong in it, without letting it escape (the window's error handling).</param>
+    /// <param name="ended">
+    /// Called when the loop has ended and nothing is on its way any more: the window shows the project's tempo again. It must not ask
+    /// for a tempo: a loop whose commits all finish at once (a locked project) has ended before its own task is recorded, which would
+    /// replace the task of a loop started from here. (The unit tests do ask from here, with a commit that is held, to stand for an event
+    /// that runs in the turn in which a loop ends.)
+    /// </param>
+    /// <param name="project">Which project is the current one: a number that changes whenever the whole project is replaced.</param>
+    internal TempoNudges(Func<double, Func<bool>, Task> commit, Func<Func<Task>, Task> guard, Action ended, Func<int> project)
+    {
+        _commit = commit;
+        _guard = guard;
+        _ended = ended;
+        _project = project;
+    }
 
-   /// <summary>
-   /// The newest tempo that was asked for and that the project does not hold yet; null while nothing is on its way, and for a request that
-   /// was asked for a project that has been replaced since.
-   /// </summary>
-   internal double? Requested => _requested is { } && _requestedFor == _project() ? _requested : null;
+    /// <summary>
+    /// The newest tempo that was asked for and that the project does not hold yet; null while nothing is on its way, and for a request that
+    /// was asked for a project that has been replaced since.
+    /// </summary>
+    internal double? Requested => _requested is { } && _requestedFor == _project() ? _requested : null;
 
     /// <summary>
     /// Completes when the loop that is running (or the last one that ran) has ended, and so has the commit of a tempo typed in the
