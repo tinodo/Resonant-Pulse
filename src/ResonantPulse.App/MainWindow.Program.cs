@@ -33,6 +33,14 @@ public sealed partial class MainWindow
         if (header is FrameworkElement row) row.Margin = new Thickness(0, 8, 0, 0);
 
         var section = new List<UIElement> { header };
+        // After its last step the program stops, or starts again from its first step and plays until Stop. The choice is the program's,
+        // not a step's, so it sits above the steps.
+        var repeat = EditorControl(Toggle("ProgramRepeat", "ProgramRepeat", _document.RepeatProgram));
+        CommitSwitch(repeat, () => _document.RepeatProgram,
+            on => CommitStudioAsync(revision, "ProgramRepeat", doc => doc.RepeatProgram = on));
+        var repeatCard = Card(null, SettingRow("ProgramRepeat", "ProgramRepeatHelp", repeat));
+        Identify(repeatCard, "ProgramRepeatCard", Text.Get("ProgramRepeat"));
+        section.Add(repeatCard);
         for (var index = 0; index < _document.Program.Count; index++) section.Add(BuildStepCard(index, revision));
         return section;
     }
@@ -365,7 +373,12 @@ public sealed partial class MainWindow
     {
         var name = index < _document.Program.Count ? _document.Program[index].Name : "";
         if (!await ConfirmAsync(Text.Format("ConfirmRemove", name), "Remove")) return;
-        await CommitEditorAsync(doc => doc.Program.RemoveAt(index));
+        await CommitEditorAsync(doc =>
+        {
+            doc.Program.RemoveAt(index);
+            // Without a program the switch that makes it repeat is not on the page, so it is not left on for the next program.
+            if (doc.Program.Count == 0) doc.RepeatProgram = false;
+        });
         // The next step takes the place of the one removed; after the last, the one before it; with none left, Add step.
         FocusAfterRebuild(_document.Program.Count == 0 ? "AddProgramStep" : $"Program{Math.Min(index, _document.Program.Count - 1)}Name");
         RebuildPreservingScroll();

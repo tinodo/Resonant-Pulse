@@ -51,6 +51,7 @@
     <Compile Include="../../src/ResonantPulse.App/SavingNotice.cs" Link="App/SavingNotice.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoCurveState.cs" Link="App/TempoCurveState.cs" />
     <Compile Include="../../src/ResonantPulse.App/TrainProgramView.cs" Link="App/TrainProgramView.cs" />
+    <Compile Include="../../src/ResonantPulse.App/LiveMetronome.cs" Link="App/LiveMetronome.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/AudioOutputSelection.cs" Link="App/Audio/AudioOutputSelection.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/ConsistentRead.cs" Link="App/Audio/ConsistentRead.cs" />
     <Compile Include="../../src/ResonantPulse.App/Audio/PlaybackDeadline.cs" Link="App/Audio/PlaybackDeadline.cs" />

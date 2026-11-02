@@ -59,6 +59,18 @@ public sealed partial class MainWindow
         // person sees what they are about to start at. It is not the project's tempo until the last tap has saved it.
         if (_tapIn.ShownTempo is { } tapped) tempo = tapped;
         _instrument?.Present(shownSettings, tempo, phase, plan, frame, blind, _preferences.IsReducedMotion);
+        if (_liveStrip is { } liveStrip)
+        {
+            var plays = snapshot.State is TransportState.Playing or TransportState.Paused;
+            var lit = LiveMetronome.LitBeat(plays, blind, position?.BeatIndex ?? 0, meterBeats);
+            var liveTempo = blind ? Text.Get("Silent") : PulseInstrument.FormatTempo(tempo);
+            var liveNote = position is null || !plays ? "" :
+                position.IsCountIn ? Text.Get("CountInActive") :
+                active.Program.Count > 0 ? Text.Format("LiveStep", position.ProgramStepIndex + 1, active.Program.Count, position.SectionName) : "";
+            liveStrip.Present(meterBeats, shownSettings.Groups, lit, liveTempo,
+                blind ? "" : $"BPM · {PulseInstrument.NoteUnit(settings.BeatUnitQuarters)} · {meterBeats}/{meterDenominator}", liveNote,
+                LiveMetronome.Describe(blind ? liveTempo : $"{liveTempo} BPM", meterBeats, lit));
+        }
         if (_tempoEdit is { } tempoEdit)
         {
             var tempoName = Text.Format("TempoEditName", PulseInstrument.FormatTempo(tempo));
@@ -164,6 +176,9 @@ public sealed partial class MainWindow
             if (!cardBlind && cardSection is not null && cardPlan is not null)
             {
                 var next = cardPlan.SectionBoundaries.FirstOrDefault(boundary => boundary.StartFrame >= cardSection.EndFrame);
+                // A program that repeats goes on from its first step after its last.
+                if (next is null && snapshot.Revision is { HasProgram: true, IsFinite: false })
+                    next = cardPlan.SectionBoundaries.FirstOrDefault(boundary => boundary.StepIndex >= 0);
                 if (next is not null) _programStatus.Text += "\n" + Text.Format("NextSection", next.Name);
             }
         }

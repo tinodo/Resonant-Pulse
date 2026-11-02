@@ -111,6 +111,23 @@ public sealed class DocumentStoreTests
     }
 
     [TestMethod]
+    public async Task SaveLoad_RepeatProgram_RoundTripsAndIsOnlyWrittenWhenSet()
+    {
+        using var temp = new TempDirectory();
+        await DocumentStore.SaveAsync(temp.File(), new PulseDocument { Program = [new() { Bars = 2 }], RepeatProgram = true });
+        Assert.IsTrue((await File.ReadAllTextAsync(temp.File())).Contains("\"RepeatProgram\"", StringComparison.Ordinal));
+        Assert.IsTrue((await DocumentStore.LoadAsync(temp.File())).RepeatProgram);
+
+        // A project that never set it is written exactly as before, so an older build can still open it; one written before it existed has it off.
+        await DocumentStore.SaveAsync(temp.File("plain.json"), new PulseDocument { Program = [new() { Bars = 2 }] });
+        Assert.IsFalse((await File.ReadAllTextAsync(temp.File("plain.json"))).Contains("RepeatProgram", StringComparison.Ordinal));
+        Assert.IsFalse((await DocumentStore.LoadAsync(temp.File("plain.json"))).RepeatProgram);
+        await File.WriteAllTextAsync(temp.File("legacy.json"), "{\"SchemaVersion\":1,\"Program\":[{\"Bars\":2}]}");
+        Assert.IsFalse((await DocumentStore.LoadAsync(temp.File("legacy.json"))).RepeatProgram);
+        temp.NoTemps();
+    }
+
+    [TestMethod]
     [DataRow("")]
     [DataRow("{")]
     [DataRow("null")]

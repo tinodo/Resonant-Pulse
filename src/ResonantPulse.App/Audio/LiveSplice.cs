@@ -50,12 +50,13 @@ internal static class LiveSplice
         new(loop, pulse, ownFrame, revision.ToAbsolute(ownFrame));
 
     /// <summary>
-    /// The first primary pulse at or after the absolute <paramref name="cursor"/>, or null for finite programs.
+    /// The first primary pulse at or after the absolute <paramref name="cursor"/>, or null for a program (its steps carry their own
+    /// meters, so there is no one pulse grid to splice on; a structural edit waits for the next Start).
     /// Allocates (rational arithmetic) and is meant to run once per queued edit.
     /// </summary>
     internal static PulseBoundary? NextPulseBoundary(PlaybackRevision revision, long cursor)
     {
-        if (revision.IsFinite) return null;
+        if (revision.HasProgram) return null;
         var initial = revision.Initial;
         var body = revision.Body;
         var unit = Rational.FromDouble(body.BeatUnitQuarters);

@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using ResonantPulse.App.Controls;
 using ResonantPulse.App.Localization;
 using ResonantPulse.Core;
 
@@ -35,6 +36,10 @@ public sealed partial class MainWindow
     private UIElement BuildStudio()
     {
         _studioFocusTargets.Clear();
+        // The metronome stays in view above the scrolling page, so the beat can be seen while a lane or a step is edited.
+        _liveStrip = new LiveBeatStrip();
+        LiveStripHost.Child = _liveStrip;
+        LiveStripHost.Visibility = Visibility.Visible;
         var revision = _editorContentRevision;
         // Studio fields apply in turn, off the page. Edits asked for before this page was built and still being applied are not in
         // the project it is built from, so its cards and its commands stay off until they are, and the page is then built again

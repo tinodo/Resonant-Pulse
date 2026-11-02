@@ -31,7 +31,14 @@
                     IsBackButtonVisible="Collapsed" IsSettingsVisible="True"
                     AutomationProperties.AutomationId="Destinations">
       <Grid Padding="20,8,20,8" Background="{ThemeResource SurfaceBrush}">
-        <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch"
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!-- Pinned above the scrolling page. Studio puts the live metronome here, so the beat stays in view while a lane or a step
+             is edited; every other page leaves it collapsed. -->
+        <Border x:Name="LiveStripHost" Visibility="Collapsed" />
+        <ContentControl x:Name="PageHost" Grid.Row="1" HorizontalContentAlignment="Stretch"
                         VerticalContentAlignment="Stretch" />
       </Grid>
     </NavigationView>

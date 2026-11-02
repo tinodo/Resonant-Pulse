@@ -100,6 +100,13 @@ public sealed record PulseDocument
     public PulseSettings Settings { get; set; } = new();
     public List<RhythmLane> Lanes { get; set; } = [];
     public List<ProgramStep> Program { get; set; } = [];
+    /// <summary>
+    /// True: after its last step the program starts again from its first step and plays until Stop (the count-in is played once, before
+    /// the first pass). False (the default, and then left out of the file): the program ends after its last step. Without a program it
+    /// means nothing. An export renders one pass either way.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RepeatProgram { get; set; }
     public List<SongEntry> Setlist { get; set; } = [];
     public int Seed { get; set; } = 1;
     public string ProbabilityAlgorithm { get; set; } = "event-hash-v1";

@@ -34,7 +34,13 @@ public sealed class PlaybackRevision
     public PulseDocument Document { get; }
     public RenderPlan Initial { get; }
     public RenderPlan Body { get; }
-    public bool IsFinite => Document.Program.Count > 0;
+    /// <summary>True when the document has a program: its steps carry the tempo and time signature, and a structural live edit waits for the next Start.</summary>
+    public bool HasProgram => Document.Program.Count > 0;
+    /// <summary>
+    /// True when playback ends by itself: a program that is not asked to repeat ends after its last step. Without a program, and with
+    /// a program that repeats, the body loops until Stop (for a program the body is one whole pass of it).
+    /// </summary>
+    public bool IsFinite => HasProgram && !Document.RepeatProgram;
     public int SampleRate => Initial.SampleRate;
     /// <summary>End of the count-in in OWN frames, which is where bar 1 beat 1 of the body starts.</summary>
     public long CountInFrames => Initial.CountInFrames;

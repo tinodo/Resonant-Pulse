@@ -55,11 +55,11 @@ internal sealed class LiveEditQueue
                 // Same musical clock (also for finite programs): identical Initial/Body geometry, so the switch
                 // keeps Shift and deadline.
                 return timeline.Switch(posted.Rebased(active.Shift, active.Deadline), cursor);
-            case LiveChange.Structural when !active.IsFinite:
+            case LiveChange.Structural when !active.HasProgram:
                 Volatile.Write(ref _armed, new Armed(posted, Volatile.Read(ref _armed)?.Boundary));
                 return timeline;
         }
-        // Equal to what is playing, or structural for a finite program (never published): a still-armed change is superseded.
+        // Equal to what is playing, or structural for a program (never published): a still-armed change is superseded.
         Volatile.Write(ref _armed, null);
         return timeline;
     }

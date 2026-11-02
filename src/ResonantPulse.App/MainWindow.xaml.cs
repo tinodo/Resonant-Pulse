@@ -45,6 +45,7 @@ public sealed partial class MainWindow : Window
     private int _editorContentRevision;
     private int _armedSong = -1;
     private PulseInstrument? _instrument;
+    private LiveBeatStrip? _liveStrip;
     private TextBlock? _position;
     private TextBlock? _stageTempo;
     private TextBlock? _stageMeter;
@@ -341,6 +342,10 @@ public sealed partial class MainWindow : Window
         // a rebuild for any reason (a recovery write that failed, a language change, another page) cannot discard a draft.
         QueueStageNotesSave();
         _instrument = null;
+        // Studio pins its live metronome above the page; the strip goes with the page it belongs to.
+        _liveStrip = null;
+        LiveStripHost.Child = null;
+        LiveStripHost.Visibility = Visibility.Collapsed;
         _beatStrip = null;
         _clickGrid = null;
         _tempoEdit = null;

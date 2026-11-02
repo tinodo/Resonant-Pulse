@@ -2204,6 +2204,38 @@ function Test-TempoTypedAfterNudges {
         }
     }
 }
+# The metronome pinned to the top of Studio follows the beat while the metronome plays: a person who opened Studio while it played saw no beat
+# anywhere on the page (docs/design/pages-design.md, Studio). It is read as a screen reader reads it: its value says the tempo and the beat that
+# is lit, and is set from the same beat as the lights. While nothing plays it says how many beats the bar has; while it plays, four seconds at
+# 120 BPM are eight beats of a bar of four, so at least three different beats must be read as lit. Runs only where an output is selected.
+function Test-StudioMetronomeLive {
+    Select-Destination 'DestinationStudio'
+    Wait-Settled 'AddLane'
+    function Get-StudioMetronome { (Find-Control 'StudioMetronome').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
+    $stopped = Get-StudioMetronome
+    if ($stopped -notlike '*, * beats in the bar') { throw "Studio: the live metronome does not say how many beats the bar has while nothing plays ('$stopped')." }
+    Invoke-Control 'TransportStartPause'
+    try {
+        $null = Wait-Transport 'Playing' $true
+        $seen = [System.Collections.Generic.HashSet[string]]::new()
+        $limit = [DateTime]::UtcNow.AddSeconds(4)
+        while ([DateTime]::UtcNow -lt $limit) {
+            $null = $seen.Add((Get-StudioMetronome))
+            Start-Sleep -Milliseconds 100
+        }
+    } finally {
+        if ((Find-Control 'TransportStatus').Current.Name -notlike 'Stopped*') { Invoke-Control 'TransportStop' }
+        $null = Wait-Transport 'Stopped'
+        Select-Destination 'DestinationPlay'
+        Wait-Settled 'QuickMeter'
+    }
+    $lit = @($seen | Where-Object { $_ -like '*, beat * of *' })
+    if ($lit.Count -lt 3) {
+        throw "Studio: the live metronome did not follow the beat: in four seconds of playing it read $($seen.Count) different ways, $($lit.Count) of them a beat that is lit ($($seen -join ' | '))."
+    }
+    # Not returned: what a function writes (Invoke-Control says what it presses) is its output, and would be part of a returned value.
+    $script:studioMetronomeDone = "followed-the-beat-with-$($lit.Count)-different-beats-lit-in-four-seconds"
+}
 $start = Find-Control 'TransportStartPause'
 $playback = 'not-run-no-output'
 $practiceStops = 'not-run-no-output'
@@ -2213,6 +2245,7 @@ $liveSplitClicks = 'not-run-no-output'
 $tapStartSwitching = 'not-run-no-output'
 $tempoTypedAfterNudges = 'not-run-no-output'
 $timingExportFlow = 'not-run-no-output'
+$studioMetronomeLive = 'not-run-no-output'
 if (-not $playAudio) {
     $playback = 'not-run-audio-disabled'
     $practiceStops = 'not-run-audio-disabled'
@@ -2222,6 +2255,7 @@ if (-not $playAudio) {
     $tapStartSwitching = 'not-run-audio-disabled'
     $tempoTypedAfterNudges = 'not-run-audio-disabled'
     $timingExportFlow = 'not-run-audio-disabled'
+    $studioMetronomeLive = 'not-run-audio-disabled'
 } elseif ($selection.Count -eq 0) {
     if ($start.Current.IsEnabled) { throw 'Start is enabled without a selected output.' }
     # Tap to start starts the metronome, so it needs an output to start on: without one the switch is off and says why.
@@ -2381,6 +2415,8 @@ if (-not $playAudio) {
     $tempoTypedAfterNudges = $script:tempoNudgeDone -join ', '
     Test-TimingExportWithOutput
     $timingExportFlow = $script:timingExportDone -join ', '
+    Test-StudioMetronomeLive
+    $studioMetronomeLive = $script:studioMetronomeDone
 }
 # Studio: lanes are added from one menu; every field of a lane applies as it is changed (no Apply button on a lane) and the page is
 # not rebuilt, so the focus, the caret and the scroll position stay; each change is one step of Undo. This runs after the playback
@@ -2839,7 +2875,7 @@ function Test-StudioText([string]$code) {
         $where = "$code at $key, Studio"
         $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
         $barTop = [Math]::Min((Find-Control 'TransportStartPause').Current.BoundingRectangle.Top, (Find-Control 'TransportStop').Current.BoundingRectangle.Top)
-        $entry = [ordered]@{ purpose = $null; howItWorks = $null; laneCommandsBottom = $null; barTop = [Math]::Round(($barTop - $windowRect.Top) / $scale, 1) }
+        $entry = [ordered]@{ purpose = $null; howItWorks = $null; laneCommandsBottom = $null; metronome = $null; barTop = [Math]::Round(($barTop - $windowRect.Top) / $scale, 1) }
         function Test-StudioInside($element, [string]$what) {
             $rect = $element.Current.BoundingRectangle
             # A line that is not on the screen at all has no rectangle (its edges are infinite); where it is, is not what is asked here.
@@ -2875,6 +2911,24 @@ function Test-StudioText([string]$code) {
         }
         $purpose = Find-Optional 'StudioPurpose'
         $how = Find-Optional 'StudioHowItWorks'
+        # The metronome is pinned above the scrolling page, so a person who edits a lane or a step sees the beat (docs/design/pages-design.md,
+        # Studio). It must be there, lie inside the window and above the row of the title and its commands, and not be so tall that a row of
+        # beat lights that has wrapped takes the first screen from the page.
+        $metronome = Find-Optional 'StudioMetronome'
+        if ($null -eq $metronome) {
+            if ($size[0] -eq 1000) { Add-Finding $where "the page has no live metronome: nothing carries the automation id 'StudioMetronome'." }
+        } else {
+            $entry.metronome = Get-StudioHeight $metronome
+            Test-StudioInside $metronome "the live metronome"
+            $metronomeRect = $metronome.Current.BoundingRectangle
+            $undoTop = (Find-Control 'StudioUndo').Current.BoundingRectangle.Top
+            if (-not $metronomeRect.IsEmpty -and $metronomeRect.Bottom -gt $undoTop + 1 * $scale) {
+                Add-Finding $where "the live metronome ends at $($metronomeRect.Bottom), below the top of the header commands ($undoTop): it lies over the page."
+            }
+            if ($null -ne $entry.metronome -and $entry.metronome -gt 130) {
+                Add-Finding $where "the live metronome is $($entry.metronome) DIP tall: its beat lights have wrapped over too many rows."
+            }
+        }
         # The first card is what the text must stay clear of: the first lane, or the empty state, or the note that the project is locked.
         $card = $null
         foreach ($id in 'StudioLocked', 'StudioEmpty', 'Lane0Card') { if ($null -eq $card) { $card = Find-Optional $id } }
@@ -3032,7 +3086,7 @@ $languageLayoutEvidence = Test-LanguageLayout
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
-  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
+  tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;studioMetronomeLive=$studioMetronomeLive;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
   initialFocus=$initialFocus;layoutFindings=@($script:findings);languageLayout=$languageLayoutEvidence;studioText=$script:studioTextEvidence;noticeFocus=@($noticeFocusEvidence);

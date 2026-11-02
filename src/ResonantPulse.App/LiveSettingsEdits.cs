@@ -63,7 +63,7 @@ internal static class LiveSettingsEdits
     /// or null when nothing is queued. A request equal to it is not recompiled; a request equal to the active revision
     /// while something else is queued IS published, so the callback can supersede the queued change.
     /// <para>
-    /// The request is classified against the active revision first. A finite program (Document.Program) keeps its
+    /// The request is classified against the active revision first. A program (Document.Program, whether it repeats or ends) keeps its
     /// musical clock and stop boundary, so only the sound-class settings can follow it, exactly like the former
     /// sound-only update: <see cref="LiveChange.Sound"/> is SoundApplied, <see cref="LiveChange.None"/> is NoChange,
     /// and any structural difference is RequiresRestart. Even then the sound part of the same request is still
@@ -80,10 +80,10 @@ internal static class LiveSettingsEdits
         {
             LiveChange.None => LiveEditOutcome.NoChange,
             LiveChange.Sound => LiveEditOutcome.SoundApplied,
-            _ when active.IsFinite => LiveEditOutcome.RequiresRestart,
+            _ when active.HasProgram => LiveEditOutcome.RequiresRestart,
             _ => LiveEditOutcome.StructuralQueued
         };
-        var merged = active.IsFinite ? LiveSoundEdits.Apply(active.Document, requested) : requestedLive;
+        var merged = active.HasProgram ? LiveSoundEdits.Apply(active.Document, requested) : requestedLive;
         var publish = Classify((target ?? active.Document).Settings, merged.Settings) != LiveChange.None;
         return new(outcome, merged, publish);
     }
