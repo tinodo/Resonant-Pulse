@@ -33,12 +33,16 @@ and API authorization remain required; update automation is separately guarded.
 
 Play centers the large cyan/magenta metronome and its BPM readout. Click the
 number to type an exact tempo; use -, **TAP** and + under the dial (hold - or +
-to repeat, Ctrl for steps of ten); choose a sheet-music time signature (2/4,
-3/4, 4/4, 6/8 and more, with **Custom...** for the full builder); click a beat
-bar to change its strength (there is a bar for every click of the bar, including
-the clicks that split a beat); pick the sound (Mute silences it whatever it is).
+to repeat, Ctrl for steps of ten; the switch next to TAP turns on Tap to start,
+which starts the metronome at the tempo you tap); choose a sheet-music time
+signature (2/4, 3/4, 4/4, 6/8 and more, with **Custom...** for the full builder);
+click a beat bar to change its strength (there is a bar for every click of the
+bar, including the clicks that split a beat; a bar of more than 128 clicks, or
+one whose beat unit does not divide it, shows its beats alone); pick the sound
+(Mute silences it whatever it is).
 **Timer**, **Project** and **Help** sit in one quiet strip under Settings and
-open compact panels in which **Done** applies and **Cancel** discards; Cancel
+open compact panels in which **Done** applies and **Cancel** discards (Help only
+shows text and has Done alone); where a panel has both, Cancel
 and Done are always the same size. If a saved project counts beats in a unit that
 does not divide its bar (say 8/8 counted in dotted halves), Play says so and one
 button switches to the unit that matches the time signature.
