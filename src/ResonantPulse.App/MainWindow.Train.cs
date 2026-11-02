@@ -288,8 +288,8 @@ public sealed partial class MainWindow
             {
                 rebuilt[next]!.Focus(focus.State);
                 // Focus(FocusState.Pointer), the state the pressed command had in the checks on a private desktop, does not scroll, and
-                // the notice that Begin opens has taken room from the foot of the page: asked for here, the command is on screen whichever
-                // way the focus reached it.
+                // the notice that Begin opens has taken room from the foot of the page: the command is asked here to be brought into view,
+                // whichever way the focus reached it.
                 rebuilt[next]!.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
             }
             // The scroll position is put back right after this, and the result is shown against the position that gives.
