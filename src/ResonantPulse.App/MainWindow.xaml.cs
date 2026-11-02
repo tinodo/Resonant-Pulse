@@ -640,19 +640,25 @@ public sealed partial class MainWindow : Window
     private void ShowNotice(string key) => ShowNoticeText(Text.Get(key));
 
     /// <summary>
-    /// The control that has the keyboard focus, if it is in the page and wholly on screen, otherwise null. Read before a notice opens, so that
-    /// the page can follow the control when the notice takes room from its foot.
+    /// The control that has the keyboard focus, if it is in the page and wholly on screen in the page and in every scrolling area between it
+    /// and the page (the strip of beats on Play, the list of the Library), otherwise null. Read before a notice opens, so that the page can
+    /// follow the control when the notice takes room from its foot: a control that a person has scrolled out of view in a scrolling area of
+    /// its own is not brought back.
     /// </summary>
     private FrameworkElement? FocusedControlOnScreen()
     {
-        if (FocusedElement() is not FrameworkElement focused || PageHost.Content is not ScrollViewer scroll || !focused.IsLoaded || focused.ActualHeight <= 0)
+        if (FocusedElement() is not FrameworkElement focused || PageHost.Content is not ScrollViewer page || !focused.IsLoaded || focused.ActualHeight <= 0)
             return null;
-        var inPage = false;
-        for (DependencyObject? node = focused; node is not null && !inPage; node = VisualTreeHelper.GetParent(node))
-            inPage = ReferenceEquals(node, scroll);
-        if (!inPage) return null;
-        var bounds = focused.TransformToVisual(scroll).TransformBounds(new Windows.Foundation.Rect(0, 0, focused.ActualWidth, focused.ActualHeight));
-        return bounds.Top >= -1 && bounds.Bottom <= scroll.ViewportHeight + 1 ? focused : null;
+        for (DependencyObject? node = VisualTreeHelper.GetParent(focused); node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is ScrollViewer scroll)
+            {
+                var bounds = focused.TransformToVisual(scroll).TransformBounds(new Windows.Foundation.Rect(0, 0, focused.ActualWidth, focused.ActualHeight));
+                if (bounds.Left < -1 || bounds.Top < -1 || bounds.Right > scroll.ViewportWidth + 1 || bounds.Bottom > scroll.ViewportHeight + 1) return null;
+            }
+            if (ReferenceEquals(node, page)) return focused;
+        }
+        return null;
     }
 
     /// <summary>
