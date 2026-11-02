@@ -358,7 +358,11 @@ Undo brings it back.
   start (*Start*, or *Audio* without an output), the box for the taps whole above *Done* at every window size (800x600 too), and,
   in five languages, the *Settings* tab as wide on every page at 320x900 and the transport commands on one line on *Play* at
   320x900 and 400x720, also with Mute on (a name of several words may take a second line); and, in the local gate with audio, the
-  Train page keeping its place and its focus after *Start check* and *Finish and show result*.
+  Train page keeping its place and its focus after *Start check* and *Finish and show result*. In five languages as well, at
+  1000x720, 800x600, 400x720 and 320x900: Studio's two lines of text (the ids `StudioPurpose` and `StudioHowItWorks`, the language's
+  own word for a lane, the labels of *Stop*, *Start* and the *Library*, inside the window and clear of the first card, the header
+  commands whole, the first lane's commands on the first screen of the two wider windows; their heights go to first-use.json as
+  `studioText`), and a line under the title of Train, Stage, Library and Settings (`<Page>Purpose`).
 
 ## 9. Delivery
 
