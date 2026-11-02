@@ -2759,9 +2759,9 @@ $languageLayoutLanguages = @(
 # heard, naming the Stop and Start of the bar at the bottom and the Library. A person who opened Studio in preview.12 wrote that there was no
 # save button, no play button and no clue what it does: the page said what was being edited, never what it is for. Both lines are read in
 # every language at the four window sizes that matter (1000x720 and 800x600, where the first lane's commands must still be on the first
-# screen, and the two narrow ones of the panels). They must lie between the edges of the window and not over what is below them, and the
-# commands of the header must stay whole (a button taller than one line has broken its name). What is found is recorded (Add-Finding); the
-# heights are kept in the report (studioText), so that what the text costs the page can be read for every size.
+# screen, and the two narrow ones of the panels). They must lie between the edges of the window, wrap instead of being cut, and not lie over
+# what is below them, and the commands of the header must stay whole (a button taller than one line has broken its name). What is found is
+# recorded (Add-Finding); the heights are kept in the report (studioText), so that what the text costs the page can be read for every size.
 $studioTextSizes = @(@(1000, 720), @(800, 600), @(400, 720), @(320, 900))
 # The language's own word for a lane (the glossary's Lane), in the singular or the plural, as a pattern that its sentence has to match.
 # ASCII only, like the rest of this file.
@@ -2803,6 +2803,20 @@ function Test-StudioText([string]$code) {
             if ($rect.IsEmpty) { return $null }
             [Math]::Round($rect.Height / $scale, 1)
         }
+        # UI Automation reports the rectangle of a control, not of the text in it, so a line that is clipped where it should wrap (it was
+        # not allowed to wrap) does not lie outside the window. What shows is how much it holds: a line of 13 DIP text holds about one
+        # character for every 6 DIP of its width and never more than one for every 4.5, and a line that shows more than that on each of
+        # its lines is cut (the real lines of five languages at four sizes are at 0.82 of that at the most, hosted and local).
+        function Test-StudioWrapped($element, [string]$what) {
+            $rect = $element.Current.BoundingRectangle
+            if ($rect.IsEmpty) { return }
+            $lines = [Math]::Max(1, [Math]::Round($rect.Height / $scale / 17.3))
+            $length = $element.Current.Name.Length
+            $width = $rect.Width / $scale
+            if ($length / $lines * 4.5 -gt $width) {
+                Add-Finding $where "$what shows $length characters on $lines line(s) in $([Math]::Round($width)) DIP: its text is cut where it should wrap."
+            }
+        }
         foreach ($id in 'StudioUndo', 'StudioRedo', 'AddLane') {
             $element = Find-Control $id
             Test-StudioInside $element "the command '$id' ('$($element.Current.Name)')"
@@ -2820,6 +2834,7 @@ function Test-StudioText([string]$code) {
         } else {
             $entry.purpose = Get-StudioHeight $purpose
             Test-StudioInside $purpose "the line that says what Studio is for"
+            Test-StudioWrapped $purpose "the line that says what Studio is for"
             if ($purpose.Current.Name -notmatch $studioTextLaneWords[$code]) {
                 Add-Finding $where "the line that says what Studio is for does not hold this language's word for a lane ('$($studioTextLaneWords[$code])'): '$($purpose.Current.Name)'."
             }
@@ -2829,6 +2844,7 @@ function Test-StudioText([string]$code) {
         } else {
             $entry.howItWorks = Get-StudioHeight $how
             Test-StudioInside $how "the line that says how a change is heard"
+            Test-StudioWrapped $how "the line that says how a change is heard"
             foreach ($label in $labels.Keys) {
                 if ($how.Current.Name -cnotlike "*$($labels[$label])*") {
                     Add-Finding $where "the line that says how a change is heard does not name '$($labels[$label])' (the $label of this language): '$($how.Current.Name)'."

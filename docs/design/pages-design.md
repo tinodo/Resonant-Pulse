@@ -360,7 +360,9 @@ Undo brings it back.
   320x900 and 400x720, also with Mute on (a name of several words may take a second line); and, in the local gate with audio, the
   Train page keeping its place and its focus after *Start check* and *Finish and show result*. In five languages as well, at
   1000x720, 800x600, 400x720 and 320x900: Studio's two lines of text (the ids `StudioPurpose` and `StudioHowItWorks`, the language's
-  own word for a lane, the labels of *Stop*, *Start* and the *Library*, inside the window and clear of the first card, the header
+  own word for a lane, the labels of *Stop*, *Start* and the *Library*, inside the window, wrapped rather than cut (a line that shows
+  more characters on each of its lines than its width can hold is cut: UI Automation reports the rectangle of the control, not of
+  its text) and clear of the first card, the header
   commands whole, the first lane's commands on the first screen of the two wider windows; their heights go to first-use.json as
   `studioText`), and a line under the title of Train, Stage, Library and Settings (`<Page>Purpose`).
 
