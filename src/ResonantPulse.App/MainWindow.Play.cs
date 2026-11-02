@@ -620,15 +620,15 @@ public sealed partial class MainWindow
         return chip;
     }
 
+    /// <summary>
+    /// Applies a ready-made meter (also the repair of a unit that does not divide the bar). Choosing one can rewrite the tempo, so it
+    /// comes after the nudges that are on their way and after a meter chosen earlier that waits for them, and only into the project it
+    /// was chosen for (see <see cref="MeterPresets.ApplyAfterNudgesAsync"/>).
+    /// </summary>
     private async Task ApplyMeterPresetAsync(MeterPreset preset)
     {
-        if (MeterPresets.IsApplied(_document.Settings, preset)) return;
-        var applied = false;
-        await CommitAsync(doc =>
-        {
-            MeterPresets.ApplyOneClickPerBeat(doc.Settings, preset.Beats, preset.Denominator, preset.Groups);
-            applied = true;
-        }, editorChange: EditorChangeKind.PlayStructure);
+        var applied = await MeterPresets.ApplyAfterNudgesAsync(_tempoNudges, () => _document.Settings,
+            edit => CommitAsync(edit, editorChange: EditorChangeKind.PlayStructure), preset);
         if (applied) BuildPage();
     }
 }

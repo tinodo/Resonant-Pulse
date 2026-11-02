@@ -18,8 +18,8 @@ public sealed partial class MainWindow
     /// <summary>
     /// One consistent panel: title, optional help, scrolling fields, then [Cancel] [Done] side by side.
     /// Done applies and closes; Cancel (or clicking away) before Done discards. Once Done has been pressed the change is on its way, and
-    /// Cancel or clicking away only closes the panel: a change that takes a moment (the Done of the Tempo panel waits for the nudges that
-    /// are on their way) is still applied, as one that is queued behind another edit is. Fields are refilled from the document
+    /// Cancel or clicking away only closes the panel: a change that takes a moment (the Done of the Tempo panel and of the Custom meter
+    /// panel wait for the nudges that are on their way) is still applied, as one that is queued behind another edit is. Fields are refilled from the document
     /// every time the panel opens, so a cancelled draft never lingers. A <paramref name="readOnly"/> panel only shows text (Help):
     /// it has nothing to cancel, so it has Done alone, and its scrolling area is a tab stop so that a keyboard can read it.
     /// <paramref name="titleExtra"/> sits at the right of the title and wraps inside its own column. The panel's height is what its
@@ -221,6 +221,18 @@ public sealed partial class MainWindow
 
     private static string Invariant(double value) => value.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>The text box inside a number box (the template part that holds what is typed), or null before the box has a template.</summary>
+    private static TextBox? InnerTextBox(DependencyObject parent)
+    {
+        for (var index = 0; index < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is TextBox box) return box;
+            if (InnerTextBox(child) is { } found) return found;
+        }
+        return null;
+    }
+
     private OptionPanel BuildTempoPanel()
     {
         var settings = _document.Settings;
@@ -273,6 +285,33 @@ public sealed partial class MainWindow
         var openedTempo = settings.Tempo;
         var openedUnit = settings.BeatUnitQuarters;
         var opening = 0;
+        // An earlier Done that ends after the panel was opened again (it was dismissed while Done waited for the nudges, and opened again
+        // before the change was in the project): the draft of this opening was filled in before that, so a field that the person has not
+        // changed since follows the project, and what was changed is left alone. The opened values move with it, so that Done still writes
+        // only what was changed.
+        void FollowProject()
+        {
+            var current = _document.Settings;
+            var shownUnit = unit.SelectedItem is Choice choice ? double.Parse(choice.Value, CultureInfo.InvariantCulture) : openedUnit;
+            var (tempoEdited, unitEdited) = TempoEdits.PanelEdits(openedTempo, openedUnit, Math.Round(tempo.Value, 1), shownUnit);
+            // A number box takes what is typed into it on Enter, on a spin button or when it is left, and its own Text only then: text in its
+            // inner text box that is not what its value shows has been typed and not accepted yet (an emptied box too). That is a change of
+            // the field, which is left alone.
+            if (tempo.NumberFormatter is Windows.Globalization.NumberFormatting.INumberFormatter2 formatter &&
+                InnerTextBox(tempo) is { } typed && typed.Text != formatter.FormatDouble(tempo.Value))
+                tempoEdited = true;
+            if (!tempoEdited)
+            {
+                openedTempo = _tempoNudges.Requested ?? current.Tempo;
+                tempo.Value = openedTempo;
+            }
+            if (!unitEdited)
+            {
+                openedUnit = current.BeatUnitQuarters;
+                SelectChoice(unit, Invariant(openedUnit));
+            }
+            ShowGuide();
+        }
         return CreateOptionPanel("TempoTab", "TempoOptions", tempoContent, "TempoEditorHelp",
             () =>
             {
@@ -346,7 +385,7 @@ public sealed partial class MainWindow
                     await _workspace.SavePreferencesAsync(_preferences);
                 }
                 return true;
-            }, () => opening), titleExtra: guide);
+            }, () => opening, FollowProject), titleExtra: guide);
     }
 
     private OptionPanel BuildRhythmPanel()
@@ -361,6 +400,7 @@ public sealed partial class MainWindow
         var audible = NumberInput("AudibleBars", "AudibleBars", settings.AudibleBars, 0, 100000);
         var silent = NumberInput("SilentBars", "SilentBars", settings.SilentBars, 0, 100000);
         var blind = Toggle("Blind", "BlindGaps", settings.BlindGaps);
+        var opening = 0;
         var content = new StackPanel
         {
             Spacing = 12,
@@ -376,6 +416,7 @@ public sealed partial class MainWindow
         return CreateOptionPanel("RhythmEditorTitle", "RhythmOptions", content, "RhythmEditorHelp",
             () =>
             {
+                opening++;
                 var current = _document.Settings;
                 beats.Value = current.BeatsPerBar;
                 SelectChoice(denominator, current.BeatDenominator.ToString(CultureInfo.InvariantCulture));
@@ -387,7 +428,9 @@ public sealed partial class MainWindow
                 silent.Value = current.SilentBars;
                 blind.IsOn = current.BlindGaps;
             },
-            async () =>
+            // A second press of Done in this opening of the panel, while the first is still being applied (it waits for the nudges that
+            // are on their way), does nothing, as in the Tempo panel: it would apply the same change again (one more Undo step).
+            TempoEdits.OneAtATime(async () =>
             {
                 var newBeats = Integer(beats);
                 var newDenominator = int.Parse(Selected(denominator), CultureInfo.InvariantCulture);
@@ -399,27 +442,31 @@ public sealed partial class MainWindow
                 var newAudible = Integer(audible);
                 var newSilent = Integer(silent);
                 var newBlind = blind.IsOn;
-                var applied = false;
-                await CommitAsync(doc =>
-                {
-                    var target = doc.Settings;
-                    var divisionBefore = target.Subdivision;
-                    if (target.BeatsPerBar != newBeats || target.BeatDenominator != newDenominator)
-                        MeterPresets.Apply(target, newBeats, newDenominator, newGroups);
-                    else target.Groups = newGroups;
-                    target.Subdivision = newDivision;
-                    // The strengths of the split clicks belong to a split of this size.
-                    if (newDivision != divisionBefore) target.SubdivisionAccents = null;
-                    target.Swing = newSwing;
-                    target.CountInBars = newCountIn;
-                    target.AudibleBars = newAudible;
-                    target.SilentBars = newSilent;
-                    target.BlindGaps = newBlind;
-                    applied = true;
-                }, editorChange: EditorChangeKind.PlayStructure);
+                var typedFor = _projectGeneration;
+                // After the nudges that are on their way and after a ready-made meter (or an earlier Done of this panel) that waits for
+                // them, so that the meter chosen last is the one the project ends on, and only into the project it was typed for.
+                var applied = await _tempoNudges.EditAfterNudgesAsync(
+                    edit => CommitAsync(edit, editorChange: EditorChangeKind.PlayStructure), doc =>
+                    {
+                        var target = doc.Settings;
+                        var divisionBefore = target.Subdivision;
+                        if (target.BeatsPerBar != newBeats || target.BeatDenominator != newDenominator)
+                            MeterPresets.Apply(target, newBeats, newDenominator, newGroups);
+                        else target.Groups = newGroups;
+                        target.Subdivision = newDivision;
+                        // The strengths of the split clicks belong to a split of this size.
+                        if (newDivision != divisionBefore) target.SubdivisionAccents = null;
+                        target.Swing = newSwing;
+                        target.CountInBars = newCountIn;
+                        target.AudibleBars = newAudible;
+                        target.SilentBars = newSilent;
+                        target.BlindGaps = newBlind;
+                    });
                 if (applied) BuildPage();
-                return applied;
-            });
+                // A project that was replaced meanwhile took this panel's page with it, and what was typed belonged to the one that
+                // went: there is nothing left to keep open.
+                return applied || typedFor != _projectGeneration;
+            }, () => opening));
     }
 
     private OptionPanel BuildPracticePanel()
