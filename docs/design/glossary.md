@@ -124,8 +124,9 @@ is renamed and the sentence is not; the word for a lane is the one the table abo
   line with it.
 - Spanish: **No hace falta guardar** and **se conserva mientras lo edita**; **copia como archivo**; **abajo** for the bar.
 - *Kept* is a choice of English too: the page says "kept as you edit it", not "saved", because what the application does after each
-  change is write its own recovery copy of the project (it opens again on the next start, and a write that fails is reported), which is
-  not a file the person can find or send; *Save project* in the Library is the command that makes one.
+  change is write its own recovery copy of the project (it is read again when the application starts; a write that fails is
+  reported, and so is a copy that cannot be read), which is not a file the person can find or send; *Save project* in the Library
+  is the command that makes one.
 - A change is heard after **Stop, then Start**, not after Pause and Start: a Start that resumes a pause keeps the revision it paused on.
 
 ## The Help panel: quick start and musical reference
