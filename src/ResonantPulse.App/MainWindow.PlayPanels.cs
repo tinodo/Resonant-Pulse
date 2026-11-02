@@ -221,6 +221,18 @@ public sealed partial class MainWindow
 
     private static string Invariant(double value) => value.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>The text box inside a number box (the template part that holds what is typed), or null before the box has a template.</summary>
+    private static TextBox? InnerTextBox(DependencyObject parent)
+    {
+        for (var index = 0; index < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is TextBox box) return box;
+            if (InnerTextBox(child) is { } found) return found;
+        }
+        return null;
+    }
+
     private OptionPanel BuildTempoPanel()
     {
         var settings = _document.Settings;
@@ -277,10 +289,11 @@ public sealed partial class MainWindow
             var current = _document.Settings;
             var shownUnit = unit.SelectedItem is Choice choice ? double.Parse(choice.Value, CultureInfo.InvariantCulture) : openedUnit;
             var (tempoEdited, unitEdited) = TempoEdits.PanelEdits(openedTempo, openedUnit, Math.Round(tempo.Value, 1), shownUnit);
-            // A number box takes what is typed into it on Enter, on a spin button or when it is left, so text that is not what its value
-            // shows has been typed and not accepted yet (an emptied box too): that is a change of the field, which is left alone.
+            // A number box takes what is typed into it on Enter, on a spin button or when it is left, and its own Text only then: text in its
+            // inner text box that is not what its value shows has been typed and not accepted yet (an emptied box too). That is a change of
+            // the field, which is left alone.
             if (tempo.NumberFormatter is Windows.Globalization.NumberFormatting.INumberFormatter2 formatter &&
-                tempo.Text != formatter.FormatDouble(tempo.Value))
+                InnerTextBox(tempo) is { } typed && typed.Text != formatter.FormatDouble(tempo.Value))
                 tempoEdited = true;
             if (!tempoEdited)
             {
