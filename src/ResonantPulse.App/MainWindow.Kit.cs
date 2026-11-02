@@ -528,17 +528,30 @@ public sealed partial class MainWindow
         return row;
     }
 
-    /// <summary>Rebuilds the page and puts the scroll position back, so a structural change does not throw the reader to the top.</summary>
-    private void RebuildPreservingScroll()
+    /// <summary>
+    /// Rebuilds the page and puts the scroll position back, so a structural change does not throw the reader to the top.
+    /// <paramref name="afterLayout"/> runs once, after the rebuilt page has had its first layout and the scroll position is back (the keyboard
+    /// focus of the person who used a command that is gone with the old page, for instance): a control that is given the focus is scrolled into
+    /// view, so the position has to be back first, or the page is scrolled to wherever that control happened to be.
+    /// </summary>
+    private void RebuildPreservingScroll(Action? afterLayout = null)
     {
         var offset = (PageHost.Content as ScrollViewer)?.VerticalOffset ?? 0;
         BuildPage();
-        if (offset <= 0 || PageHost.Content is not ScrollViewer scroll) return;
+        if (PageHost.Content is not ScrollViewer scroll)
+        {
+            afterLayout?.Invoke();
+            return;
+        }
+        if (offset <= 0 && afterLayout is null) return;
         EventHandler<object>? restore = null;
         restore = (_, _) =>
         {
             scroll.LayoutUpdated -= restore;
-            scroll.ChangeView(null, offset, null, true);
+            if (offset > 0) scroll.ChangeView(null, offset, null, true);
+            // The focus waits until the position is back: a control that is given the focus is scrolled into view, and asked for before the
+            // position was back it was scrolled to the end of the page instead of staying where the person was.
+            if (afterLayout is not null) DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => afterLayout());
         };
         scroll.LayoutUpdated += restore;
     }

@@ -44,6 +44,9 @@
     <Compile Include="../../src/ResonantPulse.App/StemExport.cs" Link="App/StemExport.cs" />
     <Compile Include="../../src/ResonantPulse.App/FileDialogFailure.cs" Link="App/FileDialogFailure.cs" />
     <Compile Include="../../src/ResonantPulse.App/CommandFocus.cs" Link="App/CommandFocus.cs" />
+    <Compile Include="../../src/ResonantPulse.App/CommandRowFocus.cs" Link="App/CommandRowFocus.cs" />
+    <Compile Include="../../src/ResonantPulse.App/NavigationFit.cs" Link="App/NavigationFit.cs" />
+    <Compile Include="../../src/ResonantPulse.App/InitialFocus.cs" Link="App/InitialFocus.cs" />
     <Compile Include="../../src/ResonantPulse.App/FileWrites.cs" Link="App/FileWrites.cs" />
     <Compile Include="../../src/ResonantPulse.App/SavingNotice.cs" Link="App/SavingNotice.cs" />
     <Compile Include="../../src/ResonantPulse.App/TempoCurveState.cs" Link="App/TempoCurveState.cs" />

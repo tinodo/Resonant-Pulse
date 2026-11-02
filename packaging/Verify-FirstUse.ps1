@@ -122,6 +122,40 @@ function Invoke-Control([string]$id) {
     } while ([DateTime]::UtcNow -lt $limit)
     throw "Native control remained disabled: $id"
 }
+# A menu that a command opens (the More button of a lane or of a step) has its items on the page only while it is open. The button is pressed
+# as soon as its page has been built, and after the removal of the step before it the page is built again on the UI thread of a loaded
+# desktop: a press that comes meanwhile can be swallowed, and the menu never opens ('Required first-use control remained missing:
+# Program0Remove' stopped the local gate now and then, and the same step passed when the run was repeated). So the button is waited for until
+# it has been still, pressed, and its item looked for for a few seconds; if no menu has opened it is pressed again (three presses at most).
+# A menu that is open is never pressed again: if the item is not in it, that is a defect and is said at once with what the menu holds (a
+# menu is a MenuFlyout with MenuItems in the tree, and the button has no ExpandCollapse state to ask). A menu that never opens still fails.
+function Get-OpenMenuItems {
+    $menus = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Menu)
+    if ($null -eq (Get-CurrentWindow).FindFirst([Windows.Automation.TreeScope]::Descendants, $menus)) { return $null }
+    $items = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::MenuItem)
+    @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $items) | ForEach-Object { $_.Current.AutomationId })
+}
+function Invoke-MenuItem([string]$menuId, [string]$itemId, [int]$presses = 3, [int]$seconds = 4) {
+    for ($press = 1; $press -le $presses; $press++) {
+        Wait-Settled $menuId
+        Invoke-Control $menuId
+        $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+        $openSince = $null
+        do {
+            if ($null -ne (Find-Optional $itemId)) { Invoke-Control $itemId; return }
+            $held = Get-OpenMenuItems
+            if ($null -ne $held) {
+                if ($null -eq $openSince) { $openSince = [DateTime]::UtcNow }
+                elseif (([DateTime]::UtcNow - $openSince).TotalSeconds -ge 1) {
+                    throw "Required first-use control remained missing: $itemId (the menu of $menuId is open and holds: $($held -join ', '))"
+                }
+            }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTime]::UtcNow -lt $limit)
+        Write-Host "The menu of $menuId did not open at press $press of $presses."
+    }
+    throw "Required first-use control remained missing: $itemId (the menu of $menuId did not open after $presses presses)"
+}
 function Wait-Until([scriptblock]$condition, [string]$failure, [int]$seconds = 10) {
     $limit = [DateTime]::UtcNow.AddSeconds($seconds)
     do {
@@ -174,6 +208,15 @@ function Wait-Settled([string]$id, [int]$stillMilliseconds = 500, [int]$seconds 
         Start-Sleep -Milliseconds 40
     } while ([DateTime]::UtcNow -lt $limit)
     throw "$id did not stop moving within $seconds seconds (last position: $last)"
+}
+# The checks of what a person sees first (where the keyboard focus starts, the room a panel gives its last box, text that fits its
+# control in every language) sweep many places at once. They do not stop the run at the first thing they find: each records it here with
+# where it is and what was measured, so that one run says everything that is wrong, and the run fails at its end (see the end of the
+# script) if anything was recorded.
+$script:findings = [Collections.Generic.List[string]]::new()
+function Add-Finding([string]$where, [string]$message) {
+    $script:findings.Add("${where}: $message")
+    Write-Host "FINDING ${where}: $message"
 }
 # Layout rules a person notices at a glance. Each one failed in a shipped preview, so each is now a gate.
 function Test-SameSize([string]$what, $first, $second, [double]$tolerance = 2) {
@@ -253,9 +296,9 @@ function Test-PlayTools {
         if ([Math]::Sqrt($dx * $dx + $dy * $dy) -lt $radius) { throw "$($names[$index]) covers the metronome's ring: $rect over dial $dial" }
     }
     # A focused item draws its focus ring, and UI Automation then reports the ring's rectangle (4 px wider on each side and 2
-    # taller than the item). The application Windows activates (the packaged one) starts with the focus on Settings and its
-    # window active, so the ring is there; a launched build, or one that restored a project, has none. This check is about the
-    # layout, so a focus that sits on Settings is moved to the mute button (always enabled) before it is measured.
+    # taller than the item). The application used to start with the focus on Settings (Test-InitialFocus now requires it elsewhere), so
+    # the ring was there; this check is about the layout, so a focus that sits on Settings is moved to the mute button (always
+    # enabled) before it is measured.
     $settingsItem = Find-Control 'DestinationSettings'
     if ($settingsItem.Current.HasKeyboardFocus) {
         try { (Find-Control 'EmergencyMute').SetFocus() } catch { }
@@ -451,6 +494,28 @@ $openedOn = Find-Control 'DestinationPlay'
 if (-not $openedOn.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected -or $null -eq (Find-Optional 'PhaseInstrument')) {
     throw 'The application did not open on Play, although the page saved last was Settings.'
 }
+# Where the keyboard focus is when the application has just started and nothing has been touched. A person who then presses Space or Tab
+# starts from there, and a focus ring drawn there is the first thing that is seen. When Windows activated the application it put the
+# focus on the Settings item, the only thing the navigation held at that moment (its pages are added when the project has been read), and
+# the ring showed on Settings (a hosted runner, packaged or not, and the private desktop of the local gate both showed it). The application
+# now places the focus once, when the page is built: on Start, or on Audio while there is no output to start on. The controls that say they
+# have the keyboard focus are read (the application's own notion of it, which a private desktop whose window is not the active one reports
+# as well; the system's focused element there is another process's).
+function Test-InitialFocus {
+    $expected = if ((Find-Control 'TransportStartPause').Current.IsEnabled) { 'TransportStartPause' } else { 'AudioOptions' }
+    $holding = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::HasKeyboardFocusProperty, $true)
+    $limit = [DateTime]::UtcNow.AddSeconds(4)
+    do {
+        $holders = @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $holding) |
+            Where-Object { $_.Current.AutomationId } | ForEach-Object { @{ id = $_.Current.AutomationId; name = $_.Current.Name } })
+        if (@($holders | Where-Object { $_.id -eq $expected }).Count -gt 0) { return @{ result = 'on-the-expected-control'; expected = $expected; holders = @($holders | ForEach-Object { $_.id }) } }
+        Start-Sleep -Milliseconds 150
+    } while ([DateTime]::UtcNow -lt $limit)
+    $where = if ($holders.Count -eq 0) { 'no control' } else { ($holders | ForEach-Object { "'$($_.id)' ('$($_.name)')" }) -join ' and ' }
+    Add-Finding 'Initial focus' "the keyboard focus starts on $where, not on '$expected' (a navigation item has it when Windows chose it for the window, before the pages existed)."
+    return @{ result = 'wrong-control'; expected = $expected; holders = @($holders | ForEach-Object { $_.id }) }
+}
+$initialFocus = Test-InitialFocus
 $bounds = $window.Current.BoundingRectangle
 $primary = @('PhaseInstrument', 'TempoEdit', 'TempoDown', 'TapTempo', 'TempoUp', 'TapStart', 'QuickMeter', 'MainSound', 'MainAccent0',
     'PracticeTimer', 'ProjectOptions', 'PlayHelp', 'AudioOptions', 'TransportStartPause', 'TransportStop', 'EmergencyMute')
@@ -879,7 +944,7 @@ function Wait-TempoGuide([string[]]$names, [string]$rate, [string]$what) {
     $wanted = if ($rate) { "at $rate BPM in quarter notes" } else { 'for a tempo counted in quarter notes, without a conversion' }
     throw "${what}: the tempo guide says '$text', but it should name $($names -join ' / ') $wanted."
 }
-function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, [string]$eighth = 'Eighth note', [string]$quarter = 'Quarter note', [bool]$tapsWhole = $true) {
+function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, [string]$eighth = 'Eighth note', [string]$quarter = 'Quarter note') {
     $transportBefore = (Find-Control 'TransportStatus').Current.Name
     $dialBefore = Get-Dial
     $dialRectBefore = (Find-Control 'PhaseInstrument').Current.BoundingRectangle
@@ -904,13 +969,12 @@ function Test-TempoGuide([string]$where, [string]$shot = '', [switch]$Interact, 
     if ($guide.Left -lt $tempoBox.Left - 2 * $scale -or $guide.Right -gt $done.Right + 2 * $scale) {
         throw "${where}: the tempo guide is clipped sideways ($guide between $($tempoBox.Left) and $($done.Right))."
     }
-    # What it sits beside costs the panel's fields nothing: the box for the number of taps is whole above the footer. A panel is only
-    # as tall as the room under the dial's readout, and a line of its own under the note value took the lower half of this box out of
-    # view at 400x720 and at the first-use size of a hosted runner (the first version of the guide did).
-    if ($tapsWhole) {
-        if ($taps.IsEmpty -or $taps.Height -lt 40 * $scale -or $taps.Bottom -gt $done.Top + $one) {
-            throw "${where}: the box for the number of taps is not whole above Done ($taps, Done $done): the tempo guide took room from the fields of the panel."
-        }
+    # What it sits beside costs the panel's fields nothing: the box for the number of taps is whole above the footer, at every size (the
+    # panel scrolls when it does not fit, and a box that scrolls out of view is cut). A panel is only as tall as the room under the dial's
+    # readout, and a line of its own under the note value took the lower half of this box out of view at 400x720 and at the first-use
+    # size of a hosted runner (the first version of the guide did); 800x600 kept 29 of its 44 DIP in view (hosted, 100 %).
+    if ($taps.IsEmpty -or $taps.Height -lt 40 * $scale -or $taps.Bottom -gt $done.Top + $one) {
+        Add-Finding $where "the box for the number of taps is not whole above Done ($([Math]::Round($taps.Height / $scale, 1)) of its 44 DIP are inside the panel: $taps, Done $done): the panel scrolls, so the box is cut."
     }
     Test-NoApplyButtons $where
     # The project holds 120 BPM counted in quarter notes here, and 120 quarter notes a minute is where two markings meet.
@@ -1225,6 +1289,66 @@ function Test-TimingExportWithOutput {
     # The next step goes on from the Train page, where the check before it was left.
     Select-Destination 'DestinationTrain'
     Wait-Settled 'TimingTolerance'
+    # 6c. Begin and Finish build the Train page again. The page stays where it was (it went to the top, so after Finish the result, the line
+    # that says what an export holds and Export itself were below the fold), the keyboard focus goes on to the command that takes over (it
+    # fell to Start in the transport bar), and the result is on screen after Finish. A command used with the keyboard has the focus first, so
+    # it is given it (SetFocus) before it is pressed. How far the page is scrolled is compared in DIP: the notice that Begin opens takes room
+    # from the page, so the share of the page in view changes with it.
+    foreach ($size in @(@(1000, 720), @(400, 720))) {
+        Resize-To $size[0] $size[1]
+        Start-Sleep -Milliseconds 800
+        $where = "Train at $($size[0])x$($size[1])"
+        Wait-Settled 'BeginKeyboardTiming'
+        Show-Control 'BeginKeyboardTiming'
+        $beforeBegin = Get-PageScroll
+        if ($beforeBegin.offset -lt 100) { throw "${where}: the page is scrolled only $($beforeBegin.offset) DIP, so this check cannot show that Begin keeps its place." }
+        (Find-Control 'BeginKeyboardTiming').SetFocus()
+        Wait-Condition { (Get-FocusHolders) -contains 'BeginKeyboardTiming' } "${where}: Begin did not take the keyboard focus."
+        Invoke-Control 'BeginKeyboardTiming'
+        Wait-Condition { (Find-Control 'KeyboardAttack').Current.IsEnabled } "${where}: the check did not start."
+        Start-Sleep -Milliseconds 900
+        $afterBegin = Get-PageScroll
+        # The page may move down to keep the command that took the focus on screen (the notice that Begin opens takes room from the foot of
+        # the page), never up: that is the jump to the top.
+        if ($afterBegin.offset -lt $beforeBegin.offset - 8) {
+            Add-Finding $where "Begin moved the page from $($beforeBegin.offset) to $($afterBegin.offset) DIP: it is built again at the top, and the person has lost their place."
+        }
+        $hit = (Find-Control 'KeyboardAttack').Current.BoundingRectangle
+        if ($hit.IsEmpty -or $hit.Top -lt $afterBegin.top - 1 -or $hit.Bottom -gt $afterBegin.bottom + 1) {
+            Add-Finding $where "after Begin the command that took the keyboard focus (Hit) is not on screen (it is at $($hit.Top) to $($hit.Bottom), the page shows $($afterBegin.top) to $($afterBegin.bottom))."
+        }
+        $holdersAfterBegin = @(Get-FocusHolders)
+        if ($holdersAfterBegin -notcontains 'KeyboardAttack') {
+            Add-Finding $where "after Begin the keyboard focus is on '$($holdersAfterBegin -join ', ')', not on Hit (the command that takes over from Begin)."
+        }
+        foreach ($press in 1..2) { Invoke-Control 'KeyboardAttack'; Start-Sleep -Milliseconds 500 }
+        Show-Control 'FinishKeyboardTiming'
+        $beforeFinish = Get-PageScroll
+        (Find-Control 'FinishKeyboardTiming').SetFocus()
+        Wait-Condition { (Get-FocusHolders) -contains 'FinishKeyboardTiming' } "${where}: Finish did not take the keyboard focus."
+        Invoke-Control 'FinishKeyboardTiming'
+        Wait-Condition { Get-ExportOn } "${where}: the export did not turn on when the check finished."
+        Wait-Condition { $null -ne (Find-Optional 'TimingCsvReady') } "${where}: no line says what is exported once the check has finished."
+        Start-Sleep -Milliseconds 1200
+        $afterFinish = Get-PageScroll
+        # The page may move down to show the result, never up: that is the jump to the top.
+        if ($afterFinish.offset -lt $beforeFinish.offset - 8) {
+            Add-Finding $where "Finish moved the page from $($beforeFinish.offset) to $($afterFinish.offset) DIP: it is built again at the top, and the result is below the fold."
+        }
+        $ready = (Find-Control 'TimingCsvReady').Current.BoundingRectangle
+        if ($ready.IsEmpty -or $ready.Top -lt $afterFinish.top - 1 -or $ready.Bottom -gt $afterFinish.bottom + 1) {
+            Add-Finding $where "after Finish the line that says what an export holds is not on screen (it is at $($ready.Top) to $($ready.Bottom), the page shows $($afterFinish.top) to $($afterFinish.bottom))."
+        }
+        $holdersAfterFinish = @(Get-FocusHolders)
+        if ($holdersAfterFinish -notcontains 'ExportTimingCsv') {
+            Add-Finding $where "after Finish the keyboard focus is on '$($holdersAfterFinish -join ', ')', not on Export result (the command that Finish turned on)."
+        }
+        $script:timingExportDone.Add("train-keeps-its-place-and-focus-$($size[0])x$($size[1]): begin $($beforeBegin.offset)->$($afterBegin.offset) DIP, finish $($beforeFinish.offset)->$($afterFinish.offset) DIP")
+    }
+    $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+    Start-Sleep -Milliseconds 800
+    Select-Destination 'DestinationTrain'
+    Wait-Settled 'TimingTolerance'
     # 7. A new check took the old result away when it began (nothing shows that while it runs), so a change of playback that ends it
     # leaves nothing to export: not the new result, which never came, and not the old one.
     Begin-Check 'A check that is about to be ended'
@@ -1490,9 +1614,9 @@ $tempoGuideEvidence['firstUse'] = Test-TempoGuide 'Tempo guide at the first-use 
 foreach ($size in @(@(800, 600), @(1000, 720), @(400, 720), @(320, 900))) {
     Resize-To $size[0] $size[1]
     Start-Sleep -Milliseconds 800
-    # At 800x600 the panel is only 536 DIP tall and the box for the number of taps is partly out of view with or without the guide
-    # (the panel scrolls), so that one size does not ask for it whole.
-    $tempoGuideEvidence["$($size[0])x$($size[1])"] = Test-TempoGuide "Tempo guide at $($size[0])x$($size[1])" "tempo-$($size[0])x$($size[1])" -tapsWhole ($size[0] -ne 800)
+    # The box for the number of taps is whole above Done in every one of these windows, 800x600 included: it was 29 of its 44 DIP
+    # there (hosted, 100 %) before the panel gave it its room, and a box that is cut is a box that cannot be read or reached.
+    $tempoGuideEvidence["$($size[0])x$($size[1])"] = Test-TempoGuide "Tempo guide at $($size[0])x$($size[1])" "tempo-$($size[0])x$($size[1])"
 }
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 Start-Sleep -Milliseconds 800
@@ -1657,6 +1781,30 @@ function Show-Control([string]$id) {
     # Brings a control that is below the first screen into view, the way a person scrolls to it.
     try { (Find-Control $id).GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView() } catch { }
     Start-Sleep -Milliseconds 400
+}
+# The page is one scrolling area (the largest one with a scroll pattern). How far it is scrolled, in DIP, is worked out from the room it has on
+# screen and the share of the page that is in view, so that it can be compared before and after the page is built again, whatever its room.
+function Get-PageScroll {
+    $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::IsScrollPatternAvailableProperty, $true)
+    $best = $null
+    foreach ($element in (Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition)) {
+        $rect = $element.Current.BoundingRectangle
+        if ($rect.IsEmpty) { continue }
+        if ($null -eq $best -or $rect.Width * $rect.Height -gt $best.Current.BoundingRectangle.Width * $best.Current.BoundingRectangle.Height) { $best = $element }
+    }
+    if ($null -eq $best) { throw 'The page has no scrolling area.' }
+    $scroll = $best.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).Current
+    $rect = $best.Current.BoundingRectangle
+    $viewport = $rect.Height / $scale
+    $extent = if ($scroll.VerticalViewSize -gt 0) { $viewport / ($scroll.VerticalViewSize / 100) } else { $viewport }
+    $percent = [Math]::Max(0, $scroll.VerticalScrollPercent)
+    @{ viewport = [Math]::Round($viewport, 1); extent = [Math]::Round($extent, 1); offset = [Math]::Round(($extent - $viewport) * $percent / 100, 1); top = $rect.Top; bottom = $rect.Bottom }
+}
+# The ids of the controls that say they have the keyboard focus (the application's own notion of it, which a private desktop whose window is
+# not the active one reports too).
+function Get-FocusHolders {
+    $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::HasKeyboardFocusProperty, $true)
+    @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $condition) | ForEach-Object { $_.Current.AutomationId } | Where-Object { $_ })
 }
 # The setlist is switched off while songs are being added, moved or removed, so a song cannot be chosen from rows that are about
 # to be replaced: Remove asks for confirmation inside the operation, so while the question is open the list is off, and after
@@ -2249,8 +2397,7 @@ Test-NoApplyButtons 'Studio'
 # not queued with the old page and then refused. Remove asks first, inside the operation: while the question is open the fields
 # are off and the command that opened it is not (the keyboard focus returns to it); after Cancel everything is back.
 $laneFields = @('Lane0Name', 'Lane0Muted', 'Lane0Solo', 'Lane0Pulses', 'Lane0Cycle', 'Lane0Offset', 'Lane0Sound', 'Lane0Volume', 'Lane0Pan', 'Lane0Probability', 'Lane0Step0', 'DocumentSeed')
-Invoke-Control 'Lane1More'
-Invoke-Control 'Lane1Remove'
+Invoke-MenuItem 'Lane1More' 'Lane1Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
 foreach ($id in $laneFields) {
     Wait-Condition { -not (Find-Control $id).Current.IsEnabled } "Studio: $id can still be edited while a lane is being removed."
@@ -2365,19 +2512,16 @@ $secondName = Get-Box 'Program1Name'
 $focusBeforeMoveUp = [Windows.Automation.AutomationElement]::FocusedElement.Current.AutomationId
 Invoke-Control 'Program1MoveUp'
 Wait-Condition { (Get-Box 'Program0Name') -eq $secondName } 'Studio: Move up did not put the second step first.'
-Invoke-Control 'Program0More'
-Invoke-Control 'Program0Duplicate'
+Invoke-MenuItem 'Program0More' 'Program0Duplicate'
 Wait-Condition { $null -ne (Find-Optional 'Program2Card') } 'Studio: Duplicate did not add a copy.'
 Wait-Condition { (Get-Box 'Program1Name') -like '*(copy)' } 'Studio: the copy is not named after its original.'
 Show-Control 'Program2More'
-Invoke-Control 'Program2More'
-Invoke-Control 'Program2Remove'
+Invoke-MenuItem 'Program2More' 'Program2Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'CloseButton') } 'Studio: Remove did not ask for confirmation.'
 Invoke-DialogButton 'CloseButton' 'Studio: the confirmation went away before Cancel could be pressed.'
 Wait-Condition { $null -eq (Find-Optional 'ConfirmationDialog') } 'Studio: Cancel did not close the confirmation.'
 $null = Find-Control 'Program2Card'
-Invoke-Control 'Program2More'
-Invoke-Control 'Program2Remove'
+Invoke-MenuItem 'Program2More' 'Program2Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Studio: Remove did not ask again.'
 Invoke-DialogButton 'PrimaryButton' 'Studio: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program2Card') } 'Studio: removing a step did not take its card away.'
@@ -2385,8 +2529,7 @@ Test-NoApplyButtons 'Studio'
 # The remaining steps are taken away too: with a program the Play page leaves the tempo and the time signature to the program, and
 # the checks that follow use those controls.
 foreach ($stepIndex in 1, 0) {
-    Invoke-Control "Program${stepIndex}More"
-    Invoke-Control "Program${stepIndex}Remove"
+    Invoke-MenuItem "Program${stepIndex}More" "Program${stepIndex}Remove"
     Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } "Studio: Remove did not ask about step $($stepIndex + 1)."
     Invoke-DialogButton 'PrimaryButton' "Studio: the confirmation about step $($stepIndex + 1) went away before Remove could be confirmed."
     Wait-Condition { $null -eq (Find-Optional "Program${stepIndex}Card") } "Studio: removing step $($stepIndex + 1) did not take its card away."
@@ -2556,8 +2699,7 @@ Invoke-Control 'AddProgramStep'
 Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Dutch Studio program: Add step did not add a step card.'
 Show-Control 'Program0Card'
 foreach ($id in 'Program0Name', 'Program0MoveUp', 'Program0MoveDown', 'Program0More') { Test-OnScreen 'Dutch Studio program' $id }
-Invoke-Control 'Program0More'
-Invoke-Control 'Program0Remove'
+Invoke-MenuItem 'Program0More' 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Dutch Studio program: Remove did not ask for confirmation.'
 Invoke-DialogButton 'PrimaryButton' 'Dutch Studio program: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Dutch Studio program: removing the step did not take its card away.'
@@ -2583,8 +2725,7 @@ Invoke-Control 'Program0ClearGrouping'
 Wait-Condition { $null -eq (Find-Optional 'Program0ClearGrouping') } 'Grouped Studio program: Clear grouping is still offered after it was used.'
 Wait-Condition { (Find-Control 'Program0Beats').Current.IsEnabled -and (Find-Control 'Program0Denominator').Current.IsEnabled } 'Grouped Studio program: clearing the grouping did not turn the time signature fields on.'
 Wait-Condition { $null -ne (Find-Optional 'Program0Card') } 'Grouped Studio program: clearing the grouping took the step away.'
-Invoke-Control 'Program0More'
-Invoke-Control 'Program0Remove'
+Invoke-MenuItem 'Program0More' 'Program0Remove'
 Wait-Condition { $null -ne (Find-DialogButton 'PrimaryButton') } 'Grouped Studio program: Remove did not ask for confirmation.'
 Invoke-DialogButton 'PrimaryButton' 'Grouped Studio program: the confirmation went away before Remove could be confirmed.'
 Wait-Condition { $null -eq (Find-Optional 'Program0Card') } 'Grouped Studio program: removing the step did not take its card away.'
@@ -2597,16 +2738,128 @@ Select-Combo 'Language' 'English'
 Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -eq 'Play' } 'The interface did not switch back to English.'
 Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
+# Every language keeps its text whole in the narrowest windows (docs/design/pages-design.md: text is never cut). The application is switched to
+# each language in turn. The navigation gives the Settings item what is left after the item of the selected page, and clips its name when
+# that is less (at 320 DIP wide the Dutch, German and French names were cut on the pages with a longer name: the item was 106 DIP wide on
+# Play and 79 on Settings): it is read on every page at 320x900 and has the same width on each, and ends inside the navigation. The transport
+# bar and the status line are read on Play at 320x900 and 400x720: a command keeps a name of one word on one line, also with Mute switched on
+# (a button taller than one line has broken its name: the German Stummschalten was broken in the middle of the word at 320 DIP wide), and a
+# name of several words may take a second line where there is no more room (Dempen opheffen at 320 DIP wide); the status line is inside the
+# window. What is found is recorded (Add-Finding), not thrown, so that one run says it all.
+$languageLayoutPages = @(
+    @{ id = 'DestinationPlay'; settle = 'QuickMeter' }, @{ id = 'DestinationStudio'; settle = 'AddLane' }, @{ id = 'DestinationTrain'; settle = 'TimingTolerance' },
+    @{ id = 'DestinationStage'; settle = 'StageLock' }, @{ id = 'DestinationLibrary'; settle = 'ExportBars' }, @{ id = 'DestinationSettings'; settle = 'Language' })
+$languageLayoutLanguages = @(
+    # ASCII only, like the rest of this file: Windows PowerShell 5.1 reads a file without a byte order mark in the ANSI code page.
+    @{ code = 'nl'; item = 'Nederlands'; play = 'Spelen' }, @{ code = 'de'; item = 'Deutsch'; play = 'Spielen' },
+    @{ code = 'fr'; item = "Fran$([char]0x00E7)ais"; play = 'Jouer' }, @{ code = 'es'; item = "Espa$([char]0x00F1)ol"; play = 'Tocar' },
+    @{ code = 'en'; item = 'English'; play = 'Play' })
+function Test-LanguageLayout {
+    $evidence = [ordered]@{}
+    $transportIds = 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions'
+    $sizes = @(@(320, 900), @(400, 720))
+    function Test-TransportLines([string]$where) {
+        foreach ($id in $transportIds) {
+            $element = Find-Control $id
+            $name = $element.Current.Name
+            $height = $element.Current.BoundingRectangle.Height / $scale
+            # A name of one word has one line (a taller button has broken it in the middle of the word); a name of several words may take
+            # a second line where the bar has no more room for it (Dempen opheffen at 320 DIP wide), and no more than that.
+            if ($height -gt 46 -and ($name -notmatch '\s' -or $height -gt 64)) {
+                Add-Finding $where "the button '$id' ('$name') is $([Math]::Round($height, 1)) DIP tall, not 44: its name is broken over several lines."
+            }
+        }
+    }
+    foreach ($language in $languageLayoutLanguages) {
+        Resize-To 1000 720
+        Start-Sleep -Milliseconds 600
+        Select-Destination 'DestinationSettings'
+        Wait-Settled 'Language'
+        Select-Combo 'Language' $language.item
+        Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -eq $language.play } "Language layout: the interface did not switch to $($language.item)."
+        $widths = @{}
+        foreach ($size in $sizes) { $widths["$($size[0])x$($size[1])"] = [ordered]@{} }
+        foreach ($page in $languageLayoutPages) {
+            # In a narrow window the navigation keeps only the page that is selected, so a page is chosen in a wide window first.
+            Resize-To 1000 720
+            Start-Sleep -Milliseconds 500
+            Select-Destination $page.id
+            Wait-Settled $page.settle
+            $pageName = $page.id -replace '^Destination', ''
+            foreach ($size in $sizes) {
+                # The transport bar and the status line are the same on every page, so they are read on Play only (at both sizes, and with
+                # Mute on); the Settings item is what the item of the selected page squeezes, so it is read on every page, at the narrowest size
+                # (at 400 DIP wide the pane has room for every name).
+                if ($pageName -ne 'Play' -and $size[0] -gt 320) { continue }
+                Resize-To $size[0] $size[1]
+                Start-Sleep -Milliseconds 700
+                Wait-Settled 'DestinationSettings'
+                $key = "$($size[0])x$($size[1])"
+                $where = "$($language.code) at $key, $pageName"
+                $windowRect = (Get-CurrentWindow).Current.BoundingRectangle
+                $navRect = (Find-Control 'Destinations').Current.BoundingRectangle
+                $settingsRect = (Find-Control 'DestinationSettings').Current.BoundingRectangle
+                $widths[$key][$pageName] = [Math]::Round($settingsRect.Width / $scale, 1)
+                if ($settingsRect.Right -gt $navRect.Right + 1 * $scale) {
+                    Add-Finding $where "the Settings item ends $([Math]::Round(($settingsRect.Right - $navRect.Right) / $scale, 1)) DIP outside the navigation."
+                }
+                if ($pageName -eq 'Play') {
+                    Test-TransportLines $where
+                    $status = (Find-Control 'TransportStatus').Current.BoundingRectangle
+                    if ($status.Bottom -gt $windowRect.Bottom + 1 * $scale -or $status.Right -gt $windowRect.Right + 1 * $scale) {
+                        Add-Finding $where "the status line ($status) is outside the window ($windowRect)."
+                    }
+                    # With Mute on the button says Unmute, which is longer in some languages ("Dempen opheffen").
+                    $muteName = (Find-Control 'EmergencyMute').Current.Name
+                    $null = Invoke-Control 'EmergencyMute'
+                    Wait-Condition { (Find-Control 'EmergencyMute').Current.Name -ne $muteName } "${where}: Mute did not switch on."
+                    Start-Sleep -Milliseconds 500
+                    Test-TransportLines "$where, with Mute on"
+                    $null = Invoke-Control 'EmergencyMute'
+                    Wait-Condition { (Find-Control 'EmergencyMute').Current.Name -eq $muteName } "${where}: Mute did not switch off."
+                }
+            }
+        }
+        foreach ($size in $sizes) {
+            $key = "$($size[0])x$($size[1])"
+            $evidence["$($language.code)-$key"] = $widths[$key]
+            # Only Play is read at 400 DIP wide: one width, nothing to compare.
+            if ($widths[$key].Count -lt 2) { continue }
+            # The pages whose own item is not the Settings item are the ones that squeeze it, so they must agree; on the Settings page the item
+            # may be a few DIP wider than elsewhere (60 instead of 48 DIP at 320 DIP wide, seen on the private desktop until a picture of the
+            # window was taken: not squeezed, so not a cut), and is only required not to be narrower than they are.
+            $others = @($widths[$key].GetEnumerator() | Where-Object { $_.Key -ne 'Settings' } | Sort-Object Value)
+            $natural = $others[-1].Value
+            $measured = @($widths[$key].GetEnumerator() | Sort-Object Value)
+            $narrowest = $measured[0]
+            $widest = $measured[-1]
+            if ($natural - $others[0].Value -gt 1.5 -or $widths[$key]['Settings'] -lt $natural - 1.5) {
+                Add-Finding "$($language.code) at $key" "the Settings item is $($narrowest.Value) DIP wide on $($narrowest.Key) and $($widest.Value) on $($widest.Key): the navigation squeezes it, and its name is clipped where it is narrower (widths: $(($widths[$key].GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', '))."
+            }
+        }
+    }
+    $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+    Start-Sleep -Milliseconds 800
+    Select-Destination 'DestinationPlay'
+    Wait-Settled 'QuickMeter'
+    return $evidence
+}
+$languageLayoutEvidence = Test-LanguageLayout
 @{controls=$controls;selectedOutputCount=$selection.Count;playback=$playback;practiceStops=$practiceStops;
   resize=$resizeEvidence;instrument=$instrumentEvidence;tools=$toolsEvidence;manyPulseInstrument=$manyPulseInstrument;
   meters=$meterEvidence;liveSound=$liveSound;liveTempoAndMeter=$liveTempoAndMeter;liveSplitClicks=$liveSplitClicks;
   tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
+  initialFocus=$initialFocus;layoutFindings=@($script:findings);languageLayout=$languageLayoutEvidence;
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 # The report is written first, so that it says why. A caller that asked for the checks that need the hooks (-RequireUiTestHooks) does not
 # get a pass for a run in which one of them could not run (a machine with no audio output reports it as not run).
 if ($RequireUiTestHooks -and $tempoTypedAfterNudges -like 'not-run*') {
     throw "-RequireUiTestHooks: the check of a tempo typed after nudges did not run ($tempoTypedAfterNudges)."
+}
+# What the sweeping checks recorded (Add-Finding) fails the run, all of it at once.
+if ($script:findings.Count -gt 0) {
+    throw "The layout and focus checks found $($script:findings.Count) problem(s):`n$($script:findings -join "`n")"
 }
