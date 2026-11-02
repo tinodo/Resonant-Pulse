@@ -122,6 +122,10 @@ public sealed class WriteLeftoverTests
             var alreadyListed = new WaveExportException(WaveExportFailure.FailedCleanup, wav, manifest, [.. candidates, stays], "x", new AggregateException(CleanupFailed(stays)));
             var listed = InLanguage(language, () => ErrorText.Explain(alreadyListed));
             Assert.AreEqual(listed.IndexOf(stays, StringComparison.Ordinal), listed.LastIndexOf(stays, StringComparison.Ordinal), language);
+            // The leftover is not always the first of the causes.
+            var second = new WaveExportException(WaveExportFailure.FailedCleanup, wav, manifest, candidates, "x",
+                new AggregateException(new IOException("Could not remove a staging file."), CleanupFailed(stays)));
+            StringAssert.Contains(InLanguage(language, () => ErrorText.Explain(second)), stays, language);
         }
     }
 

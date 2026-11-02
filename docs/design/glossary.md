@@ -273,6 +273,11 @@ person gets, *separate tracks*, and the file type in brackets, as *Export result
   *tijdelijk bestand*, *temporäre Datei*, *fichier temporaire* (French keeps the no-break space
   before the colon) and *archivo temporal*, the words the app's WAV-export sentence about leftover
   files already uses. German, French and Spanish are drafts like the rest and are in the questions.
+- The same sentence is shown for every other write whose temporary file stays (`ErrorFileLeftover`: Save,
+  Save to library, Export WAV and MIDI, the timing result's CSV): word for word the sentence above, with
+  *the file* (*het bestand*, *die Datei*, *le fichier*, *el archivo*) where it says *the tracks*, so that a
+  reading of one is a reading of the other. The page adds the pointer to the diagnostics after it, as it
+  does for every unexpected failure; the sentence of the tracks has none.
 
 ## The file dialog that could not be opened
 
