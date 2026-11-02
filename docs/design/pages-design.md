@@ -330,6 +330,11 @@ Undo brings it back.
   not asserted (they depend on text size and language).
 - Unit tests for the width rules, the wrap rule, the live-apply queue (latest value wins, one undo per gesture, barriers,
   failure reverts), and that every string exists in five languages with matching placeholders.
+- Gates for what a person sees first, which record every finding and fail the run at its end: the keyboard focus after the
+  start (*Start*, or *Audio* without an output), the box for the taps whole above *Done* at every window size (800x600 too), and,
+  in five languages, the *Settings* tab as wide on every page at 320x900 and the transport commands on one line on *Play* at
+  320x900 and 400x720, also with Mute on (a name of several words may take a second line); and, in the local gate with audio, the
+  Train page keeping its place and its focus after *Start check* and *Finish and show result*.
 
 ## 9. Delivery
 

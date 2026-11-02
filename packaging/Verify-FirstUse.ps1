@@ -2739,13 +2739,13 @@ Wait-Condition { (Find-Control 'DestinationPlay').Current.Name -eq 'Play' } 'The
 Select-Destination 'DestinationPlay'
 Wait-Settled 'QuickMeter'
 # Every language keeps its text whole in the narrowest windows (docs/design/pages-design.md: text is never cut). The application is switched to
-# each language in turn and every page is read at 320x900 and 400x720. The navigation gives the Settings item what is left after the item of
-# the selected page, and clips its name when that is less (at 320 DIP wide the Dutch, German and French names were cut on the pages with a
-# longer name: the item was 106 DIP wide on Play and 79 on Settings): it has the same width on every page, and ends inside the navigation. A
-# command of the transport bar keeps a name of one word on one line, also with Mute switched on (a button taller than one line has broken
-# its name: the German Stummschalten was broken in the middle of the word at 320 DIP wide), and a name of several words may take a second
-# line where there is no more room (Dempen opheffen at 320 DIP wide); the status line is inside the window. What is
-# found is recorded (Add-Finding), not thrown, so that one run says it all.
+# each language in turn. The navigation gives the Settings item what is left after the item of the selected page, and clips its name when
+# that is less (at 320 DIP wide the Dutch, German and French names were cut on the pages with a longer name: the item was 106 DIP wide on
+# Play and 79 on Settings): it is read on every page at 320x900 and has the same width on each, and ends inside the navigation. The transport
+# bar and the status line are read on Play at 320x900 and 400x720: a command keeps a name of one word on one line, also with Mute switched on
+# (a button taller than one line has broken its name: the German Stummschalten was broken in the middle of the word at 320 DIP wide), and a
+# name of several words may take a second line where there is no more room (Dempen opheffen at 320 DIP wide); the status line is inside the
+# window. What is found is recorded (Add-Finding), not thrown, so that one run says it all.
 $languageLayoutPages = @(
     @{ id = 'DestinationPlay'; settle = 'QuickMeter' }, @{ id = 'DestinationStudio'; settle = 'AddLane' }, @{ id = 'DestinationTrain'; settle = 'TimingTolerance' },
     @{ id = 'DestinationStage'; settle = 'StageLock' }, @{ id = 'DestinationLibrary'; settle = 'ExportBars' }, @{ id = 'DestinationSettings'; settle = 'Language' })
@@ -2787,6 +2787,10 @@ function Test-LanguageLayout {
             Wait-Settled $page.settle
             $pageName = $page.id -replace '^Destination', ''
             foreach ($size in $sizes) {
+                # The transport bar and the status line are the same on every page, so they are read on Play only (at both sizes, and with
+                # Mute on); the Settings item is what the item of the selected page squeezes, so it is read on every page, at the narrowest size
+                # (at 400 DIP wide the pane has room for every name).
+                if ($pageName -ne 'Play' -and $size[0] -gt 320) { continue }
                 Resize-To $size[0] $size[1]
                 Start-Sleep -Milliseconds 700
                 Wait-Settled 'DestinationSettings'
@@ -2799,12 +2803,12 @@ function Test-LanguageLayout {
                 if ($settingsRect.Right -gt $navRect.Right + 1 * $scale) {
                     Add-Finding $where "the Settings item ends $([Math]::Round(($settingsRect.Right - $navRect.Right) / $scale, 1)) DIP outside the navigation."
                 }
-                Test-TransportLines $where
-                $status = (Find-Control 'TransportStatus').Current.BoundingRectangle
-                if ($status.Bottom -gt $windowRect.Bottom + 1 * $scale -or $status.Right -gt $windowRect.Right + 1 * $scale) {
-                    Add-Finding $where "the status line ($status) is outside the window ($windowRect)."
-                }
                 if ($pageName -eq 'Play') {
+                    Test-TransportLines $where
+                    $status = (Find-Control 'TransportStatus').Current.BoundingRectangle
+                    if ($status.Bottom -gt $windowRect.Bottom + 1 * $scale -or $status.Right -gt $windowRect.Right + 1 * $scale) {
+                        Add-Finding $where "the status line ($status) is outside the window ($windowRect)."
+                    }
                     # With Mute on the button says Unmute, which is longer in some languages ("Dempen opheffen").
                     $muteName = (Find-Control 'EmergencyMute').Current.Name
                     $null = Invoke-Control 'EmergencyMute'
@@ -2818,6 +2822,9 @@ function Test-LanguageLayout {
         }
         foreach ($size in $sizes) {
             $key = "$($size[0])x$($size[1])"
+            $evidence["$($language.code)-$key"] = $widths[$key]
+            # Only Play is read at 400 DIP wide: one width, nothing to compare.
+            if ($widths[$key].Count -lt 2) { continue }
             # The pages whose own item is not the Settings item are the ones that squeeze it, so they must agree; on the Settings page the item
             # may be a few DIP wider than elsewhere (60 instead of 48 DIP at 320 DIP wide, seen on the private desktop until a picture of the
             # window was taken: not squeezed, so not a cut), and is only required not to be narrower than they are.
@@ -2829,7 +2836,6 @@ function Test-LanguageLayout {
             if ($natural - $others[0].Value -gt 1.5 -or $widths[$key]['Settings'] -lt $natural - 1.5) {
                 Add-Finding "$($language.code) at $key" "the Settings item is $($narrowest.Value) DIP wide on $($narrowest.Key) and $($widest.Value) on $($widest.Key): the navigation squeezes it, and its name is clipped where it is narrower (widths: $(($widths[$key].GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', '))."
             }
-            $evidence["$($language.code)-$key"] = $widths[$key]
         }
     }
     $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)

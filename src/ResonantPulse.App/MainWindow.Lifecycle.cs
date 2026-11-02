@@ -22,7 +22,8 @@ public sealed partial class MainWindow
     /// <summary>
     /// The Settings item shows its name where the pane has the room for it beside the item of any page (<see cref="NavigationFit"/>), and its
     /// gear alone where it has not: the pane clips the name there. The name stays as the item's tooltip and as its name for a screen reader.
-    /// Runs when the language changes and whenever the pane's width does (also with the Windows text size, which widens the names).
+    /// Runs when the language changes and whenever the pane's width does. The names it measures widen with the Windows text size, which is
+    /// read when it runs: a change of the text size while the app runs is only followed at the next of those (not wired to the text size).
     /// </summary>
     private void UpdateSettingsLabel()
     {
