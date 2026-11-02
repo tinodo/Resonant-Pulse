@@ -126,28 +126,32 @@ function Invoke-Control([string]$id) {
 # as soon as its page has been built, and after the removal of the step before it the page is built again on the UI thread of a loaded
 # desktop: a press that comes meanwhile can be swallowed, and the menu never opens ('Required first-use control remained missing:
 # Program0Remove' stopped the local gate now and then, and the same step passed when the run was repeated). So the button is waited for until
-# it has been still, pressed, and its item looked for for a few seconds; if the menu is still shut it is pressed again (three presses at most).
-# A menu that is open is never pressed again, which would close it. A menu that never opens still fails, and says so.
+# it has been still, pressed, and its item looked for for a few seconds; if no menu has opened it is pressed again (three presses at most).
+# A menu that is open is never pressed again: if the item is not in it, that is a defect and is said at once with what the menu holds (a
+# menu is a MenuFlyout with MenuItems in the tree, and the button has no ExpandCollapse state to ask). A menu that never opens still fails.
+function Get-OpenMenuItems {
+    $menus = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Menu)
+    if ($null -eq (Get-CurrentWindow).FindFirst([Windows.Automation.TreeScope]::Descendants, $menus)) { return $null }
+    $items = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::MenuItem)
+    @((Get-CurrentWindow).FindAll([Windows.Automation.TreeScope]::Descendants, $items) | ForEach-Object { $_.Current.AutomationId })
+}
 function Invoke-MenuItem([string]$menuId, [string]$itemId, [int]$presses = 3, [int]$seconds = 4) {
     for ($press = 1; $press -le $presses; $press++) {
         Wait-Settled $menuId
         Invoke-Control $menuId
         $limit = [DateTime]::UtcNow.AddSeconds($seconds)
+        $openSince = $null
         do {
             if ($null -ne (Find-Optional $itemId)) { Invoke-Control $itemId; return }
+            $held = Get-OpenMenuItems
+            if ($null -ne $held) {
+                if ($null -eq $openSince) { $openSince = [DateTime]::UtcNow }
+                elseif (([DateTime]::UtcNow - $openSince).TotalSeconds -ge 1) {
+                    throw "Required first-use control remained missing: $itemId (the menu of $menuId is open and holds: $($held -join ', '))"
+                }
+            }
             Start-Sleep -Milliseconds 100
         } while ([DateTime]::UtcNow -lt $limit)
-        $state = $null
-        try { $state = (Find-Control $menuId).GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Current.ExpandCollapseState } catch { }
-        if ($state -eq [Windows.Automation.ExpandCollapseState]::Expanded) {
-            # Open but slow: wait for the item once more, and fail if it is not there (an open menu without its item is a defect).
-            $limit = [DateTime]::UtcNow.AddSeconds($seconds)
-            do {
-                if ($null -ne (Find-Optional $itemId)) { Invoke-Control $itemId; return }
-                Start-Sleep -Milliseconds 100
-            } while ([DateTime]::UtcNow -lt $limit)
-            throw "Required first-use control remained missing: $itemId (the menu of $menuId is open but has no such item)"
-        }
         Write-Host "The menu of $menuId did not open at press $press of $presses."
     }
     throw "Required first-use control remained missing: $itemId (the menu of $menuId did not open after $presses presses)"
@@ -2737,16 +2741,19 @@ Wait-Settled 'QuickMeter'
 # Every language keeps its text whole in the narrowest windows (docs/design/pages-design.md: text is never cut). The application is switched to
 # each language in turn and every page is read at 320x900 and 400x720. The navigation gives the Settings item what is left after the item of
 # the selected page, and clips its name when that is less (at 320 DIP wide the Dutch, German and French names were cut on the pages with a
-# longer name: the item was 106 DIP wide on Play and 79 on Settings): it has the same width on every page, and ends inside the navigation. The
-# four commands of the transport bar each keep their name on one line, also with Mute switched on (a button taller than one line has broken
-# its name: the German Stummschalten was broken in the middle of the word at 320 DIP wide), and the status line is inside the window. What is
+# longer name: the item was 106 DIP wide on Play and 79 on Settings): it has the same width on every page, and ends inside the navigation. A
+# command of the transport bar keeps a name of one word on one line, also with Mute switched on (a button taller than one line has broken
+# its name: the German Stummschalten was broken in the middle of the word at 320 DIP wide), and a name of several words may take a second
+# line where there is no more room (Dempen opheffen at 320 DIP wide); the status line is inside the window. What is
 # found is recorded (Add-Finding), not thrown, so that one run says it all.
 $languageLayoutPages = @(
     @{ id = 'DestinationPlay'; settle = 'QuickMeter' }, @{ id = 'DestinationStudio'; settle = 'AddLane' }, @{ id = 'DestinationTrain'; settle = 'TimingTolerance' },
     @{ id = 'DestinationStage'; settle = 'StageLock' }, @{ id = 'DestinationLibrary'; settle = 'ExportBars' }, @{ id = 'DestinationSettings'; settle = 'Language' })
 $languageLayoutLanguages = @(
+    # ASCII only, like the rest of this file: Windows PowerShell 5.1 reads a file without a byte order mark in the ANSI code page.
     @{ code = 'nl'; item = 'Nederlands'; play = 'Spelen' }, @{ code = 'de'; item = 'Deutsch'; play = 'Spielen' },
-    @{ code = 'fr'; item = 'Français'; play = 'Jouer' }, @{ code = 'es'; item = 'Español'; play = 'Tocar' }, @{ code = 'en'; item = 'English'; play = 'Play' })
+    @{ code = 'fr'; item = "Fran$([char]0x00E7)ais"; play = 'Jouer' }, @{ code = 'es'; item = "Espa$([char]0x00F1)ol"; play = 'Tocar' },
+    @{ code = 'en'; item = 'English'; play = 'Play' })
 function Test-LanguageLayout {
     $evidence = [ordered]@{}
     $transportIds = 'TransportStartPause', 'TransportStop', 'EmergencyMute', 'AudioOptions'
@@ -2754,8 +2761,13 @@ function Test-LanguageLayout {
     function Test-TransportLines([string]$where) {
         foreach ($id in $transportIds) {
             $element = Find-Control $id
+            $name = $element.Current.Name
             $height = $element.Current.BoundingRectangle.Height / $scale
-            if ($height -gt 46) { Add-Finding $where "the button '$id' ('$($element.Current.Name)') is $([Math]::Round($height, 1)) DIP tall, not 44: its name is broken over several lines." }
+            # A name of one word has one line (a taller button has broken it in the middle of the word); a name of several words may take
+            # a second line where the bar has no more room for it (Dempen opheffen at 320 DIP wide), and no more than that.
+            if ($height -gt 46 -and ($name -notmatch '\s' -or $height -gt 64)) {
+                Add-Finding $where "the button '$id' ('$name') is $([Math]::Round($height, 1)) DIP tall, not 44: its name is broken over several lines."
+            }
         }
     }
     foreach ($language in $languageLayoutLanguages) {
@@ -2795,21 +2807,26 @@ function Test-LanguageLayout {
                 if ($pageName -eq 'Play') {
                     # With Mute on the button says Unmute, which is longer in some languages ("Dempen opheffen").
                     $muteName = (Find-Control 'EmergencyMute').Current.Name
-                    Invoke-Control 'EmergencyMute'
+                    $null = Invoke-Control 'EmergencyMute'
                     Wait-Condition { (Find-Control 'EmergencyMute').Current.Name -ne $muteName } "${where}: Mute did not switch on."
                     Start-Sleep -Milliseconds 500
                     Test-TransportLines "$where, with Mute on"
-                    Invoke-Control 'EmergencyMute'
+                    $null = Invoke-Control 'EmergencyMute'
                     Wait-Condition { (Find-Control 'EmergencyMute').Current.Name -eq $muteName } "${where}: Mute did not switch off."
                 }
             }
         }
         foreach ($size in $sizes) {
             $key = "$($size[0])x$($size[1])"
-            $measured = $widths[$key].GetEnumerator() | Sort-Object Value
-            $narrowest = $measured | Select-Object -First 1
-            $widest = $measured | Select-Object -Last 1
-            if ($widest.Value - $narrowest.Value -gt 1.5) {
+            # The pages whose own item is not the Settings item are the ones that squeeze it, so they must agree; on the Settings page the item
+            # may be a few DIP wider than elsewhere (60 instead of 48 DIP at 320 DIP wide, seen on the private desktop until a picture of the
+            # window was taken: not squeezed, so not a cut), and is only required not to be narrower than they are.
+            $others = @($widths[$key].GetEnumerator() | Where-Object { $_.Key -ne 'Settings' } | Sort-Object Value)
+            $natural = $others[-1].Value
+            $measured = @($widths[$key].GetEnumerator() | Sort-Object Value)
+            $narrowest = $measured[0]
+            $widest = $measured[-1]
+            if ($natural - $others[0].Value -gt 1.5 -or $widths[$key]['Settings'] -lt $natural - 1.5) {
                 Add-Finding "$($language.code) at $key" "the Settings item is $($narrowest.Value) DIP wide on $($narrowest.Key) and $($widest.Value) on $($widest.Key): the navigation squeezes it, and its name is clipped where it is narrower (widths: $(($widths[$key].GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', '))."
             }
             $evidence["$($language.code)-$key"] = $widths[$key]

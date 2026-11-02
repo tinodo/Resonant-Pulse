@@ -155,9 +155,11 @@ public sealed partial class MainWindow : Window
                 for (int column = 0; column < columns; column++)
                     TransportCommands.ColumnDefinitions.Add(new ColumnDefinition
                     {
-                        // In a narrow window the first column takes what its widest button needs and the second what is left: two equal
-                        // halves broke the German name of Mute (Stummschalten) in the middle of the word at 320 DIP wide.
-                        Width = compact ? (column == 0 ? GridLength.Auto : new GridLength(1, GridUnitType.Star))
+                        // In a narrow window the second column takes what its widest button needs (Stop, Audio) and the first what is left:
+                        // two equal halves broke the German name of Mute (Stummschalten) in the middle of the word at 320 DIP wide, and a
+                        // first column that took what Mute needs, once it says Dempen opheffen, left Stop too little for Stoppen. A name
+                        // that is still too long for what is left wraps between its words.
+                        Width = compact ? (column == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto)
                             : column == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
                     });
             }
