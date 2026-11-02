@@ -85,6 +85,8 @@ public sealed partial class MainWindow : Window
         AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
         AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
         Root.SizeChanged += (_, _) => UpdateTitleBarInset();
+        // The pane clips the name of the Settings item where it does not fit beside the page's: the item shows its gear alone then.
+        Navigation.SizeChanged += (_, _) => UpdateSettingsLabel();
         // The Windows text size can change while the app runs. UISettings raises the event on a worker thread; the fields that
         // are sized from it (the page kit) listen for the UI-thread version.
         void OnTextScaleChanged(Windows.UI.ViewManagement.UISettings sender, object args) =>
@@ -153,7 +155,10 @@ public sealed partial class MainWindow : Window
                 for (int column = 0; column < columns; column++)
                     TransportCommands.ColumnDefinitions.Add(new ColumnDefinition
                     {
-                        Width = compact || column == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
+                        // In a narrow window the first column takes what its widest button needs and the second what is left: two equal
+                        // halves broke the German name of Mute (Stummschalten) in the middle of the word at 320 DIP wide.
+                        Width = compact ? (column == 0 ? GridLength.Auto : new GridLength(1, GridUnitType.Star))
+                            : column == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
                     });
             }
             var statusRow = compact ? 2 : narrow ? 1 : 0;
@@ -197,6 +202,15 @@ public sealed partial class MainWindow : Window
                     false, editorChange: EditorChangeKind.MasterGainOnly));
         };
         Root.KeyDown += OnKeyDown;
+        // A key or a press of the pointer is the person acting, whichever control handles it: from then on the focus is theirs.
+        Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, _) => _personHasActed = true), true);
+        Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => _personHasActed = true), true);
+        // The first activation can come before the page exists, and a focus given to a window that is not active yet may not stay: the
+        // start of the keyboard focus (InitialFocus) is placed again whenever the window is activated, until the person has acted.
+        Activated += (_, args) =>
+        {
+            if (args.WindowActivationState != WindowActivationState.Deactivated) DispatcherQueue.TryEnqueue(PlaceInitialFocus);
+        };
         Root.ActualThemeChanged += (_, _) => RefreshInstrumentTheme();
         Root.Loaded += async (_, _) =>
         {
@@ -258,6 +272,7 @@ public sealed partial class MainWindow : Window
         // takes a moment to build, is never what someone starting to play wants.
         SelectView("Play");
         LocalizeTransport();
+        PlaceInitialFocus();
         _refresh.Start();
         Diagnostics.Write("Workspace initialized; no playback or capture started");
     }
@@ -279,6 +294,7 @@ public sealed partial class MainWindow : Window
         {
             settings.Content = Text.Get("Settings");
             Identify(settings, "DestinationSettings", Text.Get("Settings"));
+            UpdateSettingsLabel();
         }
     }
 
@@ -328,6 +344,7 @@ public sealed partial class MainWindow : Window
         _timingBegin = null;
         _timingHit = null;
         _timingFinish = null;
+        _timingReady = null;
         _timingExport = null;
         _tempoCurve = null;
         _libraryList = null;

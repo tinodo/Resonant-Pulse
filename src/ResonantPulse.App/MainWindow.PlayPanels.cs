@@ -255,13 +255,18 @@ public sealed partial class MainWindow
         ShowGuide();
         // A screen reader that reaches the box hears the guide as its description.
         AutomationProperties.GetDescribedBy(tempo).Add(guide);
+        // Half and Double tempo share a row with the box for the number of taps where the panel is wide enough for all three (the buttons
+        // level with the box, not with its caption); in a narrow panel the row wraps and they are stacked, as they were. A panel is only as
+        // tall as the room under the dial's readout, so at 800x600 it scrolls and the box for the number of taps was cut (29 of its 44 DIP
+        // were in view, hosted at 100 %): a row of its own for the two buttons cost 56 DIP (44 and the 12 between rows).
+        var tempoButtons = CommandRow(half, twice);
+        tempoButtons.VerticalAlignment = VerticalAlignment.Bottom;
         var tempoContent = new StackPanel
         {
             Spacing = 12,
             Children =
             {
-                FieldRow(Field(tempo), Field(unit)), CommandRow(half, twice),
-                Field(taps, "UnitTaps"), Hint("TapStartCountHelp")
+                FieldRow(Field(tempo), Field(unit)), FieldRow(tempoButtons, Field(taps, "UnitTaps")), Hint("TapStartCountHelp")
             }
         };
         // What the panel showed when it was opened (set again each time it opens): Done writes only what was changed from it.

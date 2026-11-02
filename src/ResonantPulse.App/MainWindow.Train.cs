@@ -30,6 +30,7 @@ public sealed partial class MainWindow
     private Button? _timingBegin;
     private Button? _timingHit;
     private Button? _timingFinish;
+    private TextBlock? _timingReady;
     private readonly List<double> _observed = [];
     private string _lastTimingReport = "";
 
@@ -113,6 +114,8 @@ public sealed partial class MainWindow
         _timingSilentTargets = includeSilent;
         _timingBegin = ActionButton("BeginTiming", "BeginKeyboardTiming", () =>
         {
+            // Read before the commands change: Begin is switched off by this, and a command that is off while it has the focus loses it.
+            var focus = CaptureTimingFocus();
             var snapshot = _transport.Snapshot();
             if (snapshot.State != TransportState.Playing || snapshot.Revision is null)
                 throw new InvalidOperationException(Text.Get("TimingRequiresPlayback"));
@@ -130,7 +133,7 @@ public sealed partial class MainWindow
             _lastTimingReport = "";
             _lastTimingSession = null;
             SetTimingArmed(true);
-            BuildPage();
+            RebuildTrainPage(focus);
             ShowNotice("TimingArmed");
         }, "\uE768", ButtonKind.Primary);
         _timingHit = ActionButton("Hit", "KeyboardAttack", RecordAttack, "\uE815");
@@ -156,6 +159,7 @@ public sealed partial class MainWindow
         {
             var ready = Body(TimingExport.ReadyText(finished));
             Identify(ready, "TimingCsvReady", ready.Text);
+            _timingReady = ready;
             content.Children.Add(ready);
         }
         var hint = Note("TimingCsvHint");
@@ -226,6 +230,8 @@ public sealed partial class MainWindow
     {
         if (!_isTimingArmed || _timingRevision is null) return;
         var revision = _timingRevision;
+        // Read before the commands change: a command that is switched off while it has the focus loses it at once.
+        var focus = CaptureTimingFocus();
         SetTimingArmed(false);
         // The run's frames are absolute device frames; the revision converts them to its own timeline.
         var endFrame = TimingRunRules.EndFrame(_timingStartFrame,
@@ -243,7 +249,59 @@ public sealed partial class MainWindow
         _lastTimingReport = TimingExport.ReportText(session.Report);
         RefreshTimingControlState();
         if (_timingStatus is not null) _timingStatus.Text = _lastTimingReport;
-        if (_view == "Train") BuildPage();
+        if (_view == "Train") RebuildTrainPage(focus, showResult: true);
+    }
+
+    /// <summary>
+    /// Which command of the timing check has the keyboard focus, and how it got it, read before the check changes what the commands offer:
+    /// a command that is switched off while it has the focus loses it at once (the system moves it to the transport), so reading it after
+    /// would find nothing.
+    /// </summary>
+    private (int? Index, FocusState State) CaptureTimingFocus()
+    {
+        var focused = FocusedElement();
+        var commands = new[] { _timingBegin, _timingHit, _timingFinish, _timingExport };
+        for (var index = 0; index < commands.Length; index++)
+        {
+            if (commands[index] is not { } command || !ReferenceEquals(command, focused)) continue;
+            // Focus(Unfocused) is not allowed: a command that has the focus but says nothing about how is given it as a program would.
+            return (index, command.FocusState != FocusState.Unfocused ? command.FocusState : FocusState.Programmatic);
+        }
+        return (null, FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// Builds the Train page again after a command of the timing check changed what the page offers (Begin and Finish), and leaves the person
+    /// where they were. The page keeps its scroll position (it went to the top, so after Finish the result, the line that says what an export
+    /// holds and Export itself were below the fold), the keyboard focus goes on to the command that takes over (see
+    /// <see cref="CommandRowFocus"/>), and after Finish the result is brought into view if the commands that were used were at the foot of the
+    /// screen. The commands of the old page are gone with it, so where the focus was is read before (<see cref="CaptureTimingFocus"/>).
+    /// </summary>
+    private void RebuildTrainPage((int? Index, FocusState State) focus, bool showResult = false)
+    {
+        RebuildPreservingScroll(() =>
+        {
+            if (_isClosed || _view != "Train") return;
+            var rebuilt = new[] { _timingBegin, _timingHit, _timingFinish, _timingExport };
+            if (CommandRowFocus.After(focus.Index, rebuilt.Select(command => command is { IsEnabled: true }).ToArray()) is { } next)
+                rebuilt[next]!.Focus(focus.State);
+            // The scroll position is put back right after this, and the result is shown against the position that gives.
+            if (showResult) DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, ShowTimingResult);
+        });
+    }
+
+    /// <summary>Scrolls just far enough that the result of the finished check and the line that says what an export holds are on screen.</summary>
+    private void ShowTimingResult()
+    {
+        if (_isClosed || _view != "Train" || _timingStatus is not { IsLoaded: true } status) return;
+        var bottom = status.ActualHeight;
+        if (_timingReady is { IsLoaded: true } ready)
+            bottom = Math.Max(bottom, ready.TransformToVisual(status).TransformPoint(new Windows.Foundation.Point(0, ready.ActualHeight)).Y);
+        status.StartBringIntoView(new BringIntoViewOptions
+        {
+            AnimationDesired = false,
+            TargetRect = new Windows.Foundation.Rect(0, 0, status.ActualWidth, bottom)
+        });
     }
 
     private void InvalidateTiming()
