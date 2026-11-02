@@ -1,3 +1,5 @@
+using ResonantPulse.Core;
+
 namespace ResonantPulse.App;
 
 /// <summary>
@@ -26,6 +28,13 @@ namespace ResonantPulse.App;
 /// (<c>stillTheProject</c>, checked inside the edit, as Done's commit checks the project it was typed for). A commit that is dropped for
 /// that reason is not an error, and the loop goes on to what was asked for after it, for the project that is there now, even when that is
 /// the same number.
+/// </para>
+/// <para>
+/// What waits for the nudges is one first-in, first-out chain: Done in the Tempo panel, a ready-made meter (it can rewrite the tempo) and
+/// Done in the Custom meter panel (<see cref="EditAfterNudgesAsync"/>). They are committed in the order they were chosen, so the one
+/// chosen last is the one the project ends on. A meter that was committed at once, past a ready-made meter that is still waiting for the
+/// nudges, would have been overwritten by it. While one of them is on its way the project does not hold yet what it will, so a choice made
+/// meanwhile is not judged against what the project holds now (<see cref="TypedEditsOnTheirWay"/>).
 /// </para>
 /// Pure and for the UI thread only, so every order the commits can finish in is tested without a window.
 /// </summary>
@@ -82,6 +91,13 @@ internal sealed class TempoNudges
     /// fault does not wait), Tap to start and closing (for at most its four seconds) wait for it.
     /// </summary>
     internal Task Settled => Task.WhenAll(_loop, _typed);
+
+    /// <summary>
+    /// True from the moment an edit that waits for the nudges (<see cref="AfterNudgesAsync"/>) has been asked for until it has ended: Done
+    /// in the Tempo panel, a ready-made meter or Done in the Custom meter panel. The project does not hold yet what it will once they
+    /// have landed. Nudges alone do not count: they only change the tempo.
+    /// </summary>
+    internal bool TypedEditsOnTheirWay => !_typed.IsCompleted;
 
     /// <summary>
     /// Asks for a tempo (already within 1 to 1000 BPM and to a tenth, and not the one asked for last) and starts the loop that commits
@@ -155,6 +171,32 @@ internal sealed class TempoNudges
             await typed();
         }
         finally { ended.SetResult(); }
+    }
+
+    /// <summary>
+    /// <see cref="AfterNudgesAsync"/> for an edit of the project (a ready-made meter, Done in the Custom meter panel): it is committed after
+    /// the nudges that are on their way and after every edit that was asked for before it in this way, in the order they were asked for,
+    /// and only into the project it was asked for. When that project has been replaced meanwhile (Open, New, a ready-made rhythm, the next
+    /// song) nothing is applied, and no Undo step, new project or save is left behind. True when the edit was applied; false when it was
+    /// dropped for that reason or when the commit refused it (a locked project). What goes wrong in it goes to the caller.
+    /// </summary>
+    /// <param name="commit">Commits an edit to the project in the edit queue (the window's commit, which takes its place before it awaits).</param>
+    /// <param name="edit">The edit. It runs under the edit lock, on the project that is current then.</param>
+    internal async Task<bool> EditAfterNudgesAsync(Func<Action<PulseDocument>, Task> commit, Action<PulseDocument> edit)
+    {
+        var askedFor = _project();
+        var applied = false;
+        try
+        {
+            await AfterNudgesAsync(() => commit(document =>
+            {
+                if (askedFor != _project()) throw new OperationCanceledException();
+                edit(document);
+                applied = true;
+            }));
+        }
+        catch (OperationCanceledException) when (askedFor != _project()) { }
+        return applied;
     }
 
     /// <summary>

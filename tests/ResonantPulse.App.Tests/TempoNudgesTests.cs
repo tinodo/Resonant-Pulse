@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ResonantPulse.App.Storage;
 using ResonantPulse.Core;
 
 namespace ResonantPulse.App.Tests;
@@ -25,9 +26,29 @@ public sealed class TempoNudgesTests
         internal readonly List<double> Written = [];
         internal readonly List<Exception> Reported = [];
         internal readonly TempoNudges Nudges;
-        internal double Tempo = 120;
         internal int Ended;
         private int _asked;
+
+        /// <summary>The project as the window holds it: what the commits leave, and what a choice that is made meanwhile is judged against.</summary>
+        internal PulseDocument Document = Fresh(120);
+
+        /// <summary>The tempo the project holds.</summary>
+        internal double Tempo
+        {
+            get => Document.Settings.Tempo;
+            set => Document.Settings.Tempo = value;
+        }
+
+        /// <summary>The meter (beats/denominator) that each edit of the project left, in the order they were published.</summary>
+        internal readonly List<string> Meters = [];
+
+        private static PulseDocument Fresh(double tempo) => new()
+        {
+            Settings = { Tempo = tempo, BeatsPerBar = 4, BeatDenominator = 4, BeatUnitQuarters = 1, Subdivision = 2 }
+        };
+
+        /// <summary>The meter the project holds, such as 4/4.</summary>
+        internal string Meter => $"{Document.Settings.BeatsPerBar}/{Document.Settings.BeatDenominator}";
 
         /// <summary>Run when a loop has ended, in the turn in which it ends, before the wait for that loop returns to its caller.</summary>
         internal Action? OnEnded;
@@ -158,26 +179,27 @@ public sealed class TempoNudgesTests
         {
             await Gate();
             Project++;
-            Tempo = tempo;
+            Document = Fresh(tempo);
             published();
             OnReplaced?.Invoke();
         }, _ => { });
 
         /// <summary>
-        /// The window's commit of an edit, as a ready-made meter makes it: under the edit lock the edit runs on the project (4/4 in quarter
-        /// notes with every beat split in two, at the tempo the project holds), and what it leaves is published. An edit that throws leaves
-        /// nothing behind.
+        /// The window's commit of an edit, as a ready-made meter or Done in the Custom meter panel makes it: under the edit lock the edit
+        /// runs on a copy of the project (it starts as 4/4 in quarter notes with every beat split in two, at the tempo the project holds),
+        /// and the copy is the project once it has been published. An edit that throws leaves nothing behind.
         /// </summary>
         internal Task CommitEdit(Action<PulseDocument> edit)
         {
             Interlocked.Increment(ref _asked);
             return DocumentPublication.RunAsync(_edits, async published =>
             {
-                var document = new PulseDocument { Settings = { Tempo = Tempo, BeatUnitQuarters = 1, Subdivision = 2 } };
-                edit(document);
+                var revised = LocalWorkspace.Clone(Document);
+                edit(revised);
                 var failure = await Gate();
-                Tempo = document.Settings.Tempo;
+                Document = revised;
                 Written.Add(Tempo);
+                Meters.Add(Meter);
                 published();
                 if (failure is not null) throw failure;
             }, _ => { });
@@ -186,9 +208,17 @@ public sealed class TempoNudgesTests
         /// <summary>A ready-made meter that changes the click unit, 6/8, as it was applied before it waited: committed at once.</summary>
         internal Task ConvertNow() => CommitEdit(document => MeterPresets.ApplyOneClickPerBeat(document.Settings, 6, 8, [3, 3]));
 
-        /// <summary>The same ready-made meter as the window applies it: after the nudges that are on their way, and only into the project it was chosen for.</summary>
-        internal Task<bool> ApplyMeterAsync() =>
-            MeterPresets.ApplyAfterNudgesAsync(Nudges, () => Project, CommitEdit, new MeterPreset(6, 8, [3, 3]));
+        /// <summary>The same ready-made meter (6/8 unless another is given) as the window applies it: after the nudges that are on their way, and only into the project it was chosen for.</summary>
+        internal Task<bool> ApplyMeterAsync(MeterPreset? preset = null) =>
+            MeterPresets.ApplyAfterNudgesAsync(Nudges, () => Document.Settings, CommitEdit, preset ?? new MeterPreset(6, 8, [3, 3]));
+
+        /// <summary>Done in the Custom meter panel with a meter typed, as the window makes it: after the nudges and the edits that wait for them.</summary>
+        internal Task<bool> CustomMeterAsync(int beats, int denominator) =>
+            Nudges.EditAfterNudgesAsync(CommitEdit, document => MeterPresets.Apply(document.Settings, beats, denominator));
+
+        /// <summary>The same Done as it was committed before it waited: at once, behind whatever is in the edit queue.</summary>
+        internal Task CustomMeterNow(int beats, int denominator) =>
+            CommitEdit(document => MeterPresets.Apply(document.Settings, beats, denominator));
 
         /// <summary>Completes once this many commits have been asked for, whether they have the edit lock or wait for it.</summary>
         internal async Task AskedAsync(int count)
@@ -927,5 +957,258 @@ public sealed class TempoNudgesTests
 
         CollectionAssert.AreEqual(new[] { 121.0, 242.0, 123.0 }, rig.Written);
         Assert.AreEqual(123.0, rig.Tempo, "the converted tempo was overwritten by a nudge that was asked for before it, in the old unit");
+    }
+
+    [TestMethod]
+    public async Task ACustomMeterChosenAfterAReadyMadeMeterThatWaitsIsAppliedAfterItAndIsTheLastWord()
+    {
+        // 6/8 is picked while the loop commits, and then 3/4 is entered in the Custom meter panel and Done is pressed: the meter that was
+        // chosen last is the one the project ends on, and the Custom meter does not ask for its commit before the ready-made one has ended.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+
+        var readyMade = rig.ApplyMeterAsync();
+        var custom = rig.CustomMeterAsync(3, 4);
+        Assert.AreEqual(1, rig.Asked, "neither has asked for its commit: both wait for the nudges");
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        Assert.AreEqual(3, rig.Asked, "the Custom meter waits for the ready-made meter, which was chosen before it, to have ended");
+        rig.Finish();
+        Assert.IsTrue(await readyMade.WaitAsync(Limit), "the ready-made meter was applied");
+        await rig.StartedAsync(4);
+        rig.Finish();
+        Assert.IsTrue(await custom.WaitAsync(Limit), "the Custom meter was applied");
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { "6/8", "3/4" }, rig.Meters, "in the order they were chosen");
+        Assert.AreEqual("3/4", rig.Meter);
+        Assert.AreEqual(1.0, rig.Document.Settings.BeatUnitQuarters, "3/4 is counted in quarter notes");
+        CollectionAssert.AreEqual(new[] { 121.0, 122.0, 244.0, 244.0 }, rig.Written, "the nudges first, then the meters; the Custom meter keeps the tempo number");
+    }
+
+    [TestMethod]
+    public async Task WithoutWaitingACustomMeterIsCommittedAheadOfAReadyMadeMeterThatWaitsAndIsOverwrittenByIt()
+    {
+        // What Done in the Custom meter panel did before it waited: committed at once, ahead of a ready-made meter that was chosen earlier and
+        // that still waits for the nudges, which then lands on top of it. Kept so that the test above cannot pass because this rig has no race.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+
+        var readyMade = rig.ApplyMeterAsync();
+        var custom = rig.CustomMeterNow(3, 4);
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        await rig.StartedAsync(4);
+        rig.Finish();
+        await custom.WaitAsync(Limit);
+        await readyMade.WaitAsync(Limit);
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { "3/4", "6/8" }, rig.Meters);
+        Assert.AreEqual("6/8", rig.Meter, "the meter that was chosen first was applied last");
+    }
+
+    [TestMethod]
+    public async Task EditsThatWaitForTheNudgesAreCommittedInTheOrderTheyWereChosenWhateverTheirKind()
+    {
+        // A ready-made meter, Done in the Tempo panel, Done in the Custom meter panel and another ready-made meter, chosen in that order while
+        // the loop commits. The chain is first in, first out: each one asks for its commit only when the one chosen before it has ended,
+        // whichever of the waits the end of the loop runs first, so the project ends as the last one made it.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+
+        var first = rig.ApplyMeterAsync();
+        var second = rig.DoneAsync(90);
+        var third = rig.CustomMeterAsync(3, 4);
+        var fourth = rig.ApplyMeterAsync(new MeterPreset(5, 4, [3, 2]));
+        Assert.IsTrue(rig.Nudges.TypedEditsOnTheirWay);
+        Assert.AreEqual(1, rig.Asked, "none of them has asked for its commit");
+
+        for (var commit = 1; commit <= 6; commit++)
+        {
+            await rig.StartedAsync(commit);
+            Assert.AreEqual(commit, rig.Asked, $"commit {commit} was asked for alone: the edits chosen after it wait for it to end");
+            rig.Finish();
+        }
+        Assert.IsTrue(await first.WaitAsync(Limit));
+        await second.WaitAsync(Limit);
+        Assert.IsTrue(await third.WaitAsync(Limit));
+        Assert.IsTrue(await fourth.WaitAsync(Limit));
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { 121.0, 122.0, 244.0, 90.0, 90.0, 90.0 }, rig.Written, "the nudges, then each edit in the order it was chosen");
+        CollectionAssert.AreEqual(new[] { "6/8", "3/4", "5/4" }, rig.Meters);
+        Assert.AreEqual("5/4", rig.Meter, "the one chosen last is the one the project ends on");
+        Assert.AreEqual(90.0, rig.Tempo);
+        Assert.IsFalse(rig.Nudges.TypedEditsOnTheirWay);
+    }
+
+    [TestMethod]
+    public async Task ACustomMeterTypedForAProjectThatWasReplacedIsNotAppliedToTheReplacement()
+    {
+        // Done was pressed on the page of the project that goes. The loop has a commit to finish first, so the Custom meter's commit is queued
+        // behind the replacement, and it leaves the replacement alone.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        var replacement = rig.ReplaceAsync(100);
+        var custom = rig.CustomMeterAsync(3, 4);
+
+        rig.Finish();
+        await rig.StartedAsync(2);
+        await rig.AskedAsync(2);
+        rig.Finish();
+        await replacement.WaitAsync(Limit);
+
+        Assert.IsFalse(await custom.WaitAsync(Limit), "nothing was applied");
+        await rig.SettledAsync();
+        CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written);
+        Assert.AreEqual(0, rig.Meters.Count);
+        Assert.AreEqual("4/4", rig.Meter, "the replacement keeps its own meter");
+        Assert.AreEqual(100.0, rig.Tempo);
+        Assert.AreEqual(0, rig.Reported.Count);
+    }
+
+    [TestMethod]
+    public async Task ACustomMeterIsNotAppliedToAProjectThatWasReplacedWhileItWasStillWaitingForTheLoop()
+    {
+        // The replacement is published while the Custom meter still waits for the loop (the loop has a commit of its own queued behind the
+        // replacement), so the project is another one when the Custom meter asks for its commit. It belongs to the project it was typed for,
+        // which is read when Done is pressed and not when its commit is asked for.
+        var rig = Rig.WithProjects();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        rig.Nudges.Request(122);
+        var replacement = rig.ReplaceAsync(100);
+        var custom = rig.CustomMeterAsync(3, 4);
+
+        rig.Finish();
+        await rig.StartedAsync(2);
+        await rig.AskedAsync(2);
+        Assert.IsFalse(custom.IsCompleted, "the Custom meter still waits for the loop, which has its commit of 122 queued behind the replacement");
+        rig.Finish();
+        await replacement.WaitAsync(Limit);
+        await rig.FinishUntilSettledAsync();
+
+        Assert.IsFalse(await custom.WaitAsync(Limit), "nothing was applied");
+        CollectionAssert.AreEqual(new[] { 121.0 }, rig.Written, "the nudge of the project that went was dropped too");
+        Assert.AreEqual(0, rig.Meters.Count);
+        Assert.AreEqual("4/4", rig.Meter, "the replacement keeps its own meter");
+        Assert.AreEqual(100.0, rig.Tempo);
+        Assert.AreEqual(0, rig.Reported.Count);
+    }
+
+    [TestMethod]
+    public async Task AMeterEditThatFailsGoesToItsCallerAndDoesNotHoldUpTheOneChosenAfterIt()
+    {
+        var rig = new Rig();
+        var failing = rig.Nudges.EditAfterNudgesAsync(rig.CommitEdit, _ => throw new InvalidOperationException("The meter cannot be applied."));
+        var custom = rig.CustomMeterAsync(3, 4);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => failing.WaitAsync(Limit));
+        await rig.StartedAsync(1);
+        rig.Finish();
+        Assert.IsTrue(await custom.WaitAsync(Limit));
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { "3/4" }, rig.Meters, "the failed edit left nothing behind");
+        Assert.IsFalse(rig.Nudges.TypedEditsOnTheirWay);
+    }
+
+    [TestMethod]
+    public async Task AMeterThatTheCommitRefusesIsNotAppliedAndHoldsUpNothing()
+    {
+        // A locked project refuses the edit and queues nothing: the edit does not run and the meter was not applied.
+        var rig = new Rig();
+        var refused = rig.Nudges.EditAfterNudgesAsync(_ => Task.CompletedTask, _ => Assert.Fail("The edit must not run."));
+
+        Assert.IsFalse(await refused.WaitAsync(Limit), "it was not applied");
+        Assert.IsFalse(rig.Nudges.TypedEditsOnTheirWay);
+        var custom = rig.CustomMeterAsync(3, 4);
+        await rig.StartedAsync(1);
+        rig.Finish();
+        Assert.IsTrue(await custom.WaitAsync(Limit));
+        Assert.AreEqual("3/4", rig.Meter);
+    }
+
+    [TestMethod]
+    public async Task AMeterCommitThatIsCancelledForAnyOtherReasonGoesToItsCaller()
+    {
+        // Only a project that was replaced makes a cancelled commit a quiet no-op; a cancellation of any other kind is not hidden.
+        var rig = Rig.WithProjects();
+        var meter = rig.Nudges.EditAfterNudgesAsync(_ => Task.FromException(new OperationCanceledException("Stopped.")), _ => { });
+
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => meter.WaitAsync(Limit));
+        Assert.IsFalse(rig.Nudges.TypedEditsOnTheirWay);
+    }
+
+    [TestMethod]
+    public async Task ACustomMeterWhenNothingIsOnItsWayIsCommittedAtOnce()
+    {
+        var rig = new Rig();
+        var custom = rig.CustomMeterAsync(3, 4);
+
+        Assert.AreEqual(1, rig.Asked, "it took its place in the edit queue in the turn it was pressed");
+        Assert.IsTrue(rig.Nudges.TypedEditsOnTheirWay, "it is on its way until it has ended");
+        rig.Finish();
+        Assert.IsTrue(await custom.WaitAsync(Limit));
+        await rig.SettledAsync();
+        Assert.IsFalse(rig.Nudges.TypedEditsOnTheirWay);
+        Assert.AreEqual("3/4", rig.Meter);
+    }
+
+    [TestMethod]
+    public async Task AReadyMadeMeterThatTheProjectHoldsIsStillAppliedWhenAnEarlierMeterIsOnItsWay()
+    {
+        // The project holds 4/4 and 6/8 is picked, which waits for the nudges. Then 4/4 is picked again: judged against what the project holds
+        // now that would change nothing, and the 6/8 would land after it. The last choice is 4/4, so it is applied after the 6/8.
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+
+        var sixEight = rig.ApplyMeterAsync();
+        var fourFour = rig.ApplyMeterAsync(new MeterPreset(4, 4, []));
+        Assert.IsTrue(rig.Nudges.TypedEditsOnTheirWay);
+        rig.Finish();
+        await rig.StartedAsync(2);
+        rig.Finish();
+        await rig.StartedAsync(3);
+        rig.Finish();
+        Assert.IsTrue(await sixEight.WaitAsync(Limit));
+        Assert.IsTrue(await fourFour.WaitAsync(Limit), "4/4 was applied again, after the 6/8");
+        await rig.SettledAsync();
+
+        CollectionAssert.AreEqual(new[] { "6/8", "4/4" }, rig.Meters);
+        Assert.AreEqual("4/4", rig.Meter);
+        Assert.AreEqual(1.0, rig.Document.Settings.BeatUnitQuarters);
+    }
+
+    [TestMethod]
+    public async Task AReadyMadeMeterThatTheProjectHoldsAlreadyIsNotAppliedAgainWhenOnlyNudgesAreOnTheirWay()
+    {
+        // The same pick with nothing but a nudge on its way: nothing changes, so nothing is committed (applying it would restart the accents).
+        var rig = new Rig();
+        rig.Nudges.Request(121);
+        await rig.StartedAsync(1);
+        Assert.IsFalse(rig.Nudges.TypedEditsOnTheirWay, "a nudge only changes the tempo");
+
+        var applied = await rig.ApplyMeterAsync(new MeterPreset(4, 4, [])).WaitAsync(Limit);
+
+        Assert.IsFalse(applied);
+        Assert.AreEqual(1, rig.Asked, "it asked for no commit: only the nudge's");
+        rig.Finish();
+        await rig.SettledAsync();
+        Assert.AreEqual(0, rig.Meters.Count);
     }
 }
