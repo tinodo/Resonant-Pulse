@@ -33,13 +33,14 @@ internal static class SavingNotice
     internal static bool MayReplace(bool noticeIsOpen, bool noticeIsInformational) => !noticeIsOpen || noticeIsInformational;
 
     /// <summary>
-    /// Whether the notice that a write has ended (<c>Saved</c>) may take the place of what the notice bar shows now. Until a close has been
-    /// refused it always may, as it always did: a person who tries again after an error is told that it worked, and the old error goes. Once
-    /// the window has stayed open because a close was refused, the bar says why (an error stays until it is dismissed), and the second close
-    /// leaves even when it cannot save, so a write that was going meanwhile does not replace a warning or an error that is open (the rule of
-    /// <see cref="MayReplace"/>): the person dismisses it and has not lost what it said. An informational notice still gives way, as it does
-    /// to every notice.
+    /// Whether the notice that a write has ended (<c>Saved</c>) may take the place of what the notice bar shows now. A write that begins when
+    /// no close was refused before it, or after one was, always may, as it always did: a person who tries again after an error (saves
+    /// somewhere else, as the error may say) is told that it worked, and the old error goes. A write that was going when a close was refused
+    /// (<see cref="FileWrite.LeftGoingByRefusedClose"/>) is left alone and ends later, while the bar says why the window stayed (an error
+    /// stays until it is dismissed, and the second close leaves even when it cannot save): it does not replace a warning or an error that is
+    /// open (the rule of <see cref="MayReplace"/>), so that the person dismisses the reason and has not lost what it said. An informational
+    /// notice still gives way, as it does to every notice.
     /// </summary>
-    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool closeWasRefused) =>
-        !closeWasRefused || MayReplace(noticeIsOpen, noticeIsInformational);
+    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool writeWasLeftGoingByARefusedClose) =>
+        !writeWasLeftGoingByARefusedClose || MayReplace(noticeIsOpen, noticeIsInformational);
 }

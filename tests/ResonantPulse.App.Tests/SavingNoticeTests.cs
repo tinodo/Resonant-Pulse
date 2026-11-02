@@ -30,26 +30,27 @@ public sealed class SavingNoticeTests
     }
 
     [TestMethod]
-    public void SavedReplacesWhateverTheBarShowsUntilACloseHasBeenRefused()
+    public void SavedReplacesWhateverTheBarShowsForAWriteThatWasNotGoingWhenACloseWasRefused()
     {
-        // As it always did: a person who tries again after an error is told that it worked, and the old error goes.
+        // As it always did: a person who tries again after an error (saves somewhere else, as the error may say) is told that it worked, and
+        // the old error goes, also after a close was refused: only the write that was going then is held back (the next test).
         foreach (var open in new[] { false, true })
             foreach (var informational in new[] { false, true })
-                Assert.IsTrue(SavingNotice.SavedMayReplace(open, informational, closeWasRefused: false), $"open: {open}, informational: {informational}");
+                Assert.IsTrue(SavingNotice.SavedMayReplace(open, informational, writeWasLeftGoingByARefusedClose: false), $"open: {open}, informational: {informational}");
     }
 
     [TestMethod]
-    public void AfterACloseWasRefusedSavedDoesNotReplaceAWarningOrAnErrorThatIsOpen()
+    public void AWriteThatWasGoingWhenACloseWasRefusedDoesNotReplaceAWarningOrAnErrorThatIsOpenWithSaved()
     {
-        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: false, noticeIsInformational: false, closeWasRefused: true), "A closed bar is free.");
-        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: false, noticeIsInformational: true, closeWasRefused: true));
-        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: true, noticeIsInformational: true, closeWasRefused: true),
+        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: false, noticeIsInformational: false, writeWasLeftGoingByARefusedClose: true), "A closed bar is free.");
+        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: false, noticeIsInformational: true, writeWasLeftGoingByARefusedClose: true));
+        Assert.IsTrue(SavingNotice.SavedMayReplace(noticeIsOpen: true, noticeIsInformational: true, writeWasLeftGoingByARefusedClose: true),
             "An informational notice (the one that says the last change is still being saved) gives way, and fades by itself.");
-        Assert.IsFalse(SavingNotice.SavedMayReplace(noticeIsOpen: true, noticeIsInformational: false, closeWasRefused: true),
+        Assert.IsFalse(SavingNotice.SavedMayReplace(noticeIsOpen: true, noticeIsInformational: false, writeWasLeftGoingByARefusedClose: true),
             "The error that says why the window stayed is not replaced by the end of a write that was going: the person dismisses it.");
         foreach (var open in new[] { false, true })
             foreach (var informational in new[] { false, true })
-                Assert.AreEqual(SavingNotice.MayReplace(open, informational), SavingNotice.SavedMayReplace(open, informational, closeWasRefused: true),
+                Assert.AreEqual(SavingNotice.MayReplace(open, informational), SavingNotice.SavedMayReplace(open, informational, writeWasLeftGoingByARefusedClose: true),
                     $"One rule for what may replace a warning or an error that is open (open: {open}, informational: {informational}).");
     }
 }

@@ -127,8 +127,9 @@ is specified in `metronome-design.md` and is not changed here.
   result's CSV, and the copy of the project that is saved to the library before it is replaced) is stopped in the same way when the
   window closes while it is being written, and its temporary file is removed, unless it does not stop within the 4 seconds (the log
   says so); a close that is refused leaves a write that is going alone, and when that write ends its *Saved* does not replace a warning or an
-  error that is open (the one that says why the window stayed: the person dismisses it; until a close has been refused *Saved* replaces what the
-  bar shows, as it always did). They show no notice while they write. A file dialog that cannot be opened is
+  error that is open (the one that says why the window stayed: the person dismisses it); a write that begins after the refusal, or when no close
+  was refused, has its *Saved* replace what the bar shows, as it always did, so that a person who saves again after an error is told that it
+  worked. They show no notice while they write. A file dialog that cannot be opened is
   said to be that ("The window for choosing a file could not be opened, so nothing was saved or opened. Your edits remain in this
   window. ..."), never an audio problem, and the command is usable again; cancelling a dialog is silent. After the tracks question's
   *Cancel*, after *Saved* and after an error the keyboard focus is on the command again if it was on it when it was pressed and the

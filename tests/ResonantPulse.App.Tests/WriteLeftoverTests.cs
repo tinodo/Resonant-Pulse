@@ -9,9 +9,10 @@ namespace ResonantPulse.App.Tests;
 /// <summary>
 /// What a person is told when a file could not be saved and the temporary file beside the destination could not be removed either: which
 /// file stays, whichever file was being written (Save, Save to library, Export WAV, Export MIDI, the separate tracks, the timing result's
-/// CSV). The sentence is the page's, from <see cref="ErrorText.Explain"/>. The first two tests hold the sentence in every language; the
-/// others run each kind of write for real, on Windows, where a read-only file cannot be deleted: the destination is held open, so that the
-/// move over it fails again and again for more than a second (it is tried ten times), and the temporary file is made read-only meanwhile.
+/// CSV). The sentence is the page's, from <see cref="ErrorText.Explain"/>. The text tests (the sentence in every language, the same with the
+/// exception wrapped, a WAV outcome with a leftover among its causes) use exceptions that are made up here; the others run each kind of write
+/// for real, on Windows, where a read-only file cannot be deleted: the destination is held open, so that the move over it fails again and
+/// again for more than a second (it is tried ten times), and the temporary file is made read-only meanwhile.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -83,16 +84,21 @@ public sealed class WriteLeftoverTests
     {
         var parts = new Dictionary<string, string[]>
         {
-            ["en"] = ["could not be saved", "temporary file", "could not be removed", "already there", "has not been changed", "delete the temporary file yourself"],
-            ["nl"] = ["niet worden bewaard", "tijdelijk bestand", "niet worden verwijderd", "er al stond", "niet gewijzigd", "zelf verwijderen"],
-            ["de"] = ["nicht gespeichert", "temporäre Datei", "nicht entfernt", "vorhandene Datei", "nicht verändert", "selbst löschen"],
-            ["fr"] = ["Impossible d’enregistrer le fichier", "fichier temporaire", "pas pu être supprimé", "déjà présent", "pas été modifié", "supprimer vous-même"],
-            ["es"] = ["No se pudo guardar el archivo", "archivo temporal", "no se pudo eliminar", "ya existía", "no se ha modificado", "eliminar usted mismo"]
+            ["en"] = ["could not be saved", "temporary file", "could not be removed", "already there", "has not been changed", "Your edits remain in this window.", "delete the temporary file yourself"],
+            ["nl"] = ["niet worden bewaard", "tijdelijk bestand", "niet worden verwijderd", "er al stond", "niet gewijzigd", "Wijzigingen blijven in dit venster.", "zelf verwijderen"],
+            ["de"] = ["nicht gespeichert", "temporäre Datei", "nicht entfernt", "vorhandene Datei", "nicht verändert", "Änderungen bleiben im Fenster.", "selbst löschen"],
+            ["fr"] = ["Impossible d’enregistrer le fichier", "fichier temporaire", "pas pu être supprimé", "déjà présent", "pas été modifié", "Les modifications restent dans la fenêtre.", "supprimer vous-même"],
+            ["es"] = ["No se pudo guardar el archivo", "archivo temporal", "no se pudo eliminar", "ya existía", "no se ha modificado", "Los cambios permanecen en esta ventana.", "eliminar usted mismo"]
         };
         foreach (var language in Languages)
         {
             var sentence = InLanguage(language, () => Text.Get("ErrorFileLeftover"));
             foreach (var part in parts[language]) StringAssert.Contains(sentence, part, language);
+            // The sentence that says the edits remain is the last one of the general file sentence, word for word (a project that is saved
+            // is not lost when its temporary file stays), and it comes before the path.
+            var edits = parts[language][5];
+            Assert.IsTrue(InLanguage(language, () => Text.Get("ErrorFile")).EndsWith(edits, StringComparison.Ordinal), $"{language}: the sentence is the general one's");
+            Assert.IsTrue(sentence.IndexOf(edits, StringComparison.Ordinal) < sentence.IndexOf("{0}", StringComparison.Ordinal), language);
             // The path comes last, with nothing after it that could be read as part of the path, and there is only one place for it.
             Assert.IsTrue(sentence.EndsWith("{0}", StringComparison.Ordinal), $"{language}: the path is the last thing in the sentence: '{sentence}'");
             Assert.AreEqual(sentence.IndexOf("{0}", StringComparison.Ordinal), sentence.LastIndexOf("{0}", StringComparison.Ordinal), language);

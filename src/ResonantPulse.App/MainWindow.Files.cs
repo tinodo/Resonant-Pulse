@@ -61,18 +61,18 @@ public sealed partial class MainWindow
         };
         var save = ActionButton("SaveLibrary", "SaveToLibrary", async () =>
         {
-            using (var write = _fileWrites.Begin())
-            {
-                await HoldPreparationAsync();
-                // Notes typed or on their way belong to the project, so they are in the saved copy.
-                if (!await FlushStageNotesAsync()) return;
-                // No question or dialog follows, so a close that was refused meanwhile does not void the person's command: it is written.
-                // The write is told which file it is as soon as the library has named it.
-                await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), write.Token, write.BeginWriting);
-            }
+            using var write = _fileWrites.Begin();
+            await HoldPreparationAsync();
+            // Notes typed or on their way belong to the project, so they are in the saved copy.
+            if (!await FlushStageNotesAsync()) return;
+            // No question or dialog follows, so a close that was refused meanwhile does not void the person's command: it is written.
+            // The write is told which file it is as soon as the library has named it.
+            await _workspace.SaveLibraryAsync(LocalWorkspace.Clone(_document), write.Token, write.BeginWriting);
+            // The write has ended here: the notice and the refreshed list that follow are not part of it, so that a close does not wait for them.
+            write.End();
             // A write that did not stop within the limit of a close ends after the window has gone: nobody is left to tell or to refresh.
             if (IsWindowGoing) return;
-            ShowSavedNotice();
+            ShowSavedNotice(write);
             await RefreshLibraryAsync();
         }, "\uE74E");
         var projects = Card("LibraryProjects", new StackPanel
@@ -284,7 +284,7 @@ public sealed partial class MainWindow
         write.Token.ThrowIfCancellationRequested();
         write.BeginWriting(path);
         await DocumentStore.SaveAsync(path, LocalWorkspace.Clone(_document), write.Token);
-        ShowSavedNotice();
+        ShowSavedNotice(write);
     }
 
     private async Task OpenProjectAsync()
@@ -411,7 +411,7 @@ public sealed partial class MainWindow
                 // Core writes the exact schedule/meter/seed/gain companion
                 // manifest atomically. Project exchange remains a separate Save.
             }
-            ShowSavedNotice();
+            ShowSavedNotice(write);
         }
         finally { if (!IsWindowGoing) RefreshSnapshot(); }
     }
@@ -470,7 +470,7 @@ public sealed partial class MainWindow
                 Diagnostics.Write("Saving the tracks", error);
                 throw new UserMessageException(StemExport.NotSavedText(error));
             }
-            ShowSavedNotice();
+            ShowSavedNotice(write);
         }
         finally
         {
@@ -517,12 +517,13 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The Saved notice of a write that has ended. A write that did not stop within the limit of a close ends, if it ends at all, after the
-    /// window has gone: nobody is left to tell. After a close was refused the notice bar says why the window stayed, and the write that
-    /// was going meanwhile does not replace a warning or an error that is open with Saved (see <see cref="SavingNotice.SavedMayReplace"/>).
+    /// window has gone: nobody is left to tell. A write that was going when a close was refused does not replace a warning or an error that is
+    /// open with Saved, because that is the notice that says why the window stayed (see <see cref="SavingNotice.SavedMayReplace"/>); any
+    /// other write does, as it always did.
     /// </summary>
-    private void ShowSavedNotice()
+    private void ShowSavedNotice(FileWrite write)
     {
-        if (!IsWindowGoing && SavingNotice.SavedMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational, _closeAttemptFailed))
+        if (!IsWindowGoing && SavingNotice.SavedMayReplace(Notice.IsOpen, Notice.Severity == InfoBarSeverity.Informational, write.LeftGoingByRefusedClose))
             ShowNotice("Saved");
     }
 }
