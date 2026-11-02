@@ -31,4 +31,18 @@ internal static class SavingNotice
     /// informational notice, and it comes back when a warning or an error that hid it is dismissed (see the page's notice bar).
     /// </summary>
     internal static bool MayReplace(bool noticeIsOpen, bool noticeIsInformational) => !noticeIsOpen || noticeIsInformational;
+
+    /// <summary>
+    /// Whether the notice that a write has ended (<c>Saved</c>) may take the place of what the notice bar shows now. A write that no close
+    /// affects always may, as it always did: a person who tries again after an error (saves somewhere else, as the error may say) is told that
+    /// it worked, and the old error goes. Two things hold a write back, because the bar may then show the reason why the window stays (an
+    /// error stays until it is dismissed, and the second close leaves even when it cannot save): a close that is under way (the page is
+    /// closing; the error of a recovery copy that could not be saved is open while the settings save is still awaited, before the close is
+    /// refused and the writes that are going are marked), and a write that was going when a close was refused
+    /// (<see cref="FileWrite.LeftGoingByRefusedClose"/>), which is left alone and ends later. Then Saved does not replace a warning or an
+    /// error that is open (the rule of <see cref="MayReplace"/>), so that the person dismisses the reason and has not lost what it said. An
+    /// informational notice still gives way, as it does to every notice.
+    /// </summary>
+    internal static bool SavedMayReplace(bool noticeIsOpen, bool noticeIsInformational, bool closeIsUnderWay, bool writeWasLeftGoingByARefusedClose) =>
+        !(closeIsUnderWay || writeWasLeftGoingByARefusedClose) || MayReplace(noticeIsOpen, noticeIsInformational);
 }
