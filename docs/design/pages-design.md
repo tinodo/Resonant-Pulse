@@ -132,7 +132,8 @@ is specified in `metronome-design.md` and is not changed here.
   and one for each lane, all starting at the same moment, to line up in music software); a failure of the WAV or the MIDI export
   names the file and the reason, and one of the tracks says what to check (the location, the free space, another program that has
   the file open) and that a file that was already there is unchanged, when the file could not be written; when the temporary file could not
-  be removed either, it says so and names the file that stays, so that it can be deleted.
+  be removed either, it says so and names the file that stays, so that it can be deleted (every write says it, not only the tracks: Save as file,
+  Save current to library, Export WAV, Export MIDI and the timing result's CSV too).
   The tracks command asks first (how many tracks, how long each is, what they take unzipped, where the count-in is and what a muted
   lane gives), because the ZIP can be large, and only then chooses the file; it is off from the press until the end, with a notice
   while the file is written (*Saving the tracks...*; it comes back when a transient notice that replaced it, *Saved*, has faded; it does not
@@ -142,7 +143,11 @@ is specified in `metronome-design.md` and is not changed here.
   Every other file the app writes when asked (*Save as file*, *Save current to library*, *Export WAV*, *Export MIDI*, the timing
   result's CSV, and the copy of the project that is saved to the library before it is replaced) is stopped in the same way when the
   window closes while it is being written, and its temporary file is removed, unless it does not stop within the 4 seconds (the log
-  says so); a close that is refused leaves a write that is going alone. They show no notice while they write. A file dialog that cannot be opened is
+  says so); a close that is refused leaves a write that is going alone, and when that write ends, or when any write ends while a close is under
+  way (before it is refused), its *Saved* does not replace a warning or an
+  error that is open (the one that says why the window stayed: the person dismisses it); a write that begins after the refusal, or when no
+  close is under way, has its *Saved* replace what the bar shows, as it always did, so that a person who saves again after an error is told that it
+  worked. They show no notice while they write. A file dialog that cannot be opened is
   said to be that ("The window for choosing a file could not be opened, so nothing was saved or opened. Your edits remain in this
   window. ..."), never an audio problem, and the command is usable again; cancelling a dialog is silent. After the tracks question's
   *Cancel*, after *Saved* and after an error the keyboard focus is on the command again if it was on it when it was pressed and the

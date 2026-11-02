@@ -202,6 +202,56 @@ public sealed class FileWritesTests
     }
 
     [TestMethod]
+    public async Task ACloseThatIsRefusedMarksEveryWriteThatIsGoingAsLeftGoingAndNoOtherWrite()
+    {
+        var writes = new FileWrites();
+        var preparing = Begin(writes);
+        var writing = Begin(writes);
+        writing.BeginWriting(@"C:\Music\click.wav");
+        var ended = Begin(writes);
+        ended.End();
+        Assert.IsFalse(preparing.LeftGoingByRefusedClose, "A new write is not marked.");
+        Assert.IsFalse(writing.LeftGoingByRefusedClose);
+        Assert.IsFalse(await writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+        Assert.IsTrue(writing.LeftGoingByRefusedClose, "A write that is being written is left going by the refusal: its Saved does not replace the notice that says why the window stayed.");
+        Assert.IsTrue(preparing.LeftGoingByRefusedClose, "So is one that is still being prepared (Save to library asks nothing and goes on).");
+        Assert.IsFalse(ended.LeftGoingByRefusedClose, "A write that had ended is not marked.");
+        var after = Begin(writes);
+        Assert.IsFalse(after.LeftGoingByRefusedClose, "A write begun after the refusal is not: the person began it knowing why the window stayed, and its Saved is shown.");
+        preparing.End();
+        writing.End();
+        after.End();
+    }
+
+    [TestMethod]
+    public async Task ACloseThatGoesDoesNotMarkTheWritesItStops()
+    {
+        var writes = new FileWrites();
+        var write = Begin(writes);
+        write.BeginWriting(@"C:\Music\click.wav");
+        var closing = writes.StopForCloseAsync(windowWillGo: true, TimeSpan.FromSeconds(30));
+        Assert.IsFalse(write.LeftGoingByRefusedClose, "It is stopped, not left going.");
+        write.End();
+        Assert.IsTrue(await closing.WaitAsync(Limit));
+    }
+
+    [TestMethod]
+    public async Task TheMarkOfAWriteStaysReadableAfterItEndsAndDoesNotReachTheNextWrite()
+    {
+        var writes = new FileWrites();
+        var first = Begin(writes);
+        Assert.IsFalse(await writes.StopForCloseAsync(windowWillGo: false, TimeSpan.FromSeconds(30)).WaitAsync(Limit));
+        first.End();
+        Assert.IsTrue(first.LeftGoingByRefusedClose, "The page reads it when the write has ended: the Saved of a save to the library comes after its end.");
+        first.NoteRefusedClose();
+        var second = Begin(writes);
+        Assert.IsFalse(second.LeftGoingByRefusedClose);
+        second.End();
+        second.NoteRefusedClose();
+        Assert.IsFalse(second.LeftGoingByRefusedClose, "A write that has ended is not marked afterwards.");
+    }
+
+    [TestMethod]
     public void OnlyAWriteThatIsStillBeingPreparedCanBeVoided()
     {
         var writes = new FileWrites();

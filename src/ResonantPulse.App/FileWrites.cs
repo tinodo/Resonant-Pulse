@@ -101,13 +101,20 @@ internal sealed class FileWrites
     /// <see cref="CancelAllAsync"/>). When the close is refused, a write that is writing is left to go on, and one that is not writing yet
     /// is marked (see <see cref="FileWrite.PreparationInvalidated"/>): a command that asks a question or opens a dialog looks at the mark
     /// before it does, so a plan that is still being compiled is not asked about afterwards. A command that asks nothing (Save to library,
-    /// the backup of a replacement) never looks at it and goes on. True when no write is going any more.
+    /// the backup of a replacement) never looks at it and goes on. Every write that is going is also marked as left going by the refusal (see
+    /// <see cref="FileWrite.LeftGoingByRefusedClose"/>): what it shows when it ends does not replace the notice that says why the window
+    /// stayed. True when no write is going any more.
     /// </summary>
     internal Task<bool> StopForCloseAsync(bool windowWillGo, TimeSpan limit)
     {
         if (windowWillGo) return CancelAllAsync(limit);
         foreach (var write in _going)
+        {
+            // Every write that is going is left going by this refusal, whether it is writing or still being prepared: what it shows when it ends
+            // does not replace the notice that says why the window stayed (SavingNotice.SavedMayReplace).
+            write.NoteRefusedClose();
             if (!write.IsWriting) write.InvalidatePreparation();
+        }
         return Task.FromResult(!AnyGoing);
     }
 
@@ -156,6 +163,14 @@ internal sealed class FileWrite : IDisposable
     /// The write looks at it right before it asks a question or opens a dialog.
     /// </summary>
     internal bool StillWanted => !PreparationInvalidated && !Token.IsCancellationRequested;
+
+    /// <summary>
+    /// True when this write was going when a close was refused (the window stayed open and says why): the refusal left it alone and it ends
+    /// later. What it shows when it ends does not replace a warning or an error that is open, which is the notice that says why the window
+    /// stayed (<see cref="SavingNotice.SavedMayReplace"/>). A write that begins after the refusal is not marked: the person began it knowing
+    /// why the window stayed, and a write that works after an error is told so.
+    /// </summary>
+    internal bool LeftGoingByRefusedClose { get; private set; }
 
     /// <summary>Completes when the write has ended, however it went (done, refused, failed or cancelled).</summary>
     internal Task Ended => _ended.Task;
@@ -221,5 +236,11 @@ internal sealed class FileWrite : IDisposable
     internal void InvalidatePreparation()
     {
         if (!_isEnded && !IsWriting) PreparationInvalidated = true;
+    }
+
+    /// <summary>A close was refused while this write was going (see <see cref="LeftGoingByRefusedClose"/>). Harmless when it has ended already.</summary>
+    internal void NoteRefusedClose()
+    {
+        if (!_isEnded) LeftGoingByRefusedClose = true;
     }
 }
