@@ -36,7 +36,7 @@ public sealed class PageTextTests
         "Program", "ProgramEmpty", "BeginTiming", "FinishTiming", "Hit", "TimingBudget", "TimingDriftUnavailable", "TimingNoMatches",
         "TimingAdditional", "TimingLab", "TimingLimits", "TimingArmed", "TimingReport", "TimingRequiresPlayback", "TimingPendingEdits",
         "TimingTargetChanged", "TimingInvalidated", "ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable", "TimingNoName",
-        "StudioPurpose", "StudioLocked", "StudioEmptyTitle", "StudioEmptyBody", "LanePlain", "LaneThreeInFour", "LaneThreeInThree",
+        "StudioPurpose", "StudioPurposeEmpty", "StudioHowItWorks", "StudioLocked", "StudioEmptyTitle", "StudioEmptyBody", "LanePlain", "LaneThreeInFour", "LaneThreeInThree",
         "LaneEuclidean", "LaneField", "LaneBeatName", "LaneGroupRhythm", "LaneGroupVariation", "LanePulses", "LaneCycle", "LaneOffset",
         "UnitQuarterNotes", "LaneRhythmHelp", "LaneExactNote", "CustomPositions", "LanePan", "LaneSoundCaption", "PanLeft", "PanRight", "PanCenter",
         "LaneChance", "LaneChanceHelp", "LaneSoloHelp", "LaneMuteHelp", "LaneMore", "LaneCopySuffix", "LaneNameRequired",
@@ -172,6 +172,65 @@ public sealed class PageTextTests
             Assert.AreNotEqual("Preset_" + preset.Id, name, $"{language}: {preset.Id} has no name");
             Assert.AreNotEqual("PresetDesc_" + preset.Id, description, $"{language}: {preset.Id} has no description");
             Assert.IsTrue(description.Length is > 20 and < 200, $"{language}/{preset.Id}: {description.Length} characters");
+        }
+    }
+
+    [TestMethod]
+    public void TheStudioLinesSayWhatStudioIsForInTheLanguagesOwnWordForALane()
+    {
+        // A person who opened Studio in preview.12 wrote that there was no save button, no play button and no clue what it does: the
+        // line under the title said what was being edited, never what Studio is for, and the one sentence that defines a lane was
+        // shown only while the project had no lane. Both purpose lines (with lanes, and before the first lane) name a lane by the word
+        // the app already uses for it (the glossary's Lane), in the singular or the plural.
+        var laneWord = new Dictionary<string, string>
+        {
+            ["en"] = "lane|lanes", ["nl"] = "laag|lagen", ["de"] = "Spur", ["fr"] = "piste", ["es"] = "pista"
+        };
+        foreach (var language in Languages)
+        {
+            var lane = Get(language, "Lane");
+            Assert.IsTrue(Regex.IsMatch(lane, laneWord[language], RegexOptions.IgnoreCase), $"{language}: the word for a lane is now “{lane}”; update this test and the verifier");
+            foreach (var key in new[] { "StudioPurpose", "StudioPurposeEmpty" })
+            {
+                var line = Get(language, key);
+                Assert.IsTrue(Regex.IsMatch(line, laneWord[language], RegexOptions.IgnoreCase), $"{key}/{language} does not hold the word for a lane: {line}");
+                Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{key}/{language}: {line}");
+            }
+            // Where lanes exist the line says what one is (the empty state has its own sentence for that, right under it).
+            Assert.AreNotEqual(Get(language, "StudioPurposeEmpty"), Get(language, "StudioPurpose"), language);
+        }
+    }
+
+    [TestMethod]
+    public void TheStudioHowItWorksLineSaysNothingNeedsSavingAndHowAChangeIsHeardInEveryLanguage()
+    {
+        foreach (var language in Languages)
+        {
+            var line = InLanguage(language, () => Text.Format("StudioHowItWorks", "My groove"));
+            StringAssert.Contains(line, "My groove", language);
+            // The buttons and the page are named as that language names them (Save project is the Library's command for a copy as a file;
+            // a Start that resumes a pause keeps the revision it paused on, so a change is heard after Stop, then Start).
+            foreach (var key in new[] { "Stop", "Start", "Library", "Save" })
+                StringAssert.Contains(line, Get(language, key), $"{language}: {key}");
+            // The order is the one the person presses them in.
+            Assert.IsTrue(line.IndexOf(Get(language, "Stop"), StringComparison.Ordinal) < line.IndexOf(Get(language, "Start"), StringComparison.Ordinal),
+                $"{language}: Stop comes before Start: {line}");
+            Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{language}: {line}");
+        }
+    }
+
+    [TestMethod]
+    public void TheStudioLinesAreShortEnoughForANarrowWindow()
+    {
+        // Each of them is a block of text above the first card: at 320 DIP wide about 42 characters are one line of 13 DIP text, and the
+        // lines cost the first screen their height. The limits keep both lines together to about ten lines at the narrowest width in
+        // the longest language (measured on a private desktop for the PR that added them).
+        foreach (var language in Languages)
+        {
+            Assert.IsTrue(Get(language, "StudioPurpose").Length <= 190, $"StudioPurpose/{language}: {Get(language, "StudioPurpose").Length} characters");
+            Assert.IsTrue(Get(language, "StudioPurposeEmpty").Length <= 110, $"StudioPurposeEmpty/{language}: {Get(language, "StudioPurposeEmpty").Length} characters");
+            var how = InLanguage(language, () => Text.Format("StudioHowItWorks", "A name of average length"));
+            Assert.IsTrue(how.Length <= 280, $"StudioHowItWorks/{language}: {how.Length} characters");
         }
     }
 
