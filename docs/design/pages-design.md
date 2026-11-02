@@ -54,6 +54,20 @@ is specified in `metronome-design.md` and is not changed here.
 
 ## 4. Pages
 
+### Navigation and the transport bar (every page)
+- **First keyboard focus:** when the window has its page, and again whenever Windows activates the window, the focus goes to *Start*
+  (to *Audio* when *Start* is off because no output is chosen), until the person has pressed a key or the pointer, and never when it
+  already is on a control of theirs, in a panel or in a dialog. Before, Windows left it on the *Settings* item of the navigation, and
+  its ring showed when the packaged app started. The rule is `InitialFocus`; the system's own leftover is the only focus it replaces.
+- **The Settings tab** keeps its gear and gives up its name where the name does not fit beside the item of the selected page (the
+  navigation gives the Settings item what that item leaves and clipped the rest: *Instellingen* read *Instellin* at 320 DIP). The
+  name stays as the tooltip and as the name a screen reader reads, and the tab is as wide on every page. The rule is `NavigationFit`
+  (the width of the pane against the widest page name, the Settings name and the item's own room, measured on this template).
+- **The transport bar** below 520 DIP has two columns: the second takes what its widest button needs (*Stop*, *Audio*) and the first
+  what is left (*Start*, *Mute*), so a name of one word is not broken (two equal halves broke the German *Stummschalten* in the
+  middle of the word at 320 DIP), and a name of several words that is still too long wraps between its words (the Dutch *Dempen
+  opheffen*, once muted, takes a second line at 320 DIP).
+
 ### Settings
 - **Appearance:** Language, Theme, Reduce motion (switch). Each row explains itself. Reduce motion: "The marker on the
   dial jumps from beat to beat instead of gliding, and the scrolling tape of upcoming clicks is hidden. It is also on
@@ -68,7 +82,10 @@ is specified in `metronome-design.md` and is not changed here.
   reached first stops the metronome. 0 means no limit. The count-in does not count."); a plain-language summary of what
   is saved. Cancel and Done stay, side by side and equal. Heard: next Start.
 - **Tempo and Time signature:** same kit (natural-width fields), same behaviour. The Tempo panel also holds *Taps to start*
-  (a narrow box with its unit, 2 to 16, and one line that says it counts the next time *Tap to start* is switched on). It is a
+  (a narrow box with its unit, 2 to 16, and one line that says it counts the next time *Tap to start* is switched on). Where the
+  panel is wide enough, *Half tempo* and *Double tempo* sit in the same row as that box, level with its bottom, instead of in a
+  row of their own: that row cost 56 DIP, and at 800x600 the panel scrolled and showed only 29 of the box's 44 DIP above *Done*
+  (a hosted run). In a narrow panel the row gives way, as every row of the kit does. It is a
   preference of the app, not of the project: Cancel discards it with the rest of the panel, Done keeps it and saves it like
   every other preference (best effort; if the save fails the error is shown and the value stays). Done writes only what was
   changed in the panel, so changing the number alone never puts the tempo the panel showed when it opened over a newer one
@@ -179,6 +196,13 @@ is specified in `metronome-design.md` and is not changed here.
   or by itself (a completed run keeps its revision until Stop, but nothing plays any more), so the timing check beside it
   keeps its controls and the choices made in them.
 - **Live view:** the dial and position.
+- **Place and focus while the check runs:** *Start check* and *Finish and show result* build the page again (the ready line, the
+  commands that are on and the result change), and the page stays where it was: the scroll position is put back once the page has
+  been laid out (a notice or the ready line can make the page taller or shorter, so the position is kept, not the top), the
+  keyboard focus stays on the command that had it or, when that command went off (*Start check* gives way to *Hit*), goes to the
+  next command that is on, and after *Finish and show result* the result and the ready line are brought into view, with the focus
+  on *Export result (CSV)*. A person who had scrolled down to *Hit* is not thrown back to the top, and the *Start* of the transport
+  bar does not take the focus.
 - **Timing check** (was "Timing Lab"): states plainly what it does: it compares the moment each key press or Hit
   arrives with the moment each click was scheduled; it does not hear your instrument and does not measure speaker delay.
   Fields: *Rhythm to follow*, *Accept presses within* (ms), *Include beats that are not played (silent, muted or
@@ -311,6 +335,11 @@ Undo brings it back.
   not asserted (they depend on text size and language).
 - Unit tests for the width rules, the wrap rule, the live-apply queue (latest value wins, one undo per gesture, barriers,
   failure reverts), and that every string exists in five languages with matching placeholders.
+- Gates for what a person sees first, which record every finding and fail the run at its end: the keyboard focus after the
+  start (*Start*, or *Audio* without an output), the box for the taps whole above *Done* at every window size (800x600 too), and,
+  in five languages, the *Settings* tab as wide on every page at 320x900 and the transport commands on one line on *Play* at
+  320x900 and 400x720, also with Mute on (a name of several words may take a second line); and, in the local gate with audio, the
+  Train page keeping its place and its focus after *Start check* and *Finish and show result*.
 
 ## 9. Delivery
 
