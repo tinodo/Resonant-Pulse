@@ -657,9 +657,8 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Called as a notice opens, before the page has given up its room. A control of the page that has the keyboard focus and is wholly on
-    /// screen is read now; when the page's viewport has got shorter (the notice has taken its room) the control is brought into view. The
-    /// viewport is followed, not the notice's own size: a first version that waited for the notice's size left the control hidden at some
-    /// heights in some runs. A control that was not wholly on screen is left alone: the person scrolled away from it.
+    /// screen is read now; when the page's viewport has got shorter (the notice has taken its room) the control is brought into view. A
+    /// control that was not wholly on screen is left alone: the person scrolled away from it.
     /// </summary>
     private void FollowFocusWhileNoticeTakesRoom()
     {
