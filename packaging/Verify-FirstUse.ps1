@@ -1845,6 +1845,56 @@ Wait-Condition { $null -ne (Find-Optional 'StageSong1') } 'Stage: cancelling the
 # of the check says so.
 $stemExportEvidence = @{}
 $stemExportEvidence['firstUse'] = Test-StemExport 'Stem export at the first-use size' 'stems-first-use' 'en' 1 '0:34' '6.2 MiB'
+# A notice that opens takes room from the foot of the page: it sits in its own row above the transport bar, so the page is shorter while the
+# notice is open. A control at the foot of the page that has the keyboard focus when a notice opens must stay on screen. With editing locked
+# on Stage, Load (a library project chosen) opens the notice that says so and changes nothing else on the page (Save to library adds a row to
+# the list, which moves the control by itself). At a narrow width Load is below the first screen, and the page is scrolled to it (as a person
+# would) before it is pressed. A window height that does not put it at the foot (within 80 DIP of it) proves nothing, and the check says so if
+# none did.
+$noticeFocusEvidence = [Collections.Generic.List[object]]::new()
+Select-Destination 'DestinationStage'
+Wait-Settled 'StageLock'
+$lockForNotice = (Find-Control 'StageLock').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+$lockForNotice.Toggle()
+Wait-ToggleState $lockForNotice ([Windows.Automation.ToggleState]::On) 'Library (a notice opens): Lock editing did not switch on.'
+Select-Destination 'DestinationLibrary'
+Wait-Settled 'SaveToLibrary'
+Wait-Condition { $null -ne (Find-Optional 'LibraryProject0') } 'Library (a notice opens): the saved project is not in the list.'
+(Find-Control 'LibraryProject0').GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+Wait-Condition { (Find-Control 'LoadLibraryProject').Current.IsEnabled } 'Library (a notice opens): choosing a project did not enable Load.'
+$windowBeforeNotice = (Get-CurrentWindow).Current.BoundingRectangle
+$noticeFocusAtTheFoot = $false
+foreach ($size in @(@(400, 720), @(400, 640), @(400, 560))) {
+    Resize-To $size[0] $size[1]
+    Start-Sleep -Milliseconds 800
+    $where = "Library at $($size[0])x$($size[1]) (a notice opens)"
+    Wait-Settled 'LoadLibraryProject'
+    Show-Control 'LoadLibraryProject'
+    $atTheFoot = ((Get-PageScroll).bottom - (Find-Control 'LoadLibraryProject').Current.BoundingRectangle.Bottom) -le 80 * $scale
+    (Find-Control 'LoadLibraryProject').SetFocus()
+    Wait-Condition { (Get-FocusHolders) -contains 'LoadLibraryProject' } "${where}: Load did not take the keyboard focus."
+    Invoke-Control 'LoadLibraryProject'
+    Wait-Condition { $null -ne (Find-Optional 'StatusNotice') } "${where}: no notice opened."
+    Start-Sleep -Milliseconds 2000
+    $noticePage = Get-PageScroll
+    $noticeControl = (Find-Control 'LoadLibraryProject').Current.BoundingRectangle
+    $noticeHidden = $noticeControl.IsEmpty -or $noticeControl.Top -lt $noticePage.top - 1 -or $noticeControl.Bottom -gt $noticePage.bottom + 1
+    if ($atTheFoot) { $noticeFocusAtTheFoot = $true }
+    if ($noticeHidden) {
+        Add-Finding $where "the notice that opened hid the control that had the keyboard focus (Load is at $($noticeControl.Top) to $($noticeControl.Bottom), the page shows $($noticePage.top) to $($noticePage.bottom))."
+    }
+    $noticeFocusEvidence.Add(@{ size = "$($size[0])x$($size[1])"; atTheFoot = $atTheFoot; hidden = $noticeHidden })
+    # The notice fades after a few seconds; what is measured next is not squeezed by it.
+    Wait-Condition { $null -eq (Find-Optional 'StatusNotice') } "${where}: the notice did not fade." 20
+}
+if (-not $noticeFocusAtTheFoot) { Add-Finding 'Library (a notice opens)' 'no window size put Load at the foot of the page, so nothing was checked.' }
+Resize-To ($windowBeforeNotice.Width / $scale) ($windowBeforeNotice.Height / $scale)
+Start-Sleep -Milliseconds 800
+Select-Destination 'DestinationStage'
+Wait-Settled 'StageLock'
+$lockForNotice = (Find-Control 'StageLock').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+$lockForNotice.Toggle()
+Wait-ToggleState $lockForNotice ([Windows.Automation.ToggleState]::Off) 'Library (a notice opens): Lock editing did not switch off.'
 # Train: content-sized fields; with no program the page says how to get one; a timing check offers only the command that makes
 # sense now (nothing to press or finish until one is running).
 Select-Destination 'DestinationTrain'
@@ -2985,7 +3035,7 @@ $languageLayoutEvidence = Test-LanguageLayout
   tapStartLayout=$tapStartEvidence;tapStart=$tapStartSwitching;tempoTypedAfterNudges=$tempoTypedAfterNudges;help=$helpEvidence;tempoGuide=$tempoGuideEvidence;
   timingExport=$timingExportEvidence;timingExportFlow=$timingExportFlow;stemExport=$stemExportEvidence;
   popupShortcuts=$(if ($sendKeys) { 'ctrl-m-in-all-seven-panels' } else { 'not-run-keyboard-disabled' });
-  initialFocus=$initialFocus;layoutFindings=@($script:findings);languageLayout=$languageLayoutEvidence;studioText=$script:studioTextEvidence;
+  initialFocus=$initialFocus;layoutFindings=@($script:findings);languageLayout=$languageLayoutEvidence;studioText=$script:studioTextEvidence;noticeFocus=@($noticeFocusEvidence);
   limitations='No acoustic accuracy, listening quality or complete accessibility acceptance is established.'} |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 # The report is written first, so that it says why. A caller that asked for the checks that need the hooks (-RequireUiTestHooks) does not

@@ -54,6 +54,8 @@ public sealed partial class MainWindow : Window
     private TempoCurve? _tempoCurve;
     private ListView? _libraryList;
     private TextBox? _search;
+    /// <summary>Takes back what <see cref="FollowFocusWhileNoticeTakesRoom"/> subscribed to the page's viewport.</summary>
+    private Action? _stopFollowingFocus;
     private IReadOnlyList<LibraryItem> _library = [];
 
     [DllImport("user32.dll")]
@@ -117,6 +119,13 @@ public sealed partial class MainWindow : Window
             if (args.Reason == InfoBarCloseReason.CloseButton && Notice.Severity != InfoBarSeverity.Informational && _fileWrites.IsWriting(TracksWrite))
                 ShowSavingNotice();
         };
+        // The notice is in its own row above the transport bar, so the page is shorter while it is open: a control at the foot of the page
+        // that has the keyboard focus when the notice opens would end up below the part that is shown, for as long as the notice stays.
+        Notice.RegisterPropertyChangedCallback(InfoBar.IsOpenProperty, (_, _) =>
+        {
+            if (Notice.IsOpen) FollowFocusWhileNoticeTakesRoom();
+            else StopFollowingFocus();
+        });
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);
         var scale = dpi == 0 ? 1 : dpi / 96.0;
@@ -629,6 +638,57 @@ public sealed partial class MainWindow : Window
     }
 
     private void ShowNotice(string key) => ShowNoticeText(Text.Get(key));
+
+    /// <summary>
+    /// The control that has the keyboard focus, if it is in the page and wholly on screen in the page and in every scrolling area between it
+    /// and the page (the strip of beats on Play, the list of the Library), otherwise null. Read before a notice opens, so that the page can
+    /// follow the control when the notice takes room from its foot: a control that a person has scrolled out of view in a scrolling area of
+    /// its own is not brought back.
+    /// </summary>
+    private FrameworkElement? FocusedControlOnScreen()
+    {
+        if (FocusedElement() is not FrameworkElement focused || PageHost.Content is not ScrollViewer page || !focused.IsLoaded || focused.ActualHeight <= 0)
+            return null;
+        for (DependencyObject? node = VisualTreeHelper.GetParent(focused); node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is ScrollViewer scroll)
+            {
+                var bounds = focused.TransformToVisual(scroll).TransformBounds(new Windows.Foundation.Rect(0, 0, focused.ActualWidth, focused.ActualHeight));
+                if (bounds.Left < -1 || bounds.Top < -1 || bounds.Right > scroll.ViewportWidth + 1 || bounds.Bottom > scroll.ViewportHeight + 1) return null;
+            }
+            if (ReferenceEquals(node, page)) return focused;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Called as a notice opens, before the page has given up its room. A control of the page that has the keyboard focus and is wholly on
+    /// screen is read now; when the page's viewport has got shorter (the notice has taken its room) the control is brought into view. A
+    /// control that was not wholly on screen is left alone: the person scrolled away from it.
+    /// </summary>
+    private void FollowFocusWhileNoticeTakesRoom()
+    {
+        StopFollowingFocus();
+        if (FocusedControlOnScreen() is not { } focused || PageHost.Content is not ScrollViewer scroll) return;
+        void OnSizeChanged(object sender, SizeChangedEventArgs args)
+        {
+            if (args.NewSize.Height >= args.PreviousSize.Height) return;
+            StopFollowingFocus();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!_isClosed && ReferenceEquals(FocusedElement(), focused))
+                    focused.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
+            });
+        }
+        scroll.SizeChanged += OnSizeChanged;
+        _stopFollowingFocus = () => scroll.SizeChanged -= OnSizeChanged;
+    }
+
+    private void StopFollowingFocus()
+    {
+        _stopFollowingFocus?.Invoke();
+        _stopFollowingFocus = null;
+    }
 
     private void ShowNoticeText(string text)
     {
