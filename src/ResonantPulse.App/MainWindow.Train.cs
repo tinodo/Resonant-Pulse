@@ -274,8 +274,9 @@ public sealed partial class MainWindow
     /// Builds the Train page again after a command of the timing check changed what the page offers (Begin and Finish), and leaves the person
     /// where they were. The page keeps its scroll position (it went to the top, so after Finish the result, the line that says what an export
     /// holds and Export itself were below the fold), the keyboard focus goes on to the command that takes over (see
-    /// <see cref="CommandRowFocus"/>), and after Finish the result is brought into view if the commands that were used were at the foot of the
-    /// screen. The commands of the old page are gone with it, so where the focus was is read before (<see cref="CaptureTimingFocus"/>).
+    /// <see cref="CommandRowFocus"/>) and that command is brought into view, and after Finish the result is brought into view if the commands
+    /// that were used were at the foot of the screen. The commands of the old page are gone with it, so where the focus was is read before
+    /// (<see cref="CaptureTimingFocus"/>).
     /// </summary>
     private void RebuildTrainPage((int? Index, FocusState State) focus, bool showResult = false)
     {
@@ -284,7 +285,13 @@ public sealed partial class MainWindow
             if (_isClosed || _view != "Train") return;
             var rebuilt = new[] { _timingBegin, _timingHit, _timingFinish, _timingExport };
             if (CommandRowFocus.After(focus.Index, rebuilt.Select(command => command is { IsEnabled: true }).ToArray()) is { } next)
+            {
                 rebuilt[next]!.Focus(focus.State);
+                // Focus(FocusState.Pointer), the state the pressed command had in the checks on a private desktop, does not scroll, and
+                // the notice that Begin opens has taken room from the foot of the page: the command is asked here to be brought into view,
+                // whichever way the focus reached it.
+                rebuilt[next]!.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
+            }
             // The scroll position is put back right after this, and the result is shown against the position that gives.
             if (showResult) DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, ShowTimingResult);
         });
