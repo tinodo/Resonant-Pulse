@@ -15,7 +15,7 @@ evidence separately.
 | Library and files | Local projects/preferences/recovery; My projects with search, name and date, and Open once a project is chosen; ready-made rhythms with a name, a sentence, meter and tempo; WAV and checked MIDI export, with the export length (the bars written when the project has no program) beside the export buttons; Export separate tracks (ZIP) beside them, which asks first and then saves one ZIP with a WAV file for the main beat and one for each lane, all starting at the same moment, and a manifest (below, docs/WAV-STEMS.md) | Media/chart/PDF processing (the tracks export writes audio files; it imports and processes none), pitch-preserving stretch, tempo-map import, CSV history (the Train page exports only the last completed timing check, as one CSV file that you save: that is not a history, because no earlier check is kept) and comprehensive exchange packages |
 | Sound and integration | Synthesized clicks, per-lane gain/pan, output-only operation | Imported samples, voice/drone, multichannel routing, MIDI/microphone capture and calibration, live clocks/learn/Link/network sync |
 | Accessibility/localization | Five-language source dictionaries (a test checks that every string exists in all five with matching placeholders), keyboard and automation handling, theme-aware controls, a Reduce motion switch (the marker jumps from beat to beat and the tape of upcoming clicks is hidden; also on whenever Windows has animation effects off), fields that give way in narrow windows and at larger text sizes | Musician translation review (the new and rewritten Dutch, German, French and Spanish text, the Help panel's and the tempo guide's sentences included, was written with GitHub Copilot; docs/design/glossary.md lists the terms to check first), Narrator/Contrast/enlarged-text/high-DPI installed-app acceptance, Windows text sizes above 100% on the real setting |
-| Distribution | Published GitHub preview 0.1.0-preview.11 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
+| Distribution | Published GitHub preview 0.1.0-preview.12 with x64/ARM64 ZIPs and checksums; passing hosted tests, x64 native startup/first-use controls, development-package install/activation/identity/uninstall, and earlier installed activation with the reserved Store identity | No Store publication. ARM64 hardware/install acceptance, full-product acceptance, first Store submission and certification not established |
 
 No missing integration is advertised as functioning. In particular, arrival-time
 keyboard analysis is not microphone calibration, MIDI file export is not live
@@ -566,3 +566,61 @@ private desktop, a native-speaking musician's review of the new Dutch, German, F
 Spanish text, Windows text sizes above 100%, or the owner's acceptance of editable split
 clicks. When Windows activates the packaged app, keyboard focus starts on Settings
 (initial focus is not managed yet), so its focus ring can show at launch.
+
+[Preview 0.1.0-preview.12](https://github.com/tinodo/Resonant-Pulse/releases/tag/v0.1.0-preview.12)
+collects what was built after preview.11. New: Tap to start (a switch next to TAP), a
+five-step quick start and a short musical reference in the Help panel, the approximate
+Italian tempo markings in the Tempo panel, the export of a finished timing check as CSV
+on Train, and the export of the separate tracks as WAV files in one ZIP on Library.
+Repaired: a tempo typed in the Tempo panel is no longer overwritten by a nudge (the - and
++ buttons, TAP, the wheel, the arrow keys on the dial) that is still being applied; a
+nudge that is still being applied when the project is replaced is no longer written into
+the replacement; a ready-made time signature that changes the click unit, and Done in the
+Custom meter panel, wait for the nudges on their way, so the time signature chosen last
+is the one the project ends on (a Custom meter panel that was opened while a ready-made
+one was still being applied shows the time signature that the project held then, and its
+Done writes what it shows); a Tempo panel opened again while an earlier Done is still
+being applied follows the project for the fields that were not changed in it; a file
+window that cannot open is reported as that, and the page says that the edits remain in
+the window; closing the window while a file is being written asks that write to stop and
+waits up to four seconds for it (a write that stops removes its half-written temporary
+file and leaves a file that was already there as it was; a write that has not stopped by
+then is left behind, the log names it and a temporary file may remain; an Export WAV
+that has begun moving its finished files into place is not stopped; a write that is going
+when a close is refused because the project could not be saved goes on); a temporary file
+that cannot be removed after a failed save or export is named on the page; the reason
+that a refused close left the window open is no longer replaced by *Saved* by a write
+that was going when the close was refused or that ends while a close is under way (a
+write that begins afterwards still says *Saved*); the keyboard focus returns to the
+tracks command after its question, its save or its error when it was on it at the press
+and has not been moved, starts on Start (on Audio while there is no audio output)
+instead of Settings, and on Train the page keeps its place and the focus moves on to the
+command that takes over after Start check and Finish; and at the narrowest width the
+Settings tab shows its gear alone where its name does not fit, Stummschalten is no
+longer broken in the middle of the word, and the Tempo panel shows its box for the number
+of taps in full at 800x600 (the layout check of the first-use verifier found no cut text
+in the five languages on the pages and at the sizes that it covers). Under the hood the
+Windows App SDK is 2.6.4.
+Protected main `6c2999d`: main build 41388596162 and CodeQL 41388596294 passed; release
+41413500437 passed fresh hosted tests (329 Core results, 321 passed and 8 skipped by
+platform; 917 App results, 911 passed and 6 Windows-only skipped on the Linux job; the
+Windows file-integrity job's 90 Core and 22 App cases) and the x64 native and packaged
+first-use checks (25 entries, the same as main's). Both public ZIPs were downloaded and
+re-hashed and match their checksum files and the GitHub digests; the embedded build
+information of both names the commit, the version, the architecture and the release run;
+neither shipped DLL holds a local test hook. DELIVERY.md has the Copilot findings of each
+change and what became of them. The released x64 ZIP was dry-run on a private desktop
+with an isolated copy of the owner's saved state: it opened on Play with six named
+strength bars and the keyboard focus on Start, and left the saved state byte-identical at
+start-up and after exit. It was installed on the development PC (preview.11 stays on
+disk, the Start menu shortcut now targets preview.12, the saved state is byte-identical)
+and, at the owner's request, started through Explorer and left running: responsive,
+stopped, on Play with the saved project, no error in its log, the saved state
+byte-identical; the start itself plays nothing, and the window was only read through UI
+Automation. This does not
+establish listening (no hosted runner has an audio output and the local checks play at an
+inaudible volume), the native save dialog (a stand-in was used), a native-speaking
+musician's review of the Dutch, German, French and Spanish text, a tracks ZIP opened in
+music software, Windows text sizes above 100%, Narrator, the Contrast themes, ARM64
+hardware, or the cause of the one stop of a local gate on a pull request that passed on
+its second run on the same build.
