@@ -69,6 +69,10 @@ is specified in `metronome-design.md` and is not changed here.
   opheffen*, once muted, takes a second line at 320 DIP).
 
 ### Settings
+- **Under the title,** one line says what the page is for ("Choose the interface language and the theme, and whether the display
+  moves less. Changes take effect at once."); every page of the kit has such a line (`<Page>Purpose` is its automation id, and the
+  first-use verifier checks it in five languages on Train, Stage, Library and Settings; Studio's two lines are read by their own check).
+  Settings was the one page without it.
 - **Appearance:** Language, Theme, Reduce motion (switch). Each row explains itself. Reduce motion: "The marker on the
   dial jumps from beat to beat instead of gliding, and the scrolling tape of upcoming clicks is hidden. It is also on
   whenever Windows has animation effects turned off." (The rule is: reduced if the switch is on **or** Windows says so.)
@@ -218,10 +222,25 @@ is specified in `metronome-design.md` and is not changed here.
   first screen with the whole card, so no primary control gave up its place.
 
 ### Studio
-- Header: one sentence ("Editing “name”. Changes are saved as you make them. Press Stop, then Start, to hear them.");
-  Undo and Redo as icon buttons (there are no keyboard shortcuts for them yet); *Add lane* as a menu: 4 clicks over 4
-  beats, 3 over 4 (polyrhythm), 3 over 3 (polymeter) and *Euclidean...*. While there are no lanes the one *Add lane*
-  button sits in the empty-state card instead of the header.
+- Header: the title, with Undo and Redo as icon buttons (there are no keyboard shortcuts for them yet) and *Add lane* as a menu: 4
+  clicks over 4 beats, 3 over 4 (polyrhythm), 3 over 3 (polymeter) and *Euclidean...*. While there are no lanes the one *Add lane*
+  button sits in the empty-state card instead of the header. Under the title row, across the page, two lines of text (the page
+  kit's usual line of purpose is one sentence, and a header row decides whether its actions fit beside its text from the width
+  the text would have on one line, so a text of this length in the row would send the actions under it at every window size, and
+  make it wrap in a narrower column than the page has):
+  *what Studio is for* ("Build your own rhythm here, in lanes. A lane is a layer of clicks with its own pattern, sound and volume,
+  played along with the main beat."; before the first lane only "Build your own rhythm here from lanes, and a practice program
+  from steps.", because the empty state's own card defines a lane right under it), and *how it works* ("No need to save: “name” is
+  kept as you edit it. For a copy as a file, use Save project in the Library. To hear a change, press Stop, then Start, in the bar
+  at the bottom."). The commands it names are the ones the application shows, with the labels they have in the language shown;
+  a change is heard after *Stop*, then *Start*, because a Start that resumes a pause keeps the revision it paused on. The two lines
+  have the stable automation ids `StudioPurpose` and `StudioHowItWorks`; the first-use verifier reads them in all five languages
+  at 1000x720, 800x600, 400x720 and 320x900 (a language's own word for a lane in the first, Stop, Start and the Library in the
+  second, neither cut by the window or over the first card, the header commands whole, the first lane's commands on the first
+  screen of the two wider windows), and unit tests pin the strings (`PageTextTests`). They were written because a person who
+  opened Studio in preview.12 found no save button, no play button and nothing that said what the page is for: the one line it
+  had named the project and how saving and hearing work, and the only sentence that defines a lane was shown while the project
+  had no lane.
 - **Lanes:** one card per lane: name, mute and solo, a *More* menu (rotate, invert, duplicate, remove with a
   confirmation). Three groups: *Rhythm* (the *Beat strength* strip, tap to change as on Play, then clicks per cycle,
   cycle length, start offset), *Sound* (click sound, volume, pan) and *Variation* (chance). *Custom beat positions* is an

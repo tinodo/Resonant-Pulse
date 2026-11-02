@@ -68,12 +68,38 @@ public sealed partial class MainWindow
         var heading = new StackPanel { Spacing = 4 };
         heading.Children.Add(title);
         if (purpose is not null)
-            heading.Children.Add(new TextBlock { Text = purpose, Style = ResonantStyle("NoteStyle") });
+        {
+            // Read by the first-use verifier, which checks that every page says what it is for.
+            var line = new TextBlock { Text = purpose, Style = ResonantStyle("NoteStyle") };
+            Identify(line, titleKey + "Purpose", purpose);
+            heading.Children.Add(line);
+        }
+        return PageBody(HeaderRow(heading, actions), content);
+    }
+
+    /// <summary>
+    /// A page whose text is more than a line (Studio says what it is for, that nothing needs saving and how a change is heard).
+    /// The title and the actions share the header row, and the lines run across the page under it: a header row works out whether
+    /// the actions fit beside the text from the width the text would have on one line, so a long text in it would always send the
+    /// actions under it, even in a wide window, and make the text wrap in a narrower column than the page has.
+    /// </summary>
+    private static ScrollViewer PageScaffoldLines(string titleKey, IReadOnlyList<UIElement> lines, UIElement? actions, params UIElement[] content)
+    {
+        var title = new TextBlock { Text = Text.Get(titleKey), Style = ResonantStyle("PageTitleStyle"), VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetHeadingLevel(title, AutomationHeadingLevel.Level1);
+        var top = new StackPanel { Spacing = 4 };
+        top.Children.Add(HeaderRow(title, actions));
+        foreach (var line in lines) top.Children.Add(line);
+        return PageBody(top, content);
+    }
+
+    private static ScrollViewer PageBody(UIElement header, UIElement[] content)
+    {
         // Stretch with a maximum, not Center: a centred stack is as wide as its content, so a two-pane page that changes its
         // content when its width crosses the breakpoint would change its own width and never settle (a layout cycle). A
         // stretched element with a maximum is centred in a wider slot anyway.
         var stack = new StackPanel { Spacing = 16, MaxWidth = FormMetrics.PageMaxWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
-        stack.Children.Add(HeaderRow(heading, actions));
+        stack.Children.Add(header);
         foreach (var item in content) stack.Children.Add(item);
         return new ScrollViewer
         {

@@ -2885,6 +2885,14 @@ function Test-LanguageLayout {
             Select-Destination $page.id
             Wait-Settled $page.settle
             $pageName = $page.id -replace '^Destination', ''
+            # Every page of the kit says what it is for, in a line under its title (Play has no title: the dial is the page; Studio's lines are
+            # read by Test-StudioText below).
+            if ($pageName -notin 'Play', 'Studio') {
+                $purposeLine = Find-Optional "${pageName}Purpose"
+                if ($null -eq $purposeLine -or [string]::IsNullOrWhiteSpace($purposeLine.Current.Name)) {
+                    Add-Finding "$($language.code), $pageName" "the page has no line under its title that says what it is for (nothing carries the automation id '${pageName}Purpose')."
+                }
+            }
             foreach ($size in $sizes) {
                 # The transport bar and the status line are the same on every page, so they are read on Play only (at both sizes, and with
                 # Mute on); the Settings item is what the item of the selected page squeezes, so it is read on every page, at the narrowest size

@@ -36,7 +36,7 @@ public sealed class PageTextTests
         "Program", "ProgramEmpty", "BeginTiming", "FinishTiming", "Hit", "TimingBudget", "TimingDriftUnavailable", "TimingNoMatches",
         "TimingAdditional", "TimingLab", "TimingLimits", "TimingArmed", "TimingReport", "TimingRequiresPlayback", "TimingPendingEdits",
         "TimingTargetChanged", "TimingInvalidated", "ExportTimingCsv", "TimingCsvHint", "TimingCsvReady", "TimingCsvUnavailable", "TimingNoName",
-        "StudioPurpose", "StudioPurposeEmpty", "StudioHowItWorks", "StudioLocked", "StudioEmptyTitle", "StudioEmptyBody", "LanePlain", "LaneThreeInFour", "LaneThreeInThree",
+        "StudioPurpose", "StudioPurposeEmpty", "StudioHowItWorks", "SettingsPurpose", "StudioLocked", "StudioEmptyTitle", "StudioEmptyBody", "LanePlain", "LaneThreeInFour", "LaneThreeInThree",
         "LaneEuclidean", "LaneField", "LaneBeatName", "LaneGroupRhythm", "LaneGroupVariation", "LanePulses", "LaneCycle", "LaneOffset",
         "UnitQuarterNotes", "LaneRhythmHelp", "LaneExactNote", "CustomPositions", "LanePan", "LaneSoundCaption", "PanLeft", "PanRight", "PanCenter",
         "LaneChance", "LaneChanceHelp", "LaneSoloHelp", "LaneMuteHelp", "LaneMore", "LaneCopySuffix", "LaneNameRequired",
@@ -239,12 +239,6 @@ public sealed class PageTextTests
     {
         foreach (var language in Languages)
         {
-            var purpose = InLanguage(language, () => Text.Format("StudioPurpose", "My groove"));
-            StringAssert.Contains(purpose, "My groove", language);
-            // The sentence says how to hear the changes in the app's own words for the two buttons (a Start that resumes a
-            // pause keeps the revision it paused on, so "the next Start" would be wrong).
-            StringAssert.Contains(purpose, InLanguage(language, () => Text.Get("Stop")), language);
-            StringAssert.Contains(purpose, InLanguage(language, () => Text.Get("Start")), language);
             var beat = InLanguage(language, () => Text.Format("LaneBeatName", 2, 3, Text.Get("LevelStrong")));
             StringAssert.Contains(beat, "2", language);
             StringAssert.Contains(beat, "3", language);
@@ -261,7 +255,7 @@ public sealed class PageTextTests
             var locked = InLanguage(language, () => Text.Format("StudioLocked", Text.Get("Stage"), Text.Get("Lock")));
             StringAssert.Contains(locked, InLanguage(language, () => Text.Get("Stage")), language);
             StringAssert.Contains(locked, InLanguage(language, () => Text.Get("Lock")), language);
-            foreach (var line in new[] { purpose, beat, field, euclid, left, right, locked })
+            foreach (var line in new[] { beat, field, euclid, left, right, locked })
                 Assert.IsFalse(line.Contains('{') || line.Contains('}'), $"{language}: {line}");
         }
     }
