@@ -76,7 +76,12 @@ public sealed partial class MainWindow
         // The readouts above follow what plays; the steps below are the project's program. When they differ, the page says so.
         if (view.Note != ProgramNote.None)
             body.Children.Add(Note(view.Note == ProgramNote.Removed ? "TrainProgramRemoved" : "TrainProgramChanged"));
-        if (_document.Program.Count > 0) body.Children.Add(SettingRows(_document.Program.Select(ProgramStepRow).ToArray()));
+        if (_document.Program.Count > 0)
+        {
+            body.Children.Add(SettingRows(_document.Program.Select(ProgramStepRow).ToArray()));
+            // What the program does after its last step is said where its steps are listed.
+            if (_document.RepeatProgram) body.Children.Add(Note("TrainProgramRepeats"));
+        }
         body.Children.Add(CommandRow(ActionButton("EditInStudio", "EditProgram", () => SelectView("Studio"), "\uE70F")));
         return body;
     }
@@ -94,7 +99,7 @@ public sealed partial class MainWindow
         _programHost = new ContentControl
         {
             IsTabStop = false, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top,
-            Content = BuildProgramBody(TrainProgramView.Of(_document.Program, current.Revision?.Document.Program,
+            Content = BuildProgramBody(TrainProgramView.Of(_document, current.Revision?.Document,
                 current.State == TransportState.Completed))
         };
         var program = Card("TrainProgramTitle", _programHost, "TrainProgramHelp", id: "ProgramCard");

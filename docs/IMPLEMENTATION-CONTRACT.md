@@ -35,8 +35,11 @@ can be added without changing these application-facing types.
 - `SongEntry`: `string Name`, `PulseDocument Document`, `string Notes`.
 - `PulseDocument`: `int SchemaVersion = 1`, `string Name = "Open practice"`,
   `PulseSettings Settings = new()`, `List<RhythmLane> Lanes = []`,
-  `List<ProgramStep> Program = []`, `List<SongEntry> Setlist = []`,
-  `int Seed = 1`.
+  `List<ProgramStep> Program = []`,
+  `bool RepeatProgram = false` (omitted from the file while false: true makes live playback start the program again from its first
+  step after its last, until Stop, with the count-in played once; it means nothing without a program; `ScheduleCompiler` and every
+  export still render one pass),
+  `List<SongEntry> Setlist = []`, `int Seed = 1`.
 - `ScheduledOnset`: `long Frame`, `int LaneIndex` (-1 main click,
   -2 subdivision, >=0 authored lane), `Accent Accent`, `float Gain`,
   `float Pan`, `string Sound`.
@@ -52,7 +55,8 @@ can be added without changing these application-facing types.
 - `ScheduleCompiler.Compile(PulseDocument document, int sampleRate,
   int bars = 16, bool includeCountIn = true)` returns RenderPlan.
   Validate unsupported state with descriptive ArgumentException, never silently
-  drop invalid notes. Program, if present, determines finite duration.
+  drop invalid notes. Program, if present, determines finite duration (a compiled plan is always one pass; live playback of a
+  program with `RepeatProgram` plays that pass again and again).
 - `PcmRenderer.Fill(Span<float> interleaved, RenderPlan plan,
   long startFrame, int channels = 2, float masterGain = 0.5f,
   bool mute = false, bool loop = true)` mixes scheduled events sample-aligned.

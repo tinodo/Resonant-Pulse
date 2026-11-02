@@ -61,6 +61,22 @@ public sealed class TrainProgramViewTests
     }
 
     [TestMethod]
+    public void SwitchingTheRepeatOfAProgramThatPlaysIsAChangeHeardFromTheNextStart()
+    {
+        PulseDocument Document(bool repeat) => new() { Program = [.. Warmup], RepeatProgram = repeat };
+        Assert.AreEqual(ProgramNote.None, TrainProgramView.Of(Document(true), Document(true), runCompleted: false).Note);
+        Assert.AreEqual(ProgramNote.None, TrainProgramView.Of(Document(false), Document(false), runCompleted: false).Note);
+        Assert.AreEqual(ProgramNote.Changed, TrainProgramView.Of(Document(true), Document(false), runCompleted: false).Note, "switched on while it plays");
+        Assert.AreEqual(ProgramNote.Changed, TrainProgramView.Of(Document(false), Document(true), runCompleted: false).Note, "switched off while it plays");
+        Assert.AreEqual(ProgramNote.None, TrainProgramView.Of(Document(true), Document(false), runCompleted: true).Note, "a run that has completed is not playing");
+        Assert.AreEqual(ProgramNote.None, TrainProgramView.Of(Document(true), null, runCompleted: false).Note, "nothing plays");
+        Assert.AreEqual(ProgramNote.None, TrainProgramView.Of(new PulseDocument { RepeatProgram = true }, new PulseDocument(), runCompleted: false).Note,
+            "without a program the switch means nothing");
+        Assert.AreEqual(ProgramNote.Removed, TrainProgramView.Of(new PulseDocument(), Document(true), runCompleted: false).Note);
+        Assert.AreEqual(new TrainProgramView(true, ProgramNote.Changed), TrainProgramView.Of(Document(true), Document(false), runCompleted: false));
+    }
+
+    [TestMethod]
     public void WhenPlayingEndsAProgramThatWasRemovedLeavesTheCard()
     {
         var whilePlaying = TrainProgramView.Of([], Warmup);

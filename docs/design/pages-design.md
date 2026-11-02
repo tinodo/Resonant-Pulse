@@ -241,6 +241,28 @@ is specified in `metronome-design.md` and is not changed here.
   opened Studio in preview.12 found no save button, no play button and nothing that said what the page is for: the one line it
   had named the project and how saving and hearing work, and the only sentence that defines a lane was shown while the project
   had no lane.
+- **Live metronome.** A strip pinned above the page, under the tabs and outside the scrolling area, so the beat stays in view while a
+  lane or a step is edited. (A person who opened Studio in preview.12 saw no metronome on it: the pulse is on Play, and the page that
+  edits the rhythm showed nothing of it.) It shows the tempo and the note unit as the Stage does ("120 BPM · Quarter note · 4/4", or
+  *Silent —* inside a silent gap), a light for each beat of the bar, and, while the metronome plays, *Count-in* or, for a program,
+  "Step 2 of 4: name". It stays on one line: a name may be 256 characters with line breaks, which are shown as spaces, and a name
+  longer than the row is cut with an ellipsis (a screen reader reads all of it), so a name can never make the pinned strip tall. In a
+  silent bar of a project that hides its phase cues in gaps it is empty, as Train hides its program status there. A light is a ring
+  while its beat is not sounding and a filled disc while it is (the first beat of the bar and of
+  each additive group is drawn larger and lit in the accent colour), so the two states differ by more than colour; nothing is lit while
+  nothing plays, after a program has ended, or in a silent bar of a project that hides its phase cues in gaps (*Hide all phase cues in gaps*, on by default,
+  which hides the dial's marker too: a project that shows the cues keeps lighting the beats through a silent bar, as the dial keeps its
+  marker moving, because the person asked to see the time pass while it is silent), and a pause keeps the beat it stopped on. A bar of 13 or
+  more beats (a bar has up to 64) gets small lights, the first beat of the bar or of a group told by a thicker ring, so that the strip, which
+  cannot be scrolled away, takes four rows of lights at most in the narrowest window; a unit test holds that for every bar from 1 to 64 beats,
+  and the verifier measures a bar of 64 beats at 320 DIP wide. The lights follow the meter of the
+  step that plays, wrap under the tempo in a narrow window, and change at the beat; nothing moves, so the reduced-motion preference changes
+  nothing about it. A screen reader reads it on demand as a group named *Live metronome* whose value says the tempo and the beat that is lit
+  ("120 BPM, beat 2 of 4", or "120 BPM, 4 beats in the bar" while nothing sounds); there are no events at the beat rate. Studio is the page
+  that has it, with the automation id `StudioMetronome`: Play, Train and Stage have the dial, and Library and Settings do not play. It costs
+  Studio about 55 DIP of height and 12 DIP of margin (more where the lights wrap). The first-use verifier reads it in every language at the
+  four sizes (there, inside the window, above the header commands and not taller than 130 DIP) and, where an output is selected, that its value
+  shows at least three different beats in four seconds of playing.
 - **Lanes:** one card per lane: name, mute and solo, a *More* menu (rotate, invert, duplicate, remove with a
   confirmation). Three groups: *Rhythm* (the *Beat strength* strip, tap to change as on Play, then clicks per cycle,
   cycle length, start offset), *Sound* (click sound, volume, pan) and *Variation* (chance). *Custom beat positions* is an
@@ -262,7 +284,12 @@ is specified in `metronome-design.md` and is not changed here.
   5 hits as evenly as possible over 8 steps"), a live pattern preview (● ○ ● ● ○ ...; a screen reader hears it as part of
   the preview's name), *Create* and *Cancel*. A blank or fractional box says to enter whole numbers; more hits than steps
   says that.
-- **Program:** a heading (what a program is, with *Add step*), then one card per step: its name with *Move up*, *Move down*
+- **Program:** a heading (what a program is, with *Add step*), then a card with the switch *Repeat the program* (off by default; "On: after
+  its last step the program starts again from the first, until you press Stop. Off: it stops after its last step."; the count-in is played
+  once, before the first pass, a limit of the Timer panel counts through the passes, exports render one pass, and removing the last step turns
+  the switch off so that it is not left on for the next program; it is a project setting, so it is saved with the project and Undo takes it
+  back; Train says under the steps that the program starts again after its last step, and its *Next section* names the first step after the last),
+  then one card per step: its name with *Move up*, *Move down*
   and a *More* menu (copy, remove after a question), then *Tempo* (steady, or from one tempo to another: the choice decides
   which boxes show, so a steady step has one tempo box and a ramp has a start and an end tempo, with one sentence saying
   what the two kinds of ramp mean), *Length* (bars, repeats), *Time signature* (beats and beat note; both are off, with the
