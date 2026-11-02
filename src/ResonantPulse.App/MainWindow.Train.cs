@@ -99,7 +99,7 @@ public sealed partial class MainWindow
         _programHost = new ContentControl
         {
             IsTabStop = false, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top,
-            Content = BuildProgramBody(TrainProgramView.Of(_document.Program, current.Revision?.Document.Program,
+            Content = BuildProgramBody(TrainProgramView.Of(_document, current.Revision?.Document,
                 current.State == TransportState.Completed))
         };
         var program = Card("TrainProgramTitle", _programHost, "TrainProgramHelp", id: "ProgramCard");

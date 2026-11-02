@@ -247,7 +247,12 @@ is specified in `metronome-design.md` and is not changed here.
   *Silent —* inside a silent gap), a light for each beat of the bar, and, while the metronome plays, *Count-in* or, for a program,
   "Step 2 of 4: name". A light is a ring while its beat is not sounding and a filled disc while it is (the first beat of the bar and of
   each additive group is drawn larger and lit in the accent colour), so the two states differ by more than colour; nothing is lit while
-  nothing plays, in a silent gap or after a program has ended, and a pause keeps the beat it stopped on. The lights follow the meter of the
+  nothing plays, after a program has ended, or in a silent bar of a project that hides its phase cues in gaps (*Hide all phase cues in gaps*, on by default,
+  which hides the dial's marker too: a project that shows the cues keeps lighting the beats through a silent bar, as the dial keeps its
+  marker moving, because the person asked to see the time pass while it is silent), and a pause keeps the beat it stopped on. A bar of 13 or
+  more beats (a bar has up to 64) gets small lights, the first beat of the bar or of a group told by a thicker ring, so that the strip, which
+  cannot be scrolled away, takes four rows of lights at most in the narrowest window; a unit test holds that for every bar from 1 to 64 beats,
+  and the verifier measures a bar of 64 beats at 320 DIP wide. The lights follow the meter of the
   step that plays, wrap under the tempo in a narrow window, and change at the beat; nothing moves, so the reduced-motion preference changes
   nothing about it. A screen reader reads it on demand as a group named *Live metronome* whose value says the tempo and the beat that is lit
   ("120 BPM, beat 2 of 4", or "120 BPM, 4 beats in the bar" while nothing sounds); there are no events at the beat rate. Studio is the page

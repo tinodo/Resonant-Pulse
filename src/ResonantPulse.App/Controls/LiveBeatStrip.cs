@@ -16,9 +16,6 @@ namespace ResonantPulse.App.Controls;
 /// </summary>
 public sealed class LiveBeatStrip : Grid
 {
-    private const double BeatSize = 18;
-    private const double EmphasizedSize = 26;
-
     private readonly WrapPanel _layout = new() { HorizontalSpacing = 24, VerticalSpacing = 4 };
     private readonly WrapPanel _lights = new() { HorizontalSpacing = 8, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center };
     private readonly List<Ellipse> _dots = [];
@@ -124,10 +121,16 @@ public sealed class LiveBeatStrip : Grid
         _lit = -1;
         _lights.Children.Clear();
         _dots.Clear();
+        // A long bar gets small lights, so that the strip, which is pinned, takes a few rows of the page at most.
+        var metrics = LightMetrics.For(beats);
+        _lights.HorizontalSpacing = _lights.VerticalSpacing = metrics.Spacing;
         for (var index = 0; index < beats; index++)
         {
-            var size = _emphasized.Contains(index) ? EmphasizedSize : BeatSize;
-            var dot = new Ellipse { Width = size, Height = size, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
+            var emphasized = _emphasized.Contains(index);
+            var size = emphasized ? metrics.EmphasizedSize : metrics.Size;
+            // Where an emphasized light is not larger (a long bar), its ring is thicker.
+            var ring = emphasized && metrics.EmphasizedSize == metrics.Size ? 3.5 : 2;
+            var dot = new Ellipse { Width = size, Height = size, StrokeThickness = ring, VerticalAlignment = VerticalAlignment.Center };
             _dots.Add(dot);
             _lights.Children.Add(dot);
             Paint(index);

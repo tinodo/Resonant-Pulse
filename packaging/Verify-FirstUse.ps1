@@ -673,6 +673,21 @@ $lastPulse = Find-Control 'MainAccent63'
 if ($lastPulse.Current.IsOffscreen -or $lastPulse.Current.BoundingRectangle.Height -lt 50) {
     throw 'The last beat is not fully reachable in the bounded strip.'
 }
+# The metronome pinned to the top of Studio with the longest bar there is (64 beats): its lights are small from 13 beats and wrap, so that the
+# strip, which cannot be scrolled away, never takes the page from a person who edits. It is read in the narrowest window, where the lights wrap
+# most (a page is chosen in a wide window first: a narrow one folds the pages that are not selected into the navigation's menu).
+Select-Destination 'DestinationStudio'
+Wait-Settled 'AddLane'
+Resize-To 320 900
+Start-Sleep -Milliseconds 700
+$longBarStrip = (Find-Control 'StudioMetronome').Current.BoundingRectangle.Height / $scale
+$window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
+Start-Sleep -Milliseconds 700
+Select-Destination 'DestinationPlay'
+Wait-Settled 'QuickMeter'
+if ($longBarStrip -gt 130) {
+    throw "Studio: the pinned metronome is $([Math]::Round($longBarStrip, 1)) DIP tall with a bar of 64 beats at 320 DIP wide: its lights take too many rows."
+}
 Select-Meter '4_4' '4/4'
 $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern).Resize($bounds.Width, $bounds.Height)
 foreach ($size in @(@(400, 720), @(320, 900))) {

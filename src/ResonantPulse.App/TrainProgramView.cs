@@ -41,6 +41,21 @@ internal readonly record struct TrainProgramView(bool Readouts, ProgramNote Note
         Of(edited, runCompleted ? null : retained);
 
     /// <summary>
+    /// The same, for the documents themselves. Besides its steps, whether the program repeats is part of what plays, so a switch that
+    /// Studio makes while a program plays is a change like one of a step: it is heard from the next Start, and the card says so.
+    /// Without a program the switch means nothing.
+    /// </summary>
+    public static TrainProgramView Of(PulseDocument edited, PulseDocument? retained, bool runCompleted)
+    {
+        var playing = runCompleted ? null : retained;
+        var readouts = edited.Program.Count > 0 || playing is { Program.Count: > 0 };
+        var same = playing is not null && playing.Program.SequenceEqual(edited.Program) &&
+            (edited.Program.Count == 0 || playing.RepeatProgram == edited.RepeatProgram);
+        var note = playing is null || same ? ProgramNote.None : edited.Program.Count == 0 ? ProgramNote.Removed : ProgramNote.Changed;
+        return new(readouts, note);
+    }
+
+    /// <summary>
     /// A completed run keeps its plan until Stop. When the program it played is not the one in the project (Studio changed it
     /// meanwhile), that plan says nothing about the steps listed beside it, so the card's status, progress and chart go back to
     /// the project's own program, idle, as after Stop. A finished run of the program that is still in the project keeps its

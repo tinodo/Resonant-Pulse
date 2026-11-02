@@ -21,7 +21,7 @@ public sealed partial class MainWindow
         // the timing check with the choices made in it, is left alone.
         if (_view == "Train" && _programHost is not null)
         {
-            var view = TrainProgramView.Of(_document.Program, snapshot.Revision?.Document.Program,
+            var view = TrainProgramView.Of(_document, snapshot.Revision?.Document,
                 snapshot.State == TransportState.Completed);
             if (view != _trainProgramView) _programHost.Content = BuildProgramBody(view);
         }

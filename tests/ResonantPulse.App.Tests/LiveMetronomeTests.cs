@@ -9,13 +9,35 @@ namespace ResonantPulse.App.Tests;
 public sealed class LiveMetronomeTests
 {
     [TestMethod]
-    public void TheBeatThatSoundsIsLitAndNothingIsLitWhileNothingPlays()
+    public void TheBeatThatSoundsIsLitAndNothingIsLitWhileNothingPlaysOrTheCuesAreHidden()
     {
-        Assert.AreEqual(2, LiveMetronome.LitBeat(plays: true, silentGap: false, beatIndex: 2, beats: 4));
+        Assert.AreEqual(2, LiveMetronome.LitBeat(plays: true, cuesHidden: false, beatIndex: 2, beats: 4));
         Assert.AreEqual(0, LiveMetronome.LitBeat(true, false, 0, 4));
-        Assert.AreEqual(-1, LiveMetronome.LitBeat(plays: false, silentGap: false, beatIndex: 2, beats: 4), "stopped or finished");
-        Assert.AreEqual(-1, LiveMetronome.LitBeat(plays: true, silentGap: true, beatIndex: 2, beats: 4), "a silent gap makes no sound");
+        Assert.AreEqual(-1, LiveMetronome.LitBeat(plays: false, cuesHidden: false, beatIndex: 2, beats: 4), "stopped or finished");
+        Assert.AreEqual(-1, LiveMetronome.LitBeat(plays: true, cuesHidden: true, beatIndex: 2, beats: 4),
+            "a silent bar of a project that hides its phase cues in gaps shows no beat, as the dial does");
         Assert.AreEqual(-1, LiveMetronome.LitBeat(true, false, 0, 0), "a meter without beats");
+    }
+
+    [TestMethod]
+    public void ALongBarGetsSmallLightsSoThePinnedStripTakesAFewRowsAtMost()
+    {
+        // The strip is pinned above the page, so however many beats a bar has (up to 64) its lights must not take the page. The worst case
+        // is a bar in which every beat begins an additive group, in the narrowest window, which leaves about 280 DIP for the lights.
+        for (var beats = 1; beats <= 64; beats++)
+        {
+            var emphasized = LiveMetronome.Emphasized(beats, Enumerable.Repeat(1, beats).ToArray());
+            var height = LightMetrics.For(beats).Height(beats, emphasized, 280);
+            Assert.IsTrue(height <= 64, $"{beats} beats take {height} DIP of the page");
+        }
+        Assert.AreEqual(18d, LightMetrics.For(12).Size, "a bar of 12/8 is still drawn in full size");
+        Assert.AreEqual(26d, LightMetrics.For(4).EmphasizedSize);
+        Assert.AreEqual(10d, LightMetrics.For(LightMetrics.CompactFrom).Size);
+        Assert.AreEqual(LightMetrics.For(64).Size, LightMetrics.For(64).EmphasizedSize, "where lights are small the first of a group is told by its ring");
+        // One row in a wide window, and the height of one light when everything fits.
+        Assert.AreEqual(18d, LightMetrics.For(4).Height(4, LiveMetronome.Emphasized(4, []).Where(index => index != 0).ToHashSet(), 900));
+        Assert.AreEqual(26d, LightMetrics.For(4).Height(4, LiveMetronome.Emphasized(4, []), 900));
+        Assert.AreEqual(0d, LightMetrics.For(0).Height(0, new HashSet<int>(), 280));
     }
 
     [TestMethod]
