@@ -201,6 +201,38 @@ $cases = @(
     @{ Name = 'a refresh to a page that is there'; Expect = 'accepted'; Change = {
             Add-ToHome '<meta http-equiv="refresh" content="0; url=privacy.html">'
         } }
+    @{ Name = 'a refresh whose address holds a semicolon'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=privacy.html;missing">'
+        } }
+    @{ Name = 'a refresh with a quoted address'; Expect = 'accepted'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=''privacy.html''">'
+        } }
+    @{ Name = 'a refresh without url= and with a comma'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0, missing.html">'
+        } }
+    @{ Name = 'a refresh of the same page'; Expect = 'accepted'; Change = { Add-ToHome '<meta http-equiv="refresh" content="30">' } }
+    @{ Name = 'a quoted comment marker in an attribute, then a link to nothing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<a title="<!--" href="missing.html" data-end="-->">x</a>'
+        } }
+    @{ Name = 'a canonical address with its href twice'; Expect = 'times'; Change = {
+            Add-ToHome '<link rel="canonical" href="https://example.com/" href="https://tinodo.github.io/Resonant-Pulse/">'
+        } }
+    @{ Name = 'a link with its rel twice'; Expect = 'times'; Change = {
+            Add-ToHome '<link rel="stylesheet" rel="canonical" href="https://example.com/">'
+        } }
+    @{ Name = 'a preview address with its property twice'; Expect = 'times'; Change = {
+            Add-ToHome '<meta property="og:title" property="og:image" content="https://example.com/x.png">'
+        } }
+    @{ Name = 'a canonical address among other words of rel'; Expect = 'does not point at'; Change = {
+            Add-ToHome '<link rel="alternate canonical" href="https://example.com/">'
+        } }
+    @{ Name = 'a style block that is commented out'; Expect = 'accepted'; Change = {
+            Add-ToHome '<!-- <style>.a { background: url(missing.png); }</style> -->'
+        } }
+    @{ Name = 'a comment inside a style block, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<style><!-- .a { background: url(missing.png); } --></style>'
+        } }
+    @{ Name = 'a link to the top of the page'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="#top">a</a> <a href="#TOP">b</a> <a href="privacy.html#top">c</a> <a href="#">d</a></p>' } }
     @{ Name = 'an SVG link to a file that is not there'; Expect = 'points at nothing'; Change = {
             Add-ToHome '<svg><use xlink:href="missing.svg#a"/></svg>'
         } }

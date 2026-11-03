@@ -373,6 +373,12 @@ Add-Case @{ Name = 'a file that a path written one piece at a time includes, the
 Add-Case @{ Name = 'text on both sides of a comment, with and without a space'; Expect = 'different'
     Release = { Add-ToProject $project '<PropertyGroup><DefineConstants>FOO<!-- c -->BAR</DefineConstants></PropertyGroup>' }
     Change = { Add-ToProject $project '<PropertyGroup><DefineConstants>FOO<!-- c --> BAR</DefineConstants></PropertyGroup>' } }
+Add-Case @{ Name = 'text beside a child element, with and without a space'; Expect = 'different'
+    Release = { Add-ToProject $project '<PropertyGroup><DefineConstants>FOO <X/>BAR</DefineConstants></PropertyGroup>' }
+    Change = { Add-ToProject $project '<PropertyGroup><DefineConstants>FOO<X/>BAR</DefineConstants></PropertyGroup>' } }
+Add-Case @{ Name = 'text beside a processing instruction, checked against itself'; Expect = 'different'; Self = $true; Change = {
+        Add-ToProject $project '<PropertyGroup><DefineConstants>FOO<?x y?> BAR</DefineConstants></PropertyGroup>'
+    } }
 # The three files that the comparison leaves out are left out in the library's own folder only.
 foreach ($name in 'ResonantPulse.Core.csproj', 'README.md', 'packages.lock.json') {
     $releaseBlock = [scriptblock]::Create("Write-Text '$library/Sub/$name' 'one'")

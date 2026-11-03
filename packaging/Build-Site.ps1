@@ -88,12 +88,14 @@ $attributePattern = '\s(?<name>[^\s"''<>/=]+)(?<rest>\s*=\s*(?:"[^"]*"|''[^'']*'
 # The attributes that the checks read. They read them written name="value" and in no other way, so any other way is refused.
 $readAttributes = @('href', 'src', 'srcset', 'imagesrcset', 'poster', 'data', 'action', 'formaction', 'background', 'content', 'http-equiv', 'alt', 'lang', 'id', 'rel', 'property', 'name', 'style')
 
-# The tags of a page (a commented-out tag is not one) with their attributes, read one by one, as a browser does: the name in lower case, the
-# text of the attribute, and its value when it is written name="value" (WellFormed), the only form that the checks read. Left is what stands in
-# the tag besides its name and its attributes, which should be nothing: an attribute that follows a closing quote without a space
-# (<a class="x"href="y">) is read by a browser and not by the checks.
+# The tags of a page with their attributes, read one by one, as a browser does: the name in lower case, the text of the attribute, and its
+# value when it is written name="value" (WellFormed), the only form that the checks read. A comment is recognised where a browser does, outside
+# a tag (<!-- inside a quoted value is text), and a commented-out tag is not one. Left is what stands in the tag besides its name and its
+# attributes, which should be nothing: an attribute that follows a closing quote without a space (<a class="x"href="y">) is read by a browser
+# and not by the checks.
 function Get-Tags([string]$Text) {
-    foreach ($match in [regex]::Matches([regex]::Replace($Text, '(?s)<!--.*?-->', ''), $tagPattern)) {
+    foreach ($match in [regex]::Matches($Text, "(?s)<!--.*?-->|$tagPattern")) {
+        if ($match.Value.StartsWith('<!--')) { continue }
         $body = $match.Value -replace '^<[a-zA-Z][^\s/>]*', ''
         $attributes = @(foreach ($attribute in [regex]::Matches($body, $attributePattern)) {
             $quoted = [regex]::Match($attribute.Groups['rest'].Value, '^="([^"]*)"$')
@@ -135,7 +137,8 @@ function Test-Reference([string]$Where, [string]$Label, [string]$Raw, [string]$F
     if ($value.Contains('#')) { $fragment = $value.Substring($value.IndexOf('#') + 1); $value = $value.Substring(0, $value.IndexOf('#')) }
     if ($value.Contains('?')) { $value = $value.Substring(0, $value.IndexOf('?')) }
     if ($value -eq '' -and $fragment -and -not $fromRoot) {
-        if ($PageIds -cnotcontains $fragment) { Fail "${Where}: the link #$fragment has no target." }
+        # (#top, in any letter case, is the top of the page whether or not an id says so.)
+        if ($PageIds -cnotcontains $fragment -and $fragment -ne 'top') { Fail "${Where}: the link #$fragment has no target." }
         return
     }
     $value = [System.Uri]::UnescapeDataString($value)
@@ -150,15 +153,18 @@ function Test-Reference([string]$Where, [string]$Label, [string]$Raw, [string]$F
     if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { Fail "${Where}: $Label='$Raw' points at nothing."; return }
     if ($fragment -and $target.EndsWith('.html')) {
         $targetIds = @(Get-PageIds ([System.IO.File]::ReadAllText($target)))
-        if ($targetIds -cnotcontains $fragment) { Fail "${Where}: $Label='$Raw' has no #$fragment in its target." }
+        if ($targetIds -cnotcontains $fragment -and $fragment -ne 'top') { Fail "${Where}: $Label='$Raw' has no #$fragment in its target." }
     }
 }
 
 # The addresses that a search engine or a social card takes from a page must be those of this site, not of some other one.
 function Test-SharedAddress([string]$Where, $Tag) {
     $values = @{}
+    # (Two attributes of one name are refused where the tags are read: a browser keeps the first and the checks read both.)
     foreach ($attribute in $Tag.Attributes) { if ($attribute.WellFormed) { $values[$attribute.Name] = $attribute.Value } }
-    if ($values['rel'] -ne 'canonical' -and $values['property'] -notin 'og:url', 'og:image' -and $values['name'] -ne 'twitter:image') { return }
+    # The rel attribute is a list of words: <link rel="alternate canonical"> is a canonical address too.
+    $canonical = @($values['rel'] -split '\s+') -contains 'canonical'
+    if (-not $canonical -and $values['property'] -notin 'og:url', 'og:image' -and $values['name'] -ne 'twitter:image') { return }
     $address = if ($values.ContainsKey('href')) { $values['href'] } elseif ($values.ContainsKey('content')) { $values['content'] } else { $null }
     if ($null -eq $address -or -not $address.StartsWith($PublicBase)) { Fail "${Where}: $($Tag.Text) does not point at $PublicBase." }
 }
@@ -270,6 +276,12 @@ foreach ($page in $pages) {
     $tags = @(Get-Tags $text)
     $ids = @($tags | ForEach-Object { $_.Attributes } | Where-Object { $_.Name -eq 'id' -and $_.WellFormed } | ForEach-Object { $_.Value })
     foreach ($tag in $tags) {
+        # A browser keeps the first of two attributes of one name, and the checks below read them all: refused.
+        foreach ($group in @($tag.Attributes | Group-Object -Property Name)) {
+            if ($group.Count -gt 1 -and $readAttributes -contains ($group.Name -replace '^.*:', '')) {
+                Fail "${relative}: $($tag.Text) has the attribute '$($group.Name)' $($group.Count) times, which a browser reads once and the checks do not."
+            }
+        }
         foreach ($attribute in $tag.Attributes) {
             # A namespace prefix does not make another attribute: xlink:href is an href.
             $name = $attribute.Name -replace '^.*:', ''
@@ -291,10 +303,11 @@ foreach ($page in $pages) {
             }
             elseif ($name -eq 'content') {
                 if ($value.StartsWith($PublicBase)) { Test-Reference $relative 'content' $value $page.DirectoryName $ids }
-                # <meta http-equiv="refresh" content="0; url=page.html">: the address after url= is a link.
+                # <meta http-equiv="refresh" content="0; url=page.html">: after the delay, the rest is a link (url= is optional), to the end of the
+                # text (a semicolon is part of it) or to the closing quote.
                 elseif ($tag.Name -eq 'meta' -and @($tag.Attributes | Where-Object { $_.Name -eq 'http-equiv' -and $_.Value -eq 'refresh' }).Count -gt 0) {
-                    $refresh = [regex]::Match($value, '(?i);\s*url\s*=\s*[''"]?(?<address>[^''";]+)')
-                    if ($refresh.Success) { Test-Reference $relative 'refresh' $refresh.Groups['address'].Value $page.DirectoryName $ids }
+                    $refresh = [regex]::Match($value, '(?i)^\s*[\d.]+\s*[;,]?\s*(?:url\s*=\s*)?(?:"(?<address>[^"]*)"|''(?<address>[^'']*)''|(?<address>.*))$')
+                    if ($refresh.Success -and $refresh.Groups['address'].Value.Trim()) { Test-Reference $relative 'refresh' $refresh.Groups['address'].Value $page.DirectoryName $ids }
                 }
             }
             # A style attribute is an attribute value, with its character references; a style block (below) is text that a browser does not decode.
@@ -306,7 +319,12 @@ foreach ($page in $pages) {
         }
         if ($tag.Name -in 'link', 'meta') { Test-SharedAddress $relative $tag }
     }
-    foreach ($style in [regex]::Matches($text, "(?is)<style\b$tagBody>(?<css>.*?)</style>")) { Test-StyleUrls $relative $style.Groups['css'].Value $page.DirectoryName $ids }
+    # A style block is text that a browser does not decode. A comment is recognised outside a style block only, and a style block holds its own
+    # comments (<style><!-- ... --></style>).
+    foreach ($style in [regex]::Matches($text, "(?is)<!--.*?-->|<style\b$tagBody>(?<css>.*?)</style>")) {
+        if (-not $style.Groups['css'].Success) { continue }
+        Test-StyleUrls $relative $style.Groups['css'].Value $page.DirectoryName $ids
+    }
 }
 
 foreach ($style in @(Get-ChildItem -LiteralPath $Output -Filter '*.css' -File -Recurse)) {

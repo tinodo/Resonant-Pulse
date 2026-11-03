@@ -34,7 +34,8 @@
       * a package reference (the library has no package dependencies, and a package that restore resolves is code that is not among the
         compared files), and a name or a wildcard that could take in a file that this check leaves out of the comparison (README.md, the
         lock file, the project file, all in the library's own folder), which would then be a build input that nobody compares;
-      * a CDATA section, which MSBuild reads in a way that this check does not follow, and a symbolic link or a submodule among the
+      * a CDATA section, which MSBuild reads in a way that this check does not follow, text beside markup (a child element, a processing
+        instruction), which MSBuild reads as literal markup, and a symbolic link or a submodule among the
         library's files, which are compared by their entries and not by what they point at. (Text that a comment splits is read joined,
         as MSBuild joins it: $<!---->(OS) is read as $(OS).)
       * TreatAsLocalProperty, which lets a project override the properties given on the command line: the package is made with
@@ -138,6 +139,11 @@ function Find-UnreadReferences($Root, [string] $Name) {
         # it reads a CDATA section in a way that this check does not follow.
         if (@($element.ChildNodes | Where-Object { $_.NodeType -eq 'CDATA' }).Count -gt 0) {
             "$Name has a CDATA section in <$($element.LocalName)>, which MSBuild reads in a way that this check does not follow"
+        }
+        # Text beside markup (a child element, a processing instruction) is read by MSBuild as literal markup, spaces and all.
+        if (@($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'SignificantWhitespace' -and $_.Value.Trim() }).Count -gt 0 -and
+            @($element.ChildNodes | Where-Object { $_.NodeType -in 'Element', 'ProcessingInstruction', 'EntityReference' }).Count -gt 0) {
+            "$Name has text and markup together in <$($element.LocalName)>, which MSBuild reads as literal markup and this check does not follow"
         }
         $content = -join @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA', 'SignificantWhitespace', 'Whitespace' } | ForEach-Object { $_.Value })
         $values = @($element.Attributes | ForEach-Object { [pscustomobject] @{ Text = $_.Value; IsContent = $false } }) +
