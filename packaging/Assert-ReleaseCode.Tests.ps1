@@ -271,6 +271,14 @@ $unread = [ordered] @{
     'a default that the environment can override' = {
         Add-ToProject $project "<PropertyGroup><Flag Condition=`"'`$(Flag)' == ''`">x</Flag></PropertyGroup>"
     }
+    'a method called on a property that the project defines' = {
+        Add-ToProject $project "<PropertyGroup><ExternalPath>__/Shared/Other.cs</ExternalPath></PropertyGroup><ItemGroup><Compile Include=`"`$(ExternalPath.Replace('_','.'))`" /></ItemGroup>"
+    }
+    'an item list named like a property that may be read' = { Add-ToProject $project "<PropertyGroup><Extra>@(NoWarn)</Extra></PropertyGroup>" }
+    'item metadata named like a property that may be read' = { Add-ToProject $project "<ItemGroup><Compile Update=`"x.cs`" Link=`"%(NoWarn)`" /></ItemGroup>" }
+    'a property that is defined only inside a Choose, read outside it' = {
+        Add-ToProject $project "<Choose><When Condition=`"'`$(Configuration)' == 'Debug'`"><PropertyGroup><Flag>x</Flag></PropertyGroup></When></Choose><PropertyGroup Condition=`"'`$(Flag)' == 'x'`"><DefineConstants>Y</DefineConstants></PropertyGroup>"
+    }
     'a project with a project reference' = { Add-ToProject $project '<ItemGroup><ProjectReference Include="Other.csproj" /></ItemGroup>' }
     'a project that includes a file of another folder' = { Add-ToProject $project '<ItemGroup><Compile Include="..\Shared\Extra.cs" /></ItemGroup>' }
     'a property that points outside the library folder' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<ApplicationIcon>../../assets/x.ico</ApplicationIcon>' }

@@ -110,8 +110,10 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   reference, a path outside its own folder (also a rooted one, in a value or in a condition), a condition on the file system, a property
   function, an escaped character, `TreatAsLocalProperty` (which lets a project override the version that the package is made with), a
   read of one of the package properties that the comparison leaves out, or a read of anything that the project's files do not define
-  without a condition (an environment variable, the operating system, a reserved property, an item list or item metadata: only
-  `NoWarn`, `DefineConstants`, `Version` and `Configuration` are given by the pipeline). When the candidate is the release's own commit
+  at the top level without a condition (an environment variable, the operating system, a reserved property, an item list or item
+  metadata: only `NoWarn`, `DefineConstants`, `Version` and `Configuration` are given by the pipeline; only a plain `$(Name)` is
+  understood, so a method called on a property, `%(Metadata)` and `@(Items)` are refused whatever their names). When the candidate is
+  the release's own commit
   (as it is when `release.yml` calls the workflow) nothing is compared. The package itself is made by
   the candidate's own `Build-NuGetPackage.ps1`, which gives the version and the configuration and nothing else; that script is part of
   the reviewed pipeline and is not compared (the tagged commit does not have it).
@@ -119,11 +121,13 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   every build. The workflow then runs the engine's tests, packs and checks the package, and hands it to a second job, the only one with
   `packages: write`, which has no checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never
   overwritten.
-- GitHub publishes the first version of a package as private and has no API to change that. Once, after the first push: open the
-  package (<https://github.com/tinodo?tab=packages&repo_name=Resonant-Pulse>), Package settings, Danger Zone, Change visibility,
-  Public. That cannot be undone, so it is the owner's decision; the summary of the run says whether the package is public. Restoring
-  any NuGet package from GitHub Packages, a public one too, needs a personal access token with `read:packages`
-  ([README](../README.md#using-resonantpulsecore)).
+- Visibility: the first version, 1.0.0, came out public when `package.yml` pushed it on 3 November 2026 (a package pushed from a
+  workflow of a public repository takes the repository's visibility; the page
+  <https://github.com/tinodo/Resonant-Pulse/pkgs/nuget/ResonantPulse.Core> answers 200 to an anonymous request). The tuner's first version
+  came out private, so the summary of the run says whether the package is public. If one ever is not: GitHub has no API to change it, so
+  open the package (<https://github.com/tinodo?tab=packages&repo_name=Resonant-Pulse>), Package settings, Danger Zone, Change visibility,
+  Public. That cannot be undone, so it is the owner's decision. Restoring any NuGet package from GitHub Packages, a public one too,
+  needs a personal access token with `read:packages` ([README](../README.md#using-resonantpulsecore)).
 
 ## Website
 

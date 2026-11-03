@@ -23,9 +23,11 @@
       * a path outside the library's folder (with .., rooted, wherever it stands, or made from the project's or the solution's directory),
         a condition that looks at the file system (Exists, HasTrailingSlash), a property function, $([...]), which can read any file, or an
         escaped character (%2E), which can hide any of these;
-      * a read of anything that neither the compared files define unconditionally nor the pipeline gives: an environment variable, the
-        operating system, a reserved property, an item list, item metadata. Only the properties that the files themselves define, and
-        NoWarn, DefineConstants, Version and Configuration, may be read. (That a definition comes before the read is not checked);
+      * a read of anything that neither the compared files define unconditionally (at the top level, not under a condition or inside
+        Choose) nor the pipeline gives: an environment variable, the operating system, a reserved property, an item list, item metadata.
+        Only a plain $(Name) is understood, and only the properties that the files themselves define, and NoWarn, DefineConstants,
+        Version and Configuration, may be read that way; $(Name.Method()), %(Metadata) and @(Items) are refused whatever their names.
+        (That a definition comes before the read is not checked);
       * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison;
       * TreatAsLocalProperty, which lets a project override the properties given on the command line: the package is made with
         -p:Version, so the version can be left out of the comparison and read freely only while nothing can override it.
@@ -84,8 +86,10 @@ $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path t
 $packageProperty = '[$%@]\((' + (($permittedProperties | Where-Object { $_ -ne 'Version' }) -join '|') + ')\b'
 # An escaped character (%2E, %24) can write any of the characters above without them showing.
 $escapedCharacter = '%[0-9A-Fa-f]{2}'
-# What a value or a condition reads: $(Name), %(Name), @(Name). Only these may be read; the files' own unconditional definitions are added.
-$readPattern = '[$%@]\(\s*([A-Za-z_][\w\-]*)'
+# What a value or a condition reads. Only a plain $(Name) is understood: the files' own unconditional definitions, and the properties that
+# the pipeline gives, may be read that way. Anything else that starts an expression, $(Name.Method()), %(Metadata), @(Items), is refused.
+$plainRead = '\$\(([A-Za-z_][\w\-]*)\)'
+$expression = '[$%@]\('
 $allowedReads = @('NoWarn', 'DefineConstants', 'Version', 'Configuration')
 $defined = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $reads = [System.Collections.Generic.List[object]]::new()
@@ -129,8 +133,11 @@ function Find-UnreadReferences($Root, [string] $Name) {
             if ($value -match $escapedCharacter) {
                 "$Name has '$($value.Trim())' in <$($element.LocalName)>, an escaped character, which can hide what this check looks for"
             }
-            foreach ($read in [regex]::Matches($value, $readPattern)) {
+            foreach ($read in [regex]::Matches($value, $plainRead)) {
                 $script:reads.Add([pscustomobject] @{ Where = $Name; Name = $read.Groups[1].Value; Token = $read.Value; Element = $element.LocalName })
+            }
+            if ([regex]::Replace($value, $plainRead, '') -match $expression) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, an expression, item list or item metadata (not a plain `$(Name)), which this check does not evaluate"
             }
         }
     }
@@ -178,8 +185,9 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
         if (-not $group.HasChildNodes) { [void] $root.RemoveChild($group) }
     }
     foreach ($reference in @(Find-UnreadReferences $root $Name)) { $script:unreadReferences.Add($reference) }
-    # A property that a file defines with no condition has the value that it says, whatever the environment: it may be read.
-    foreach ($property in @($root.SelectNodes("//*[local-name()='PropertyGroup'][not(@Condition)]/*[not(@Condition)]"))) { [void] $script:defined.Add($property.LocalName) }
+    # A property that a file defines at the top level with no condition has the value that it says, whatever the environment: it may be read.
+    # (A definition inside Choose, When or Otherwise is under a condition, even if no Condition attribute says so.)
+    foreach ($property in @($root.SelectNodes("*[local-name()='PropertyGroup'][not(@Condition)]/*[not(@Condition)]"))) { [void] $script:defined.Add($property.LocalName) }
 
     $lines = [System.Collections.Generic.List[string]]::new()
     Write-CanonicalElement $root 0 $lines

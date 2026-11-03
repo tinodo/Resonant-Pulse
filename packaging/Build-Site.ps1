@@ -123,10 +123,37 @@ function Test-SharedAddress([string]$Where, [string]$Tag) {
     if (-not $address.Success -or -not $address.Groups[1].Value.StartsWith($PublicBase)) { Fail "${Where}: $Tag does not point at $PublicBase." }
 }
 
+# Style text without its comments. A comment starts with /* and ends with */, unless the two characters are inside a string ("/*" is text).
+function Remove-CssComments([string]$Css) {
+    $out = [System.Text.StringBuilder]::new()
+    $i = 0
+    while ($i -lt $Css.Length) {
+        $c = $Css[$i]
+        if ($c -eq '"' -or $c -eq "'") {
+            [void]$out.Append($c)
+            $i++
+            while ($i -lt $Css.Length) {
+                $d = $Css[$i]
+                [void]$out.Append($d)
+                $i++
+                if ($d -eq '\' -and $i -lt $Css.Length) { [void]$out.Append($Css[$i]); $i++ }
+                elseif ($d -eq $c) { break }
+            }
+        }
+        elseif ($c -eq '/' -and $i + 1 -lt $Css.Length -and $Css[$i + 1] -eq '*') {
+            $end = $Css.IndexOf('*/', $i + 2, [System.StringComparison]::Ordinal)
+            $i = if ($end -lt 0) { $Css.Length } else { $end + 2 }
+            [void]$out.Append(' ')
+        }
+        else { [void]$out.Append($c); $i++ }
+    }
+    $out.ToString()
+}
+
 # url(...) and @import in style text: a style sheet, a style block or a style attribute. Comments are left out, and so is text on a page that
 # is not style (a code sample that shows a url() is not a reference).
 function Test-StyleUrls([string]$Where, [string]$Css, [string]$FromDirectory, [string[]]$PageIds) {
-    $css = [regex]::Replace($Css, '(?s)/\*.*?\*/', '')
+    $css = Remove-CssComments $Css
     foreach ($url in [regex]::Matches($css, 'url\(\s*["'']?(?<value>[^)"'']*)["'']?\s*\)')) {
         $value = $url.Groups['value'].Value.Trim()
         if ($value -and -not $value.StartsWith('#')) { Test-Reference $Where 'url()' $value $FromDirectory $PageIds }
@@ -148,10 +175,11 @@ foreach ($page in $pages) {
         if ($image.Value -notmatch '\salt="') { Fail "${relative}: a picture has no alt text: $($image.Value.Substring(0, [Math]::Min(80, $image.Value.Length)))" }
     }
     $ids = @([regex]::Matches($text, '\sid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
-    # The checks read attributes in double quotes only: an attribute in single quotes, or in none, would be passed over without a word.
+    # The checks read attributes written name="value" only: an attribute in single quotes, in none, or with spaces around the equals sign
+    # would be passed over without a word.
     foreach ($tag in [regex]::Matches($text, '<[a-zA-Z][^>]*>')) {
-        if ($tag.Value -match '\s(?:href|src|srcset|content|alt|lang|id|rel|property|name)\s*=\s*(?:''|[^"''\s>])') {
-            Fail "${relative}: $($tag.Value) has an attribute that is not in double quotes, and the checks read double quotes only."
+        if ($tag.Value -match '\s(?:href|src|srcset|content|alt|lang|id|rel|property|name|style)(?!=")\s*=') {
+            Fail "${relative}: $($tag.Value) has an attribute that is not written name=""value"" (no single quotes, no spaces around the equals sign), and the checks read that form only."
         }
     }
     foreach ($tag in [regex]::Matches($text, '<(?:link|meta)\b[^>]*>')) { Test-SharedAddress $relative $tag.Value }

@@ -91,9 +91,23 @@ $cases = @(
     @{ Name = 'a style sheet that imports a style sheet that is not there'; Expect = 'points at nothing'; Change = {
             Edit-Site 'assets/site.css' '.wrap {' '@import "missing.css"; .wrap {'
         } }
-    @{ Name = 'a link in single quotes'; Expect = 'not in double quotes'; Change = { Add-ToHome "<p><a href='nowhere.html'>x</a></p>" } }
-    @{ Name = 'a link without quotes'; Expect = 'not in double quotes'; Change = { Add-ToHome '<p><a href=nowhere.html>x</a></p>' } }
-    @{ Name = 'a preview address in single quotes'; Expect = 'not in double quotes'; Change = {
+    @{ Name = 'a link in single quotes'; Expect = 'not written name='; Change = { Add-ToHome "<p><a href='nowhere.html'>x</a></p>" } }
+    @{ Name = 'a link without quotes'; Expect = 'not written name='; Change = { Add-ToHome '<p><a href=nowhere.html>x</a></p>' } }
+    @{ Name = 'a link with spaces around the equals sign'; Expect = 'not written name='; Change = { Add-ToHome '<p><a href = "nowhere.html">x</a></p>' } }
+    @{ Name = 'a style attribute in single quotes'; Expect = 'not written name='; Change = { Add-ToHome "<p style='background: url(missing.png)'>x</p>" } }
+    @{ Name = 'a style attribute with spaces around the equals sign'; Expect = 'not written name='; Change = {
+            Add-ToHome '<p style = "background: url(missing.png)">x</p>'
+        } }
+    @{ Name = 'comment delimiters inside strings of a style sheet, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.a::before { content: "/*"; } .b { background: url(missing.png); } .c::after { content: "*/"; } .wrap {'
+        } }
+    @{ Name = 'an apostrophe in a comment of a style sheet, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' "/* it's a note */ .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a comment in a style sheet that holds a string and a url() to nothing'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '/* was: "x" and url(old.png) */ .wrap {'
+        } }
+    @{ Name = 'a preview address in single quotes'; Expect = 'not written name='; Change = {
             Add-ToHome "<meta property='og:image' content='https://example.com/x.png'>"
         } }
     @{ Name = 'a percent-encoded link to a file that exists'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="screenshots/01%2Dplay.png">x</a></p>' } }

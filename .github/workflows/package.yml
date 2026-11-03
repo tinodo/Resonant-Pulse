@@ -164,10 +164,10 @@ jobs:
           }
           if ($visibilityKnown -and -not $public) {
             $lines += '- To list it on the repository page: open the package, then Package settings, Danger Zone, Change visibility, Public. GitHub has no API for this and it cannot be undone.'
-            Write-Host '::notice title=Make ResonantPulse.Core public::GitHub publishes the first version of a package as private and has no API to change that. To list it on the repository page: open the package, then Package settings, Danger Zone, Change visibility, Public. This cannot be undone.'
+            Write-Host '::notice title=ResonantPulse.Core is private::The package is not public, and GitHub has no API to change that. To list it on the repository page: open the package, then Package settings, Danger Zone, Change visibility, Public. This cannot be undone.'
           }
           elseif (-not $visibilityKnown) {
-            $lines += '- If the package is private: open it, then Package settings, Danger Zone, Change visibility, Public (GitHub publishes the first version of a package as private, has no API to change that, and the change cannot be undone).'
+            $lines += '- If the package is private: open it, then Package settings, Danger Zone, Change visibility, Public (GitHub has no API for this, and the change cannot be undone).'
           }
           $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           exit 0
