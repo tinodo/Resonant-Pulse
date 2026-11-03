@@ -83,6 +83,52 @@ review conversations must still be resolved before merge. `Copilot review
 completion` is a required branch-protection check, verified end to end in hosted
 run 40223399203 without an owner credential.
 
+## GitHub Package
+
+The engine (`src/ResonantPulse.Core`: no user interface, no package dependencies) is also published as the NuGet package
+`ResonantPulse.Core` on GitHub Packages (`https://nuget.pkg.github.com/tinodo/index.json`), as the Resonant tuner publishes
+`Resonant.Core`. The package version is the version of a release: release 1.0.0 is package 1.0.0, and a pre-release 1.1.0-preview.1 is
+package 1.1.0-preview.1. The library is the application's engine and is versioned with it; the package promises no stable API.
+
+- `packaging/Build-NuGetPackage.ps1` packs it and checks it before anything can publish it. The package holds exactly the expected
+  files; its nuspec names the id, the version, the MIT license, the readme, the repository and the commit it was built from; it has no
+  dependencies; and a stand-alone project (`packaging/nuget/Consumer`, copied out of the repository) restores the package from a local
+  folder as its only source, checks that the assembly it runs is byte for byte the one in the package, and runs the quick start of the
+  package README against it. `ci.yml` does this in the "Musical correctness" job of every build, for the fixed version `0.0.0-ci`,
+  so a change that breaks the package breaks the pull request.
+- `release.yml` calls `package.yml` after it has published a release. `package.yml` can also be run by hand from main
+  (`gh workflow run package.yml -R tinodo/Resonant-Pulse --ref main -f version=1.0.0`), for a release that was published before it
+  existed (1.0.0) or to repeat a push that failed. It refuses a version without a published GitHub release, a release whose pre-release
+  flag disagrees with the version, a commit that is not the release's or one of its descendants, a commit whose library code
+  (`src/ResonantPulse.Core/*.cs`) differs from the release's, and a commit without a successful main-branch run of `ci.yml` and
+  `codeql.yml`. It runs the engine's tests, packs and checks the package, and hands it to a second job, the only one with
+  `packages: write`, which has no checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never
+  overwritten.
+- GitHub publishes the first version of a package as private and has no API to change that. Once, after the first push: open the
+  package (<https://github.com/tinodo?tab=packages&repo_name=Resonant-Pulse>), Package settings, Danger Zone, Change visibility,
+  Public. That cannot be undone, so it is the owner's decision; the summary of the run says whether the package is public. Restoring
+  any NuGet package from GitHub Packages, a public one too, needs a personal access token with `read:packages`
+  ([README](../README.md#using-resonantpulsecore)).
+
+## Website
+
+<https://tinodo.github.io/Resonant-Pulse/> is served by GitHub Pages with the build type "GitHub Actions" (Settings, Pages).
+`pages.yml` builds `site/` with `packaging/Build-Site.ps1` and deploys it from main when `site/`, `docs/PRIVACY.md`, the script, the
+screenshots or the workflow change, every Monday, and on request. A pull request only builds and checks; the result is kept for seven
+days as the artifact `website-preview`.
+
+- The pictures of the application on the page are the English screenshots in `packaging/store-assets/screenshots/en-US`, copied in at
+  build time so that there is one copy of them. The icon and the preview image of the site are made from the Store artwork by
+  `packaging/Generate-SiteAssets.ps1`.
+- The build fails when a link or a picture points at nothing, a page has no language, title, description or alt text, a link is not
+  https, text is unfinished, or the effective date of `site/privacy.html` differs from that of `docs/PRIVACY.md`. The privacy policy has
+  those two copies and they must say the same: change both in one pull request.
+- The Microsoft Store block of the home page follows `STORE_FIRST_PUBLICATION_COMPLETED`: `false` shows "coming soon", `true` shows the
+  Store badge and a link to `STORE_PRODUCT_ID`. After the variable is changed, run `pages.yml` (or wait for Monday).
+- After a deployment the job requests the live site: the home page, the privacy policy, the stylesheet, six pictures and a 404 page.
+  An accepted deployment is not yet a website that answers.
+- `https://tinodo.github.io/Resonant-Pulse/privacy.html` is the privacy policy URL of the Store listing.
+
 ## Microsoft Store prerequisites
 
 No Store identity or authorization is guessed from the separate Resonant tuner.

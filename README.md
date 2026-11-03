@@ -3,7 +3,7 @@
 [![Build and test](https://github.com/tinodo/Resonant-Pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tinodo/Resonant-Pulse/actions/workflows/ci.yml)
 
 A native Windows metronome and rhythm workstation in C#/.NET 10 and WinUI 3,
-with the cyan/magenta instrument aesthetic of Resonant.
+with the cyan/magenta instrument aesthetic of Resonant. Website: <https://tinodo.github.io/Resonant-Pulse/>
 
 **Version 1.0.0.** Play, Studio, Train, Stage, Library and Settings are built and in use. The full reviewed design is a longer-term
 target, and not every part of it is built: [capabilities and limits](docs/CAPABILITIES.md), [delivery evidence](docs/DELIVERY.md),
@@ -30,6 +30,41 @@ the presence of an ARM64 artifact as proof of instrument/audio behavior.
 The exact Partner Center identity is configured, and the listing artwork is in
 [packaging/store-assets](packaging/store-assets). First submission, certification
 and API authorization remain required; update automation is separately guarded.
+
+## Using ResonantPulse.Core
+
+`ResonantPulse.Core` is the UI-free engine of the app (net10.0, no package dependencies): the rhythm document model, a schedule compiler
+that places every click on an exact sample, a stateless PCM renderer, WAV, per-track WAV (ZIP) and MIDI export, a tap-tempo estimator
+and a timing analyzer. It is published to [GitHub Packages](https://github.com/tinodo?tab=packages&repo_name=Resonant-Pulse) by the
+release workflow, with the version of the release (release 1.0.0 is package 1.0.0), and is versioned with the app: it promises no stable API.
+GitHub Packages requires authentication to restore any NuGet package, public or not: create a
+[personal access token (classic)](https://github.com/settings/tokens) with the `read:packages` scope, and never commit it.
+
+```powershell
+dotnet nuget add source "https://nuget.pkg.github.com/tinodo/index.json" --name github --username <github-user> --password <token> --store-password-in-clear-text
+dotnet add package ResonantPulse.Core
+```
+
+The flag stores the token unencrypted in your user-level NuGet configuration. NuGet can encrypt it on Windows only, so you can omit the flag
+there. Then add a `nuget.config` next to your solution so that only `ResonantPulse.*` comes from GitHub Packages and everything else
+from nuget.org:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSourceMapping>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="github">
+      <package pattern="ResonantPulse.*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+```
+
+A short example is in the [package readme](packaging/nuget/README.md). How the package and the website are built and published, and what
+checks them, is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Development and verification
 
@@ -110,6 +145,8 @@ dotnet test tests\ResonantPulse.Core.Tests\ResonantPulse.Core.Tests.csproj -c Re
 dotnet test tests\ResonantPulse.App.Tests\ResonantPulse.App.Tests.csproj -c Release
 .\packaging\Generate-Assets.ps1
 dotnet publish src\ResonantPulse.App\ResonantPulse.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:DistributionMode=Portable --self-contained true
+.\packaging\Build-NuGetPackage.ps1   # packs ResonantPulse.Core into artifacts\nuget and checks it as a user of the package would
+.\packaging\Build-Site.ps1           # builds and checks the website into artifacts\site
 ```
 
 No account, cloud service, advertising or telemetry is required, or present: Resonant Pulse

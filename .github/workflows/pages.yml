@@ -1,0 +1,104 @@
+name: GitHub Pages
+
+# Builds the website (site/ plus the real screenshots of the application), checks it, and deploys it to https://tinodo.github.io/Resonant-Pulse/.
+# A pull request only builds and checks. The Microsoft Store block of the home page follows the repository variable
+# STORE_FIRST_PUBLICATION_COMPLETED: the weekly run, or a run by hand, picks up a change of that variable.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/PRIVACY.md'
+      - 'packaging/Build-Site.ps1'
+      - 'packaging/store-assets/screenshots/en-US/**'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'docs/PRIVACY.md'
+      - 'packaging/Build-Site.ps1'
+      - 'packaging/store-assets/screenshots/en-US/**'
+      - '.github/workflows/pages.yml'
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A deployment is never cancelled half way, and a pull request's check never replaces a deployment that is waiting.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and check the website
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and check the website
+        env:
+          STORE_PUBLISHED: ${{ vars.STORE_FIRST_PUBLICATION_COMPLETED }}
+          STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+        shell: pwsh
+        run: |
+          ./packaging/Build-Site.ps1 -StorePublished $env:STORE_PUBLISHED -StoreProductId $env:STORE_PRODUCT_ID | Tee-Object -Variable report
+          @('### Website', '', '```', $report, '```') | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: artifacts/site
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'pull_request'
+        with:
+          name: website-preview
+          path: artifacts/site
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Check the live website
+        # A deployment that was accepted is not yet a website that answers: look at it, as a visitor would.
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          STORE_PUBLISHED: ${{ vars.STORE_FIRST_PUBLICATION_COMPLETED }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${PAGE_URL%/}"
+          fetch() { curl --fail --silent --show-error --location --retry 8 --retry-delay 10 --retry-all-errors "$base/$1"; }
+          home=$(fetch "")
+          grep -q 'Keep time.' <<<"$home" || { echo "::error::The home page does not have the expected content."; exit 1; }
+          if [[ "${STORE_PUBLISHED,,}" == "true" ]]; then
+            grep -q 'apps.microsoft.com/detail/' <<<"$home" || { echo "::error::The Store listing is published but the home page has no link to it."; exit 1; }
+          else
+            grep -q 'coming soon' <<<"$home" || { echo "::error::The Store listing is not published but the home page does not say so."; exit 1; }
+          fi
+          fetch "privacy.html" | grep -q 'Privacy policy' || { echo "::error::The privacy policy page does not have the expected content."; exit 1; }
+          fetch "assets/site.css" >/dev/null
+          for picture in screenshots/01-play.png screenshots/02-studio.png screenshots/03-train.png screenshots/04-stage.png screenshots/05-library.png assets/og-image.png; do
+            type=$(curl --fail --silent --show-error --location --retry 8 --retry-delay 10 --retry-all-errors --output /dev/null --write-out '%{content_type}' "$base/$picture")
+            [[ "$type" == image/png ]] || { echo "::error::$picture is served as '$type', not image/png."; exit 1; }
+          done
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$base/there-is-no-such-page")
+          [[ "$status" == 404 ]] || { echo "::error::A page that does not exist answers $status, not 404."; exit 1; }
+          echo "The website answers at $base/: home page, privacy policy, stylesheet, six pictures and a 404 page." >> "$GITHUB_STEP_SUMMARY"
