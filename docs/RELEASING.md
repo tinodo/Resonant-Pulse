@@ -148,8 +148,8 @@ days as the artifact `website-preview`.
   outside the site, a canonical or preview address is not this site's, a page has no language, title, description or alt text, an
   attribute that the checks read is not written `name="value"` (single quotes, no quotes, spaces around the equals sign, or no space
   before the attribute are refused), a fragment is not in the letter case of its id, a style sheet, style block or style attribute has
-  something that the check does not read (`image-set()`, `src()`, an escape outside a string), a link is not https, text is unfinished,
-  or `site/privacy.html`
+  something that the check does not read (`image-set()`, `src()`, an escape outside a string or in an address), a link is not https, text
+  is unfinished, or `site/privacy.html`
   and `docs/PRIVACY.md` differ in their effective date or in a word (formatting and the last section, which says where the policy is
   published, are left out of the comparison). The privacy policy has those two copies and they must say the same: change both in one pull
   request. `packaging/Build-Site.Tests.ps1` proves the check on each of those defects (and that the site as it is passes, in both Store

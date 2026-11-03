@@ -311,6 +311,7 @@ $unread = [ordered] @{
     }
     'the README of the library taken into the build' = { Add-ToProject $project '<ItemGroup><EmbeddedResource Include="README.md" /></ItemGroup>' }
     'the lock file taken into the build' = { Add-ToProject $project '<ItemGroup><AdditionalFiles Include="packages.lock.json" /></ItemGroup>' }
+    'the project file taken into the build' = { Add-ToProject $project '<ItemGroup><EmbeddedResource Include="ResonantPulse.Core.csproj" /></ItemGroup>' }
     'a wildcard that could take in a file that the comparison leaves out' = {
         Add-ToProject $project '<ItemGroup><AdditionalFiles Include="**/*.json" /></ItemGroup>'
     }
@@ -369,6 +370,15 @@ Add-Case @{ Name = 'a file that a path written one piece at a time includes, the
         Write-Text 'src/Shared/Extra.cs' 'namespace Shared { class Extra { } }'
     }
     Change = { Write-Text 'src/Shared/Extra.cs' 'namespace Shared { class Extra { int Changed; } }' } }
+Add-Case @{ Name = 'text on both sides of a comment, with and without a space'; Expect = 'different'
+    Release = { Add-ToProject $project '<PropertyGroup><DefineConstants>FOO<!-- c -->BAR</DefineConstants></PropertyGroup>' }
+    Change = { Add-ToProject $project '<PropertyGroup><DefineConstants>FOO<!-- c --> BAR</DefineConstants></PropertyGroup>' } }
+# The three files that the comparison leaves out are left out in the library's own folder only.
+foreach ($name in 'ResonantPulse.Core.csproj', 'README.md', 'packages.lock.json') {
+    $releaseBlock = [scriptblock]::Create("Write-Text '$library/Sub/$name' 'one'")
+    $changeBlock = [scriptblock]::Create("Write-Text '$library/Sub/$name' 'two'")
+    Add-Case @{ Name = "$name in a sub folder, changed"; Expect = 'different'; OnRelease = $true; Release = $releaseBlock; Change = $changeBlock }
+}
 Add-Case @{ Name = 'the release''s own commit, whatever the project holds'; Expect = 'same'; Identical = $true; Change = {
         Add-ToProject $project "<Import Project=`"extra.props`" /><PropertyGroup Condition=`"'`$(OS)' == 'Windows_NT'`">$overflow</PropertyGroup>"
     } }

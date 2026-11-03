@@ -167,6 +167,46 @@ $cases = @(
     @{ Name = 'a preloaded picture set that is not there'; Expect = 'points at nothing'; Change = {
             Add-ToHome '<link rel="preload" as="image" imagesrcset="screenshots/09-nothing.png 1x">'
         } }
+    @{ Name = 'an escape in a quoted address of a style sheet'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: url("assets/\favicon-32.png"); } .wrap {'
+        } }
+    @{ Name = 'an escape in a quoted @import address'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@import "assets/\favicon.css"; .wrap {'
+        } }
+    @{ Name = 'an escape in an unquoted address of a style sheet'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: url(assets/\favicon-32.png); } .wrap {'
+        } }
+    @{ Name = 'an attribute whose name ends with the name of one that is read'; Expect = 'accepted'; Change = {
+            Add-ToHome '<button data-action="download">x</button>'
+        } }
+    @{ Name = 'a quoted value that holds text that looks like a reference'; Expect = 'accepted'; Change = {
+            Add-ToHome "<div title='background=`"missing.png`"'>x</div>"
+        } }
+    @{ Name = 'a style block whose opening tag holds a ">" in a quoted value'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<style title="1 > 0">.x { background: url(missing.png); }</style>'
+        } }
+    @{ Name = 'an id in the text of a quoted value is not an id'; Expect = 'has no target'; Change = {
+            Add-ToHome "<p title='x id=`"fake`"'>y</p><p><a href=`"#fake`">z</a></p>"
+        } }
+    @{ Name = 'an id in the text of a quoted value of another page is not an id'; Expect = 'has no #fake in its target'; Change = {
+            Add-ToPrivacy "<p title='x id=`"fake`"'>y</p>"
+            Add-ToHome '<p><a href="privacy.html#fake">z</a></p>'
+        } }
+    @{ Name = 'a tag that is commented out'; Expect = 'accepted'; Change = {
+            Add-ToHome "<!-- <a href='x'>old</a> <a href=`"nowhere.html`">older</a> -->"
+        } }
+    @{ Name = 'a refresh to a page that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=missing.html">'
+        } }
+    @{ Name = 'a refresh to a page that is there'; Expect = 'accepted'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=privacy.html">'
+        } }
+    @{ Name = 'an SVG link to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<svg><use xlink:href="missing.svg#a"/></svg>'
+        } }
+    @{ Name = 'an SVG link in single quotes'; Expect = 'not written name='; Change = {
+            Add-ToHome "<svg><use xlink:href='missing.svg#a'/></svg>"
+        } }
     @{ Name = 'a preview address in single quotes'; Expect = 'not written name='; Change = {
             Add-ToHome "<meta property='og:image' content='https://example.com/x.png'>"
         } }

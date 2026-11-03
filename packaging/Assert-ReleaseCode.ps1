@@ -33,7 +33,7 @@
       * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison;
       * a package reference (the library has no package dependencies, and a package that restore resolves is code that is not among the
         compared files), and a name or a wildcard that could take in a file that this check leaves out of the comparison (README.md, the
-        lock file), which would then be a build input that nobody compares;
+        lock file, the project file, all in the library's own folder), which would then be a build input that nobody compares;
       * a CDATA section, which MSBuild reads in a way that this check does not follow, and a symbolic link or a submodule among the
         library's files, which are compared by their entries and not by what they point at. (Text that a comment splits is read joined,
         as MSBuild joins it: $<!---->(OS) is read as $(OS).)
@@ -88,7 +88,7 @@ $permittedItems = @('../../packaging/nuget/README.md')
 # is code that is not among the compared files.
 $unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference', 'PackageReference', 'GlobalPackageReference', 'PackageDownload')
 # The files that the comparison of the library's folder leaves out (they differ between a release and a later commit), and what could name them.
-$leftOutOrWildcard = '(?i)README|packages\.lock\.json|[*?]'
+$leftOutOrWildcard = '(?i)README|packages\.lock\.json|\.csproj|[*?]'
 $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path that climbs out of a folder
     '|(^|[\s''"(;=,])[\\/][^\s''")]' +                                # a rooted path, at the start of a value or inside one (a condition)
     '|(^|\W)[A-Za-z]:[\\/]' +                                         # a path with a drive letter
@@ -196,6 +196,8 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
     catch { throw "$Name is not valid XML: $($_.Exception.Message)" }
 
     foreach ($comment in @($document.SelectNodes('//comment()'))) { [void] $comment.ParentNode.RemoveChild($comment) }
+    # The text on both sides of a comment is one text, as MSBuild reads it (FOO<!-- c -->BAR is FOOBAR, and FOO<!-- c --> BAR is FOO BAR).
+    $document.Normalize()
     $root = $document.DocumentElement
     if ($DropPackageMetadata) {
         foreach ($group in @($root.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })) {
@@ -238,7 +240,10 @@ function Get-Inputs([string] $Revision) {
     }
 
     $library = foreach ($path in $entries.Keys) {
-        if ($path.StartsWith("$libraryFolder/", [System.StringComparison]::Ordinal) -and $path -cnotmatch '(/ResonantPulse\.Core\.csproj|/README\.md|/packages\.lock\.json)$') {
+        # Only these three, in the library's own folder, are left out: the project file is compared as XML, and the other two differ between a
+        # release and a later commit. Anywhere else a file of that name is a library file like any other.
+        if ($path.StartsWith("$libraryFolder/", [System.StringComparison]::Ordinal) -and $path -cne $projectFile -and
+            $path -cne "$libraryFolder/README.md" -and $path -cne "$libraryFolder/packages.lock.json") {
             "$($entries[$path]) $(ConvertTo-Literal $path)"
         }
     }
