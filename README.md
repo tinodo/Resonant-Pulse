@@ -10,6 +10,8 @@ target, and not every part of it is built: [capabilities and limits](docs/CAPABI
 [architecture](docs/ARCHITECTURE.md) and [release operations](docs/RELEASING.md) say which, and the
 [release notes](docs/RELEASE-NOTES.md) say what is in 1.0.0 and what was not tried.
 
+![Resonant Pulse playing: the tempo dial with the scrolling tape of upcoming clicks, TAP, the time signature and the strength of every beat](packaging/store-assets/screenshots/en-US/01-play.png)
+
 ## Downloads
 
 **Releases:** [GitHub downloads](https://github.com/tinodo/Resonant-Pulse/releases), with x64/ARM64 downloads and SHA-256 checksums.
