@@ -90,13 +90,15 @@ $readAttributes = @('href', 'src', 'srcset', 'imagesrcset', 'poster', 'data', 'a
 
 # The tags of a page with their attributes, read one by one, as a browser does: the name in lower case, the text of the attribute, and its
 # value when it is written name="value" (WellFormed), the only form that the checks read. A comment is recognised where a browser does, outside
-# a tag (<!-- inside a quoted value is text), and a commented-out tag is not one. Left is what stands in the tag besides its name and its
-# attributes, which should be nothing: an attribute that follows a closing quote without a space (<a class="x"href="y">) is read by a browser
-# and not by the checks.
+# a tag (<!-- inside a quoted value is text), and a commented-out tag is not one. The text of a style, script, textarea or title element is not
+# markup: it is Content of its tag (a style sheet is read from there), and tags that it seems to hold are not tags. Left is what stands in the
+# tag besides its name and its attributes, which should be nothing: an attribute that follows a closing quote without a space
+# (<a class="x"href="y">) is read by a browser and not by the checks.
 function Get-Tags([string]$Text) {
-    foreach ($match in [regex]::Matches($Text, "(?s)<!--.*?-->|$tagPattern")) {
-        if ($match.Value.StartsWith('<!--')) { continue }
-        $body = $match.Value -replace '^<[a-zA-Z][^\s/>]*', ''
+    foreach ($match in [regex]::Matches($Text, "(?is)<!--.*?-->|(?<open><(?<raw>style|script|textarea|title)\b$tagBody>)(?<content>.*?)</\k<raw>\s*>|(?<open>$tagPattern)")) {
+        if (-not $match.Groups['open'].Success) { continue }
+        $open = $match.Groups['open'].Value
+        $body = $open -replace '^<[a-zA-Z][^\s/>]*', ''
         $attributes = @(foreach ($attribute in [regex]::Matches($body, $attributePattern)) {
             $quoted = [regex]::Match($attribute.Groups['rest'].Value, '^="([^"]*)"$')
             [pscustomobject] @{
@@ -107,10 +109,11 @@ function Get-Tags([string]$Text) {
             }
         })
         [pscustomobject] @{
-            Text = $match.Value
-            Name = [regex]::Match($match.Value, '^<([a-zA-Z][^\s/>]*)').Groups[1].Value.ToLowerInvariant()
+            Text = $open
+            Name = [regex]::Match($open, '^<([a-zA-Z][^\s/>]*)').Groups[1].Value.ToLowerInvariant()
             Attributes = $attributes
             Left = ([regex]::Replace($body, $attributePattern, '') -replace '\s*/?>$', '').Trim()
+            Content = $match.Groups['content'].Value
         }
     }
 }
@@ -318,12 +321,8 @@ foreach ($page in $pages) {
             Fail "${relative}: a picture has no alt text: $($tag.Text.Substring(0, [Math]::Min(80, $tag.Text.Length)))"
         }
         if ($tag.Name -in 'link', 'meta') { Test-SharedAddress $relative $tag }
-    }
-    # A style block is text that a browser does not decode. A comment is recognised outside a style block only, and a style block holds its own
-    # comments (<style><!-- ... --></style>).
-    foreach ($style in [regex]::Matches($text, "(?is)<!--.*?-->|<style\b$tagBody>(?<css>.*?)</style>")) {
-        if (-not $style.Groups['css'].Success) { continue }
-        Test-StyleUrls $relative $style.Groups['css'].Value $page.DirectoryName $ids
+        # A style block is text that a browser does not decode.
+        if ($tag.Name -eq 'style') { Test-StyleUrls $relative $tag.Content $page.DirectoryName $ids }
     }
 }
 

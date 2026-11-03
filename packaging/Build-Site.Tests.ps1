@@ -232,6 +232,16 @@ $cases = @(
     @{ Name = 'a comment inside a style block, then a url() to nothing'; Expect = 'points at nothing'; Change = {
             Add-ToHome '<style><!-- .a { background: url(missing.png); } --></style>'
         } }
+    @{ Name = 'comment markers in the attributes of two tags, a style block between them'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p title="<!--"></p><style>.x { background: url(missing.png); }</style><p title="-->"></p>'
+        } }
+    @{ Name = 'tag-like text in a script'; Expect = 'accepted'; Change = {
+            Add-ToHome '<script>var t = ''<a href="missing.html">'';</script>'
+        } }
+    @{ Name = 'tag-like text in a textarea and a title'; Expect = 'accepted'; Change = {
+            Add-ToHome '<textarea><a href="missing.html"></textarea><svg><title>an <a href="missing.html"> in a title</title></svg>'
+        } }
+    @{ Name = 'a script that is not there'; Expect = 'points at nothing'; Change = { Add-ToHome '<script src="missing.js"></script>' } }
     @{ Name = 'a link to the top of the page'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="#top">a</a> <a href="#TOP">b</a> <a href="privacy.html#top">c</a> <a href="#">d</a></p>' } }
     @{ Name = 'an SVG link to a file that is not there'; Expect = 'points at nothing'; Change = {
             Add-ToHome '<svg><use xlink:href="missing.svg#a"/></svg>'
