@@ -14,7 +14,11 @@
         into the package. Everything else counts, however it is written: a property, an item, a condition, a target, an import;
       * the other build files (Directory.Build.rsp, MSBuild.rsp, NuGet.config, global.json), by content.
 
-    Throws, naming what differs, when the library of the candidate is not the release's.
+    The check reads only what is listed. A project or build file that imports another file or points outside the library's folder
+    (an Import or Sdk element, a path with .., a rooted path, or one made from the project's or the solution's directory) depends on files
+    that are not read, so it is refused whatever the other commit holds, until the check is taught to read them.
+
+    Throws, naming what differs or what is not read, when the library of the candidate cannot be shown to be the release's.
 
 .PARAMETER Release
     The commit of the release (the tag's commit).
@@ -50,10 +54,29 @@ $permittedProperties = @(
     'Copyright', 'RepositoryUrl', 'RepositoryType', 'PublishRepositoryUrl', 'Authors', 'Company', 'Product', 'Version')
 $permittedItems = @('../../packaging/nuget/README.md')
 
+# A project that imports another file, or points outside its own folder, depends on files that this check does not read. It is not compared
+# further: it is refused, and the check must be taught to read what it points at before such a library can be published later.
+$outsideReference = '(^|[^\w.])\.\.([^\w.]|$)|^\s*[\\/]|^\s*[A-Za-z]:[\\/]|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)'
+$unreadReferences = [System.Collections.Generic.List[string]]::new()
+
 function Invoke-Git([string[]] $Arguments) {
     $output = & git -C $Repository -c core.quotepath=false @Arguments
     if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE." }
     $output
+}
+
+function Find-UnreadReferences($Root, [string] $Name) {
+    foreach ($element in @($Root.SelectNodes('descendant-or-self::*'))) {
+        if ($element.LocalName -in 'Import', 'Sdk') { "$Name has an <$($element.LocalName)> element, and an imported file is not read" }
+        foreach ($attribute in @($element.Attributes)) {
+            if ($attribute.Value -match $outsideReference) {
+                "$Name has <$($element.LocalName) $($attribute.LocalName)=""$($attribute.Value)""> which refers outside the library's folder"
+            }
+        }
+        foreach ($node in @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA' })) {
+            if ($node.Value -match $outsideReference) { "$Name has <$($element.LocalName)> with '$($node.Value.Trim())' which refers outside the library's folder" }
+        }
+    }
 }
 
 function Write-CanonicalElement($Element, [int] $Depth, $Lines) {
@@ -97,6 +120,7 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
     foreach ($group in @($root.ChildNodes | Where-Object { $_.NodeType -eq 'Element' -and $_.LocalName -in 'PropertyGroup', 'ItemGroup' })) {
         if (-not $group.HasChildNodes) { [void] $root.RemoveChild($group) }
     }
+    foreach ($reference in @(Find-UnreadReferences $root $Name)) { $script:unreadReferences.Add($reference) }
 
     $lines = [System.Collections.Generic.List[string]]::new()
     Write-CanonicalElement $root 0 $lines
@@ -156,7 +180,8 @@ foreach ($name in $before.Keys) {
         }
     }
 }
+foreach ($reference in $unreadReferences | Sort-Object -Unique) { $report.Add("  not compared: $reference") }
 if ($report.Count -gt 0) {
-    throw "The library or its build settings differ from the release's ($Release and $Candidate):`n$($report -join "`n")"
+    throw "The library cannot be shown to be the release's ($Release and $Candidate):`n$($report -join "`n")"
 }
 Write-Host "The library and its build settings at $Candidate are those of the release at $Release."

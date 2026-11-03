@@ -105,10 +105,12 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   project file and the `Directory.Build.props`, `Directory.Build.targets` and `Directory.Packages.props` files above it as parsed XML
   (comments and layout do not count, and neither does anything that only describes the package or the version: description, tags, URLs,
   copyright, license, authors, the packed README, the version; a property, item, condition, target or import counts however it is
-  written), and `Directory.Build.rsp`, `NuGet.config` and `global.json`. `packaging/Assert-ReleaseCode.Tests.ps1` runs it on changes to a
-  copy of the real project in the "Musical correctness" job of every build. The workflow then runs the engine's tests, packs and checks
-  the package, and hands it to a second job, the only one with `packages: write`, which has no checkout and runs no repository code. A
-  version that is already on GitHub Packages is skipped, never overwritten.
+  written), and `Directory.Build.rsp`, `NuGet.config` and `global.json`. A project that imports a file or points outside its own folder
+  depends on files that the check does not read, so it is refused until the check is taught to read them.
+  `packaging/Assert-ReleaseCode.Tests.ps1` runs the check on changes to a copy of the real project in the "Musical correctness" job of
+  every build. The workflow then runs the engine's tests, packs and checks the package, and hands it to a second job, the only one with
+  `packages: write`, which has no checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never
+  overwritten.
 - GitHub publishes the first version of a package as private and has no API to change that. Once, after the first push: open the
   package (<https://github.com/tinodo?tab=packages&repo_name=Resonant-Pulse>), Package settings, Danger Zone, Change visibility,
   Public. That cannot be undone, so it is the owner's decision; the summary of the run says whether the package is public. Restoring
@@ -118,17 +120,18 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
 ## Website
 
 <https://tinodo.github.io/Resonant-Pulse/> is served by GitHub Pages with the build type "GitHub Actions" (Settings, Pages).
-`pages.yml` builds `site/` with `packaging/Build-Site.ps1` and deploys it from main when `site/`, `docs/PRIVACY.md`, the script, the
-screenshots or the workflow change, every Monday, and on request. A pull request only builds and checks; the result is kept for seven
+`pages.yml` builds `site/` with `packaging/Build-Site.ps1` and deploys it from main when `site/`, `docs/PRIVACY.md`, the script and its
+tests, the screenshots or the workflow change, every Monday, and on request. A pull request only builds and checks; the result is kept for seven
 days as the artifact `website-preview`.
 
 - The pictures of the application on the page are the English screenshots in `packaging/store-assets/screenshots/en-US`, copied in at
   build time so that there is one copy of them. The icon and the preview image of the site are made from the Store artwork by
   `packaging/Generate-SiteAssets.ps1`.
-- The build fails when a link or a picture points at nothing, a page has no language, title, description or alt text, a link is not
-  https, text is unfinished, or `site/privacy.html` and `docs/PRIVACY.md` differ in their effective date or in a word (formatting and the
-  last section, which says where the policy is published, are left out of the comparison). The privacy policy has those two copies and
-  they must say the same: change both in one pull request.
+- The build fails when a link or a picture points at nothing or outside the site, a page has no language, title, description or alt text,
+  a link is not https, text is unfinished, or `site/privacy.html` and `docs/PRIVACY.md` differ in their effective date or in a word
+  (formatting and the last section, which says where the policy is published, are left out of the comparison). The privacy policy has
+  those two copies and they must say the same: change both in one pull request. `packaging/Build-Site.Tests.ps1` proves the check on
+  each of those defects (and that the site as it is passes, in both Store states); `pages.yml` runs it before the build.
 - The Microsoft Store block of the home page follows `STORE_FIRST_PUBLICATION_COMPLETED`: `false` shows "coming soon", `true` shows the
   Store badge and a link to `STORE_PRODUCT_ID`. After the variable is changed, run `pages.yml` (or wait for Monday).
 - After a deployment the job requests the live site: the home page, the privacy policy, the stylesheet, six pictures and a 404 page.

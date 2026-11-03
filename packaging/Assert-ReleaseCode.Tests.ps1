@@ -170,6 +170,33 @@ $cases = @(
     @{ Name = 'Directory.Build.rsp added'; Expect = 'different'; Change = { Write-Text 'Directory.Build.rsp' '-p:CheckForOverflowUnderflow=true' } }
     @{ Name = 'NuGet.config added'; Expect = 'different'; Change = { Write-Text 'NuGet.config' '<configuration />' } }
     @{ Name = 'the SDK version changed'; Expect = 'different'; Change = { Edit-Pattern 'global.json' '"version": "[^"]*"' '"version": "1.2.3"' } }
+
+    # A project that points at files this check does not read is refused even when both commits are the same one.
+    @{ Name = 'a project that imports a file, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '</Project>' '<Import Project="extra.props" /></Project>'
+        } }
+    @{ Name = 'a project with an Sdk element, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '<PropertyGroup>' '<Sdk Name="Other.Sdk" Version="1.0.0" /><PropertyGroup>'
+        } }
+    @{ Name = 'a project that includes a file of another folder, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '</Project>' '<ItemGroup><Compile Include="..\Shared\Extra.cs" /></ItemGroup></Project>'
+        } }
+    @{ Name = 'a property that points outside the library folder, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><ApplicationIcon>../../assets/x.ico</ApplicationIcon>'
+        } }
+    @{ Name = 'a property made from the project directory, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><KeyFile>$(MSBuildProjectDirectory)/x.snk</KeyFile>'
+        } }
+    @{ Name = 'a property with a rooted path, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><KeyFile>C:\keys\x.snk</KeyFile>'
+        } }
+    @{ Name = 'a condition on a file outside the library folder, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $project '</Project>' '<PropertyGroup Condition="Exists(''..\x'')"><Nullable>enable</Nullable></PropertyGroup></Project>'
+        } }
+    @{ Name = 'Directory.Build.props that imports a file, checked against itself'; Expect = 'different'; Self = $true; Change = {
+            Edit-Text $props '</Project>' '<Import Project="common.props" /></Project>'
+        } }
+    @{ Name = 'the project as it is, checked against itself'; Expect = 'same'; Self = $true; Change = { } }
 )
 
 try {
@@ -196,9 +223,10 @@ try {
 
         $answer = 'same'
         $message = ''
-        try { & $guard -Release $release -Candidate HEAD -Repository $work 6>$null }
+        $from = if ($case.ContainsKey('Self')) { 'HEAD' } else { $release }
+        try { & $guard -Release $from -Candidate HEAD -Repository $work 6>$null }
         catch {
-            if ($_.Exception.Message -notlike "The library or its build settings differ*") { throw }
+            if ($_.Exception.Message -notlike "The library cannot be shown to be the release's*") { throw }
             $answer = 'different'
             $message = $_.Exception.Message
         }

@@ -76,6 +76,8 @@ if (-not $published) {
 }
 
 $allFiles = @(Get-ChildItem -LiteralPath $Output -File -Recurse)
+$outputFull = (Resolve-Path -LiteralPath $Output).Path.TrimEnd('\', '/')
+$pathComparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
 function Get-Relative([string]$path) { [System.IO.Path]::GetRelativePath($Output, $path).Replace('\', '/') }
 
 foreach ($page in $pages) {
@@ -107,8 +109,13 @@ foreach ($page in $pages) {
             if ($ids -notcontains $fragment) { Fail "${relative}: the link #$fragment has no target." }
             continue
         }
-        $base = if ($reference.Groups['value'].Value.StartsWith('/') -or $reference.Groups['value'].Value.StartsWith($PublicBase)) { $Output } else { $page.DirectoryName }
+        $base = if ($reference.Groups['value'].Value.StartsWith('/') -or $reference.Groups['value'].Value.StartsWith($PublicBase)) { $outputFull } else { $page.DirectoryName }
         $target = if ($value -eq '' -or $value -eq './') { Join-Path $base 'index.html' } else { Join-Path $base $value }
+        # Only what is in the uploaded site exists on the web: a link that climbs out of it can find a file of the repository, and break after deployment.
+        $target = [System.IO.Path]::GetFullPath($target)
+        if ($target -ne $outputFull -and -not $target.StartsWith($outputFull + [System.IO.Path]::DirectorySeparatorChar, $pathComparison)) {
+            Fail "${relative}: $attribute='$($reference.Groups['value'].Value)' points outside the site."; continue
+        }
         if (Test-Path -LiteralPath $target -PathType Container) { $target = Join-Path $target 'index.html' }
         if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { Fail "${relative}: $attribute='$($reference.Groups['value'].Value)' points at nothing."; continue }
         if ($fragment -and $target.EndsWith('.html')) {

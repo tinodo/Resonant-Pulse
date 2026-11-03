@@ -11,6 +11,7 @@ on:
       - 'site/**'
       - 'docs/PRIVACY.md'
       - 'packaging/Build-Site.ps1'
+      - 'packaging/Build-Site.Tests.ps1'
       - 'packaging/store-assets/screenshots/en-US/**'
       - '.github/workflows/pages.yml'
   pull_request:
@@ -18,6 +19,7 @@ on:
       - 'site/**'
       - 'docs/PRIVACY.md'
       - 'packaging/Build-Site.ps1'
+      - 'packaging/Build-Site.Tests.ps1'
       - 'packaging/store-assets/screenshots/en-US/**'
       - '.github/workflows/pages.yml'
   schedule:
@@ -42,6 +44,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Test the website check
+        # The check is what stands between a broken page and a deployment, so it is proven on defects first: each kind it exists to catch
+        # is refused, and the site as it is, in both Store states, is accepted.
+        shell: pwsh
+        run: ./packaging/Build-Site.Tests.ps1
       - name: Build and check the website
         env:
           STORE_PUBLISHED: ${{ vars.STORE_FIRST_PUBLICATION_COMPLETED }}
