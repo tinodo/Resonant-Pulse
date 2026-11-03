@@ -107,7 +107,9 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   copyright, license, authors, the packed README, the version; a property, item, condition, target or import counts however it is
   written), and `Directory.Build.rsp`, `NuGet.config` and `global.json`. A project that depends on something the check does not follow or
   evaluate is refused until the check is taught to read it: an import, a target or task, a project reference, a path outside its own
-  folder, a property function, or a read of one of the package properties that the comparison leaves out. The package itself is made by
+  folder (also a rooted one, in a value or in a condition), a condition on the file system, a property function, `TreatAsLocalProperty`
+  (which lets a project override the version that the package is made with), or a read of one of the package properties that the
+  comparison leaves out. The package itself is made by
   the candidate's own `Build-NuGetPackage.ps1`, which gives the version and the configuration and nothing else; that script is part of
   the reviewed pipeline and is not compared (the tagged commit does not have it).
   `packaging/Assert-ReleaseCode.Tests.ps1` runs the check on changes to a copy of the real project in the "Musical correctness" job of

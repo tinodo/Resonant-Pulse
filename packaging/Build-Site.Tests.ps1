@@ -67,6 +67,37 @@ $cases = @(
             Add-ToHome '<p><a href="../outside.html">x</a></p>'
         } }
     @{ Name = 'a link to a path outside the base path'; Expect = 'absolute path outside'; Change = { Add-ToHome '<p><a href="/elsewhere/x.html">x</a></p>' } }
+    @{ Name = 'a percent-encoded link to a file that exists'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="screenshots/01%2Dplay.png">x</a></p>' } }
+    @{ Name = 'a picture with two sources, both there'; Expect = 'accepted'; Change = {
+            Add-ToHome '<p><img src="screenshots/01-play.png" srcset="screenshots/01-play.png 1x, screenshots/02-studio.png 2x" alt="x"></p>'
+        } }
+    @{ Name = 'a picture with two sources, the second missing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p><img src="screenshots/01-play.png" srcset="screenshots/01-play.png 1x, screenshots/09-nothing.png 2x" alt="x"></p>'
+        } }
+    @{ Name = 'a canonical address on another site'; Expect = 'does not point at'; Change = {
+            Edit-Site 'index.html' '<link rel="canonical" href="https://tinodo.github.io/Resonant-Pulse/">' '<link rel="canonical" href="https://example.com/">'
+        } }
+    @{ Name = 'a preview picture address on another site'; Expect = 'does not point at'; Change = {
+            Edit-Site 'index.html' 'content="https://tinodo.github.io/Resonant-Pulse/assets/og-image.png"' 'content="https://example.com/og-image.png"'
+        } }
+    @{ Name = 'a style sheet that refers to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: url(missing.png); } .wrap {'
+        } }
+    @{ Name = 'a style sheet that refers to a file outside the site'; Expect = 'points outside the site'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: url("../../README.md"); } .wrap {'
+        } }
+    @{ Name = 'a sitemap entry for a page that does not exist'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'sitemap.xml' '</urlset>' '<url><loc>https://tinodo.github.io/Resonant-Pulse/gone.html</loc></url></urlset>'
+        } }
+    @{ Name = 'a sitemap entry on another site'; Expect = 'is not under'; Change = {
+            Edit-Site 'sitemap.xml' '</urlset>' '<url><loc>https://example.com/page.html</loc></url></urlset>'
+        } }
+    @{ Name = 'robots.txt that announces a sitemap on another site'; Expect = 'is not under'; Change = {
+            Edit-Site 'robots.txt' 'Sitemap: https://tinodo.github.io/Resonant-Pulse/sitemap.xml' 'Sitemap: https://example.com/sitemap.xml'
+        } }
+    @{ Name = 'robots.txt that announces a sitemap that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'robots.txt' 'Sitemap: https://tinodo.github.io/Resonant-Pulse/sitemap.xml' 'Sitemap: https://tinodo.github.io/Resonant-Pulse/gone.xml'
+        } }
     @{ Name = 'a link that is not https'; Expect = 'is not https'; Change = { Add-ToHome '<p><a href="http://example.com/">x</a></p>' } }
     @{ Name = 'a page without a title'; Expect = 'no title'; Change = { Edit-SitePattern 'index.html' '(?s)<title>.*?</title>' '' } }
     @{ Name = 'a page without a description'; Expect = 'no description'; Change = { Edit-SitePattern 'index.html' '<meta name="description" content="[^"]*">' '' } }

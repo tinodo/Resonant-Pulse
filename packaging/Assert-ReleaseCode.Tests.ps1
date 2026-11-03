@@ -255,6 +255,25 @@ $unread = [ordered] @{
     'a condition on a file outside the library folder' = {
         Add-ToProject $project "<PropertyGroup Condition=`"Exists('..\x')`"><Nullable>enable</Nullable></PropertyGroup>"
     }
+    'a condition on a file at a rooted path' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"Exists('/tmp/release-code-flag')`">$overflow</PropertyGroup>"
+    }
+    'a condition on a file at a path with a drive letter' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"Exists('C:\build\release-code-flag')`">$overflow</PropertyGroup>"
+    }
+    'a condition on a file named without a path' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"Exists('release-code-flag')`">$overflow</PropertyGroup>"
+    }
+    'a condition on a trailing slash' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"HasTrailingSlash('x')`">$overflow</PropertyGroup>"
+    }
+    'a rooted path inside a property value' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<Extra>--flag=/etc/keys/x</Extra>' }
+    'a path with a drive letter inside a property value' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<Extra>--key=C:\keys\x</Extra>' }
+    'a rooted path inside a condition that does not look at the file system' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(Flag)' == '/tmp/release-code-flag'`">$overflow</PropertyGroup>"
+    }
+    'a project that treats the version as local' = { Edit-Match $project '<Project\b' { param($match) '<Project TreatAsLocalProperty="Version"' } }
+    'a property group that treats a property as local' = { Edit-Text $project '<PropertyGroup>' '<PropertyGroup TreatAsLocalProperty="Version">' }
     'logic that reads a package property' = {
         Add-ToProject $props "<PropertyGroup Condition=`"'`$(Product)' == 'Resonant Pulse'`"><DefineConstants>BRANDED</DefineConstants></PropertyGroup>"
     }

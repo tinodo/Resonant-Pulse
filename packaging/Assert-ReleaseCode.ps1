@@ -19,9 +19,11 @@
 
       * an Import, ImportGroup, Sdk, UsingTask or Target element, or a ProjectReference: another file, a task, or code that this check
         does not follow or evaluate;
-      * a path outside the library's folder (with .., rooted, or made from the project's or the solution's directory), or a property
-        function, $([...]), which can read any file;
-      * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison.
+      * a path outside the library's folder (with .., rooted, wherever it stands, or made from the project's or the solution's directory),
+        a condition that looks at the file system (Exists, HasTrailingSlash), or a property function, $([...]), which can read any file;
+      * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison;
+      * TreatAsLocalProperty, which lets a project override the properties given on the command line: the package is made with
+        -p:Version, so the version can be left out of the comparison and read freely only while nothing can override it.
 
     The package itself is made by the candidate's own packaging script (Build-NuGetPackage.ps1), which gives the version and the
     configuration and nothing else. It is part of the reviewed pipeline and is not compared.
@@ -63,9 +65,14 @@ $permittedProperties = @(
 $permittedItems = @('../../packaging/nuget/README.md')
 
 # What the check cannot follow or evaluate (see the description). The version is read harmlessly: the package is made with -p:Version, which
-# wins over every file, on both sides.
+# wins over every file, on both sides, unless the project treats the version as local (TreatAsLocalProperty), which is refused too.
 $unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference')
-$outsideReference = '(^|[^\w.])\.\.([^\w.]|$)|^\s*[\\/]|^\s*[A-Za-z]:[\\/]|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)|\$\(\['
+$outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path that climbs out of a folder
+    '|(^|[\s''"(;=,])[\\/][^\s''")]' +                                # a rooted path, at the start of a value or inside one (a condition)
+    '|(^|\W)[A-Za-z]:[\\/]' +                                         # a path with a drive letter
+    '|\b(Exists|HasTrailingSlash)\s*\(' +                             # a condition that looks at the file system
+    '|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)' +  # a path made from the project's or the solution's place
+    '|\$\(\['                                                         # a property function, which can read anything
 $packageProperty = '[$%@]\((' + (($permittedProperties | Where-Object { $_ -ne 'Version' }) -join '|') + ')\b'
 $unreadReferences = [System.Collections.Generic.List[string]]::new()
 
@@ -91,6 +98,11 @@ function ConvertTo-Literal([string] $Text) {
 function Find-UnreadReferences($Root, [string] $Name) {
     foreach ($element in @($Root.SelectNodes('descendant-or-self::*'))) {
         if ($element.LocalName -in $unreadElements) { "$Name has a <$($element.LocalName)> element, which this check does not follow or evaluate" }
+        foreach ($attribute in @($element.Attributes)) {
+            if ($attribute.LocalName -eq 'TreatAsLocalProperty') {
+                "$Name has TreatAsLocalProperty=""$($attribute.Value)"" on <$($element.LocalName)>, which lets the project override the properties given on the command line"
+            }
+        }
         $values = @($element.Attributes | ForEach-Object { $_.Value }) + @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA' } | ForEach-Object { $_.Value })
         foreach ($value in $values) {
             if ($value -match $outsideReference) {

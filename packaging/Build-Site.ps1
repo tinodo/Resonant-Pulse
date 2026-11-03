@@ -80,6 +80,57 @@ $outputFull = (Resolve-Path -LiteralPath $Output).Path.TrimEnd('\', '/')
 $pathComparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
 function Get-Relative([string]$path) { [System.IO.Path]::GetRelativePath($Output, $path).Replace('\', '/') }
 
+# Checks one reference ($Raw, as written in $Where: a page, a style sheet, the sitemap) and says what is wrong with it, if anything. It must
+# resolve to a file inside the uploaded site, because only that exists on the web: a link that climbs out of it can find a file of the
+# repository and break after deployment. $FromDirectory is where a relative reference starts; $PageIds are the ids of the page, for a
+# reference to an anchor of the same page.
+function Test-Reference([string]$Where, [string]$Label, [string]$Raw, [string]$FromDirectory, [string[]]$PageIds) {
+    $value = $Raw.Trim()
+    if ($value -match '^(mailto:|tel:|data:)') { return }
+    if ($value.StartsWith('http://')) { Fail "${Where}: $Label='$Raw' is not https."; return }
+    if ($value.StartsWith('https://') -and -not $value.StartsWith($PublicBase)) { return }
+    $fromRoot = $value.StartsWith('/') -or $value.StartsWith($PublicBase)
+    if ($value.StartsWith($PublicBase)) { $value = $value.Substring($PublicBase.Length) }
+    elseif ($value.StartsWith($BasePath)) { $value = $value.Substring($BasePath.Length) }
+    elseif ($value.StartsWith('/')) { Fail "${Where}: $Label='$Raw' is an absolute path outside $BasePath."; return }
+    $fragment = $null
+    if ($value.Contains('#')) { $fragment = $value.Substring($value.IndexOf('#') + 1); $value = $value.Substring(0, $value.IndexOf('#')) }
+    if ($value.Contains('?')) { $value = $value.Substring(0, $value.IndexOf('?')) }
+    if ($value -eq '' -and $fragment) {
+        if ($PageIds -notcontains $fragment) { Fail "${Where}: the link #$fragment has no target." }
+        return
+    }
+    $value = [System.Uri]::UnescapeDataString($value)
+    $base = if ($fromRoot) { $outputFull } else { $FromDirectory }
+    $target = if ($value -eq '' -or $value -eq './') { Join-Path $base 'index.html' } else { Join-Path $base $value }
+    $target = [System.IO.Path]::GetFullPath($target)
+    if ($target -ne $outputFull -and -not $target.StartsWith($outputFull + [System.IO.Path]::DirectorySeparatorChar, $pathComparison)) {
+        Fail "${Where}: $Label='$Raw' points outside the site."
+        return
+    }
+    if (Test-Path -LiteralPath $target -PathType Container) { $target = Join-Path $target 'index.html' }
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { Fail "${Where}: $Label='$Raw' points at nothing."; return }
+    if ($fragment -and $target.EndsWith('.html')) {
+        $targetIds = @([regex]::Matches([System.IO.File]::ReadAllText($target), '\sid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+        if ($targetIds -notcontains $fragment) { Fail "${Where}: $Label='$Raw' has no #$fragment in its target." }
+    }
+}
+
+# The addresses that a search engine or a social card takes from a page must be those of this site, not of some other one.
+function Test-SharedAddress([string]$Where, [string]$Tag) {
+    if ($Tag -notmatch '\brel="canonical"' -and $Tag -notmatch '\b(?:property="og:(?:url|image)"|name="twitter:image")') { return }
+    $address = [regex]::Match($Tag, '\b(?:href|content)="([^"]*)"')
+    if (-not $address.Success -or -not $address.Groups[1].Value.StartsWith($PublicBase)) { Fail "${Where}: $Tag does not point at $PublicBase." }
+}
+
+# url(...) in a style sheet, a style block or a style attribute.
+function Test-StyleUrls([string]$Where, [string]$Text, [string]$FromDirectory, [string[]]$PageIds) {
+    foreach ($url in [regex]::Matches($Text, 'url\(\s*["'']?(?<value>[^)"'']*)["'']?\s*\)')) {
+        $value = $url.Groups['value'].Value.Trim()
+        if ($value -and -not $value.StartsWith('#')) { Test-Reference $Where 'url()' $value $FromDirectory $PageIds }
+    }
+}
+
 foreach ($page in $pages) {
     $relative = Get-Relative $page.FullName
     $text = [System.IO.File]::ReadAllText($page.FullName)
@@ -92,37 +143,34 @@ foreach ($page in $pages) {
         if ($image.Value -notmatch '\salt="') { Fail "${relative}: a picture has no alt text: $($image.Value.Substring(0, [Math]::Min(80, $image.Value.Length)))" }
     }
     $ids = @([regex]::Matches($text, '\sid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+    foreach ($tag in [regex]::Matches($text, '<(?:link|meta)\b[^>]*>')) { Test-SharedAddress $relative $tag.Value }
     foreach ($reference in [regex]::Matches($text, '\b(?<attribute>href|src|srcset|content)="(?<value>[^"]*)"')) {
         $attribute = $reference.Groups['attribute'].Value
         $value = $reference.Groups['value'].Value
         if ($attribute -eq 'content' -and -not $value.StartsWith($PublicBase)) { continue }
-        if ($value -match '^(mailto:|tel:|data:)') { continue }
-        if ($value.StartsWith('http://')) { Fail "${relative}: $attribute='$value' is not https."; continue }
-        if ($value.StartsWith('https://') -and -not $value.StartsWith($PublicBase)) { continue }
-        if ($value.StartsWith($PublicBase)) { $value = $value.Substring($PublicBase.Length) }
-        elseif ($value.StartsWith($BasePath)) { $value = $value.Substring($BasePath.Length) }
-        elseif ($value.StartsWith('/')) { Fail "${relative}: $attribute='$value' is an absolute path outside $BasePath."; continue }
-        $fragment = $null
-        if ($value.Contains('#')) { $fragment = $value.Substring($value.IndexOf('#') + 1); $value = $value.Substring(0, $value.IndexOf('#')) }
-        if ($value.Contains('?')) { $value = $value.Substring(0, $value.IndexOf('?')) }
-        if ($value -eq '' -and $fragment) {
-            if ($ids -notcontains $fragment) { Fail "${relative}: the link #$fragment has no target." }
-            continue
-        }
-        $base = if ($reference.Groups['value'].Value.StartsWith('/') -or $reference.Groups['value'].Value.StartsWith($PublicBase)) { $outputFull } else { $page.DirectoryName }
-        $target = if ($value -eq '' -or $value -eq './') { Join-Path $base 'index.html' } else { Join-Path $base $value }
-        # Only what is in the uploaded site exists on the web: a link that climbs out of it can find a file of the repository, and break after deployment.
-        $target = [System.IO.Path]::GetFullPath($target)
-        if ($target -ne $outputFull -and -not $target.StartsWith($outputFull + [System.IO.Path]::DirectorySeparatorChar, $pathComparison)) {
-            Fail "${relative}: $attribute='$($reference.Groups['value'].Value)' points outside the site."; continue
-        }
-        if (Test-Path -LiteralPath $target -PathType Container) { $target = Join-Path $target 'index.html' }
-        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { Fail "${relative}: $attribute='$($reference.Groups['value'].Value)' points at nothing."; continue }
-        if ($fragment -and $target.EndsWith('.html')) {
-            $targetIds = @([regex]::Matches([System.IO.File]::ReadAllText($target), '\sid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
-            if ($targetIds -notcontains $fragment) { Fail "${relative}: $attribute='$($reference.Groups['value'].Value)' has no #$fragment in its target." }
-        }
+        $candidates = if ($attribute -eq 'srcset') { @($value -split ',' | ForEach-Object { ($_.Trim() -split '\s+')[0] } | Where-Object { $_ }) } else { @($value) }
+        foreach ($candidate in $candidates) { Test-Reference $relative $attribute $candidate $page.DirectoryName $ids }
     }
+    Test-StyleUrls $relative $text $page.DirectoryName $ids
+}
+
+foreach ($style in @(Get-ChildItem -LiteralPath $Output -Filter '*.css' -File -Recurse)) {
+    Test-StyleUrls (Get-Relative $style.FullName) ([System.IO.File]::ReadAllText($style.FullName)) $style.DirectoryName @()
+}
+
+# What the sitemap and robots.txt announce must exist on this site.
+$announced = @()
+$sitemap = Join-Path $Output 'sitemap.xml'
+if (Test-Path -LiteralPath $sitemap) {
+    $announced += @([regex]::Matches([System.IO.File]::ReadAllText($sitemap), '<loc>\s*(?<value>[^<]*?)\s*</loc>') | ForEach-Object { , @('sitemap.xml', $_.Groups['value'].Value) })
+}
+$robots = Join-Path $Output 'robots.txt'
+if (Test-Path -LiteralPath $robots) {
+    $announced += @([System.IO.File]::ReadAllLines($robots) | Where-Object { $_ -match '^\s*Sitemap:\s*\S+' } | ForEach-Object { , @('robots.txt', ($_ -replace '^\s*Sitemap:\s*', '').Trim()) })
+}
+foreach ($item in $announced) {
+    if (-not $item[1].StartsWith($PublicBase)) { Fail "$($item[0]): '$($item[1])' is not under $PublicBase." }
+    else { Test-Reference $item[0] 'address' $item[1] $outputFull @() }
 }
 
 foreach ($name in $screenshotNames) {
