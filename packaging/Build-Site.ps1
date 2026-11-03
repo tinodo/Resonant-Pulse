@@ -95,7 +95,7 @@ $readAttributes = @('href', 'src', 'srcset', 'imagesrcset', 'poster', 'data', 'a
 # tag besides its name and its attributes, which should be nothing: an attribute that follows a closing quote without a space
 # (<a class="x"href="y">) is read by a browser and not by the checks.
 function Get-Tags([string]$Text) {
-    foreach ($match in [regex]::Matches($Text, "(?is)<!--.*?-->|(?<open><(?<raw>style|script|textarea|title)\b$tagBody>)(?<content>.*?)</\k<raw>\s*>|(?<open>$tagPattern)")) {
+    foreach ($match in [regex]::Matches($Text, "(?is)<!--.*?-->|(?<open><(?<raw>style|script|textarea|title)(?=[\s/>])$tagBody>)(?<content>.*?)</\k<raw>\s*>|(?<open>$tagPattern)")) {
         if (-not $match.Groups['open'].Success) { continue }
         $open = $match.Groups['open'].Value
         $body = $open -replace '^<[a-zA-Z][^\s/>]*', ''

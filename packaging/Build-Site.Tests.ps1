@@ -242,6 +242,9 @@ $cases = @(
             Add-ToHome '<textarea><a href="missing.html"></textarea><svg><title>an <a href="missing.html"> in a title</title></svg>'
         } }
     @{ Name = 'a script that is not there'; Expect = 'points at nothing'; Change = { Add-ToHome '<script src="missing.js"></script>' } }
+    @{ Name = 'a custom element whose name starts with script, then a script'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<script-example><a href="missing.html">x</a></script-example><script>void 0;</script>'
+        } }
     @{ Name = 'a link to the top of the page'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="#top">a</a> <a href="#TOP">b</a> <a href="privacy.html#top">c</a> <a href="#">d</a></p>' } }
     @{ Name = 'an SVG link to a file that is not there'; Expect = 'points at nothing'; Change = {
             Add-ToHome '<svg><use xlink:href="missing.svg#a"/></svg>'
