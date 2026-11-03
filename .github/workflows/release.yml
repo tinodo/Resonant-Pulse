@@ -36,6 +36,10 @@ jobs:
           if [[ "$PREVIEW" != "true" && "$VERSION" == *-* ]]; then
             echo "::error::A prerelease version cannot be labelled stable."; exit 1
           fi
+          # The package (package.yml) takes the version as it is, so a pre-release needs a pre-release version: 1.1.0-preview.1, not 1.1.0.
+          if [[ "$PREVIEW" == "true" && "$VERSION" != *-* ]]; then
+            echo "::error::A pre-release needs a pre-release version such as 1.1.0-preview.1."; exit 1
+          fi
           if [[ "$PREVIEW" != "true" && "$ACCEPTED" != "true" ]]; then
             echo "::error::Stable delivery requires recorded full-product/device acceptance and PRODUCT_ACCEPTANCE_COMPLETED=true."; exit 1
           fi
@@ -85,3 +89,15 @@ jobs:
           args=(--repo "$GITHUB_REPOSITORY" --verify-tag --title "Resonant Pulse $VERSION" --notes-file docs/RELEASE-NOTES.md)
           if [[ "$PREVIEW" == "true" ]]; then args+=(--prerelease); fi
           gh release create "v$VERSION" release-assets/*.zip release-assets/*.sha256 "${args[@]}"
+  package:
+    name: ResonantPulse.Core package
+    # The release is published by now. The package is made and checked again at this commit, then pushed by a job of its own (package.yml),
+    # so that a failed push never touches the release and can be repeated: run package.yml from main with the same version.
+    needs: release
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    uses: ./.github/workflows/package.yml
+    with:
+      version: ${{ inputs.version }}

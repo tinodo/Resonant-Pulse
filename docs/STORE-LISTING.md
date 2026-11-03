@@ -13,7 +13,8 @@ external prerequisites. Do not claim the entire design as shipping functionality
 | Package version | 1.0.0.0 (the fourth part of a Store version is reserved and stays 0), built by the Microsoft Store workflow |
 | Category candidate | Music |
 | Support | https://github.com/tinodo/Resonant-Pulse/issues |
-| Privacy | https://github.com/tinodo/Resonant-Pulse/blob/main/docs/PRIVACY.md |
+| Website | https://tinodo.github.io/Resonant-Pulse/ (GitHub Pages; the home page says "coming soon" for the Store until `STORE_FIRST_PUBLICATION_COMPLETED` is `true`) |
+| Privacy | https://tinodo.github.io/Resonant-Pulse/privacy.html (the same text as docs/PRIVACY.md; `pages.yml` fails when their effective dates or words differ) |
 | Source/license | https://github.com/tinodo/Resonant-Pulse / MIT |
 | Package languages | en-US, nl-NL, de-DE, fr-FR, es-ES |
 | Distribution baseline | Windows 11 24H2 or later; x64 and ARM64 builds (the Store package is x64) |

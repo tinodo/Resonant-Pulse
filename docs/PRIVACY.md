@@ -41,7 +41,7 @@ The components the app is built from are listed in the [third-party notices](../
 
 ## Changes and contact
 
-If this policy changes, the new version is published at
-<https://github.com/tinodo/Resonant-Pulse/blob/main/docs/PRIVACY.md> with a new effective date. Questions about privacy can be raised
+If this policy changes, the new version is published on the website at
+<https://tinodo.github.io/Resonant-Pulse/privacy.html>, and in this file, with a new effective date. Questions about privacy can be raised
 as an issue at <https://github.com/tinodo/Resonant-Pulse/issues>. Issues are public: do not attach private projects, credentials or
 personal information to them, and ask there for a private way to get in touch before sharing anything sensitive.

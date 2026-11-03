@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tinodo.github.io/Resonant-Pulse/sitemap.xml

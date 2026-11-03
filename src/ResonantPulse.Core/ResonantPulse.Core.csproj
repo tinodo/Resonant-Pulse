@@ -6,5 +6,21 @@
     <LangVersion>14</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <IsPackable>true</IsPackable>
+    <PackageId>ResonantPulse.Core</PackageId>
+    <Description>The UI-free engine of Resonant Pulse, a metronome and rhythm workstation for Windows: a rhythm document model, a schedule compiler that places every click on an exact sample, a stateless PCM renderer, WAV, per-track WAV (ZIP) and MIDI export, a tap-tempo estimator and a timing analyzer. Platform independent, no package dependencies.</Description>
+    <PackageTags>metronome;rhythm;polyrhythm;euclidean;tempo;midi;wav;music;practice</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://tinodo.github.io/Resonant-Pulse/</PackageProjectUrl>
+    <Copyright>Copyright (c) 2026 Tino Donderwinkel</Copyright>
+    <!-- GitHub Packages links the package to this repository from the nuspec, and only a linked package can be pushed with GITHUB_TOKEN. -->
+    <RepositoryUrl>https://github.com/tinodo/Resonant-Pulse</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The README of the package page. src/ResonantPulse.Core/README.md is the engine's integration contract and stays out of the package. -->
+    <None Include="..\..\packaging\nuget\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 </Project>

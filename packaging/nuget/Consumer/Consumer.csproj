@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Stand-alone on purpose: it is copied out of the repository and restores the packed ResonantPulse.Core from a local folder, as
+       any user of the package would. It is not part of ResonantPulse.slnx. packaging/Build-NuGetPackage.ps1 runs it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ResonantPulseCoreVersion Condition="'$(ResonantPulseCoreVersion)' == ''">1.0.0</ResonantPulseCoreVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ResonantPulse.Core" Version="$(ResonantPulseCoreVersion)" />
+  </ItemGroup>
+
+</Project>
