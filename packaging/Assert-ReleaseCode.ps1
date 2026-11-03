@@ -12,7 +12,8 @@
         the project's folder up to the root, as parsed XML. Comments and layout do not count, and neither do the properties that only
         describe the package or the version (description, tags, URLs, copyright, license, authors, version) or the README that is packed
         into the package. Everything else counts, however it is written: a property, an item, a condition, an attribute, a text;
-      * the other build files (Directory.Build.rsp, MSBuild.rsp, NuGet.config, global.json), by content.
+      * the other build files (Directory.Build.rsp, MSBuild.rsp, NuGet.config, global.json) and the analyzer configuration (.editorconfig,
+        .globalconfig, which can configure source generators), by content.
 
     The check reads only what is listed, so a project that depends on anything else is refused, whatever the other commit holds, until
     the check is taught to read it:
@@ -20,10 +21,28 @@
       * an Import, ImportGroup, Sdk, UsingTask or Target element, or a ProjectReference: another file, a task, or code that this check
         does not follow or evaluate;
       * a path outside the library's folder (with .., rooted, wherever it stands, or made from the project's or the solution's directory),
-        a condition that looks at the file system (Exists, HasTrailingSlash), or a property function, $([...]), which can read any file;
+        a condition that looks at the file system (Exists, HasTrailingSlash), a property function, $([...]), which can read any file, or an
+        escaped character (%2E), which can hide any of these;
+      * a read of anything that the pipeline does not fix. Only $(Version) and $(Configuration), which the package is made with (-p:Version
+        and --configuration Release: a global property wins over every file, so both commits read the same value), and $(NoWarn) inside
+        the NoWarn property itself (<NoWarn>$(NoWarn);1591</NoWarn>, which adds to the default and hands it on to nothing else) may be
+        read. A property that the files define themselves may not, however it is defined: its value can come from the environment
+        (<P>$(P)</P> reads the environment's P), from itself, from a cycle, or write a path (..) one piece at a time. Nor may an
+        environment variable, the operating system, a reserved property, an item list or item metadata; $(Name.Method()), %(Metadata)
+        and @(Items) are refused whatever their names;
       * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison;
+      * a package reference (the library has no package dependencies, and a package that restore resolves is code that is not among the
+        compared files), and a name or a wildcard that could take in a file that this check leaves out of the comparison (README.md, the
+        lock file, the project file, all in the library's own folder), which would then be a build input that nobody compares;
+      * a CDATA section, which MSBuild reads in a way that this check does not follow, text beside markup (a child element, a processing
+        instruction), which MSBuild reads as literal markup, and a symbolic link or a submodule among the
+        library's files, which are compared by their entries and not by what they point at. (Text that a comment splits is read joined,
+        as MSBuild joins it: $<!---->(OS) is read as $(OS).)
       * TreatAsLocalProperty, which lets a project override the properties given on the command line: the package is made with
         -p:Version, so the version can be left out of the comparison and read freely only while nothing can override it.
+
+    When the candidate is the release's own commit (release.yml makes the package at the commit it has just released) nothing is compared:
+    the library is the release's.
 
     The package itself is made by the candidate's own packaging script (Build-NuGetPackage.ps1), which gives the version and the
     configuration and nothing else. It is part of the reviewed pipeline and is not compared.
@@ -56,7 +75,7 @@ $Repository = (Resolve-Path -LiteralPath $Repository).Path
 $libraryFolder = 'src/ResonantPulse.Core'
 $projectFile = "$libraryFolder/ResonantPulse.Core.csproj"
 $xmlBuildFiles = @('Directory.Build.props', 'Directory.Build.targets', 'Directory.Packages.props')
-$otherBuildFiles = @('Directory.Build.rsp', 'MSBuild.rsp', 'NuGet.config', 'nuget.config', 'NuGet.Config', 'global.json')
+$otherBuildFiles = @('Directory.Build.rsp', 'MSBuild.rsp', 'NuGet.config', 'nuget.config', 'NuGet.Config', 'global.json', '.editorconfig', '.globalconfig')
 
 # What only describes the package or the version, and so cannot change what the library does.
 $permittedProperties = @(
@@ -66,7 +85,11 @@ $permittedItems = @('../../packaging/nuget/README.md')
 
 # What the check cannot follow or evaluate (see the description). The version is read harmlessly: the package is made with -p:Version, which
 # wins over every file, on both sides, unless the project treats the version as local (TreatAsLocalProperty), which is refused too.
-$unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference')
+# The library has no package dependencies, and a package that restore resolves (a floating version, the lock file that this check leaves out)
+# is code that is not among the compared files.
+$unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference', 'PackageReference', 'GlobalPackageReference', 'PackageDownload')
+# The files that the comparison of the library's folder leaves out (they differ between a release and a later commit), and what could name them.
+$leftOutOrWildcard = '(?i)README|packages\.lock\.json|\.csproj|[*?]'
 $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path that climbs out of a folder
     '|(^|[\s''"(;=,])[\\/][^\s''")]' +                                # a rooted path, at the start of a value or inside one (a condition)
     '|(^|\W)[A-Za-z]:[\\/]' +                                         # a path with a drive letter
@@ -74,6 +97,15 @@ $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path t
     '|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)' +  # a path made from the project's or the solution's place
     '|\$\(\['                                                         # a property function, which can read anything
 $packageProperty = '[$%@]\((' + (($permittedProperties | Where-Object { $_ -ne 'Version' }) -join '|') + ')\b'
+# An escaped character (%2E, %24) can write any of the characters above without them showing.
+$escapedCharacter = '%[0-9A-Fa-f]{2}'
+# What a value or a condition reads. Only a plain $(Name) is understood. Anything else that starts an expression, $(Name.Method()), %(Metadata),
+# @(Items), is refused.
+$plainRead = '\$\(([A-Za-z_][\w\-]*)\)'
+$expression = '[$%@]\('
+# The properties that the pipeline fixes for both commits (-p:Version, --configuration Release): no file can change them (TreatAsLocalProperty,
+# which could, is refused), so a read of one gives the same value on both sides and can be neither made from the environment nor a path.
+$pipelineGiven = @('Version', 'Configuration')
 $unreadReferences = [System.Collections.Generic.List[string]]::new()
 
 # git's output as one string, as it is: no lines, no console encoding, so that names and files are read exactly.
@@ -103,13 +135,43 @@ function Find-UnreadReferences($Root, [string] $Name) {
                 "$Name has TreatAsLocalProperty=""$($attribute.Value)"" on <$($element.LocalName)>, which lets the project override the properties given on the command line"
             }
         }
-        $values = @($element.Attributes | ForEach-Object { $_.Value }) + @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA' } | ForEach-Object { $_.Value })
-        foreach ($value in $values) {
+        # MSBuild joins the pieces of the text of an element (a comment may stand between them: $<!---->(OS) is $(OS)), so they are read joined, and
+        # it reads a CDATA section in a way that this check does not follow.
+        if (@($element.ChildNodes | Where-Object { $_.NodeType -eq 'CDATA' }).Count -gt 0) {
+            "$Name has a CDATA section in <$($element.LocalName)>, which MSBuild reads in a way that this check does not follow"
+        }
+        # Text beside markup (a child element, a processing instruction) is read by MSBuild as literal markup, spaces and all.
+        if (@($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'SignificantWhitespace' -and $_.Value.Trim() }).Count -gt 0 -and
+            @($element.ChildNodes | Where-Object { $_.NodeType -in 'Element', 'ProcessingInstruction', 'EntityReference' }).Count -gt 0) {
+            "$Name has text and markup together in <$($element.LocalName)>, which MSBuild reads as literal markup and this check does not follow"
+        }
+        $content = -join @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA', 'SignificantWhitespace', 'Whitespace' } | ForEach-Object { $_.Value })
+        $values = @($element.Attributes | ForEach-Object { [pscustomobject] @{ Text = $_.Value; IsContent = $false } }) +
+            @([pscustomobject] @{ Text = $content; IsContent = $true })
+        foreach ($item in $values) {
+            $value = $item.Text
             if ($value -match $outsideReference) {
                 "$Name has '$($value.Trim())' in <$($element.LocalName)>, which refers outside the library's folder or runs code"
             }
+            if ($value -match $leftOutOrWildcard) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, which names a file that this check leaves out of the comparison (a README, a lock file) or could match one (a wildcard)"
+            }
             if ($value -match $packageProperty) {
                 "$Name reads the package property $($Matches[1]) in <$($element.LocalName)>, which this check leaves out of the comparison"
+            }
+            if ($value -match $escapedCharacter) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, an escaped character, which can hide what this check looks for"
+            }
+            foreach ($read in [regex]::Matches($value, $plainRead)) {
+                $readName = $read.Groups[1].Value
+                # <NoWarn>$(NoWarn);1591</NoWarn> adds to the default value of the property and hands it on to nothing else.
+                $accumulates = $item.IsContent -and $element.LocalName -eq 'NoWarn' -and $readName -eq 'NoWarn' -and $element.ParentNode.LocalName -eq 'PropertyGroup'
+                if ($pipelineGiven -notcontains $readName -and -not $accumulates) {
+                    "$Name reads $($read.Value) in <$($element.LocalName)>, which can come from the environment, from a definition of the project or from the operating system, or be a piece of a path, and this check does not follow that"
+                }
+            }
+            if ([regex]::Replace($value, $plainRead, '') -match $expression) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, an expression, item list or item metadata (not a plain `$(Name)), which this check does not evaluate"
             }
         }
     }
@@ -140,6 +202,8 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
     catch { throw "$Name is not valid XML: $($_.Exception.Message)" }
 
     foreach ($comment in @($document.SelectNodes('//comment()'))) { [void] $comment.ParentNode.RemoveChild($comment) }
+    # The text on both sides of a comment is one text, as MSBuild reads it (FOO<!-- c -->BAR is FOOBAR, and FOO<!-- c --> BAR is FOO BAR).
+    $document.Normalize()
     $root = $document.DocumentElement
     if ($DropPackageMetadata) {
         foreach ($group in @($root.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })) {
@@ -172,12 +236,20 @@ function Get-Inputs([string] $Revision) {
     $listing = Invoke-Git (@('ls-tree', '-r', '-z', $Revision, '--', $libraryFolder) + $paths)
     foreach ($entry in $listing -split "`0") {
         if (-not $entry) { continue }
-        if ($entry -cnotmatch '(?s)^\d+ \w+ ([0-9a-f]+)\t(.+)$') { throw "Unexpected entry from git ls-tree: $entry" }
-        $entries[$Matches[2]] = $Matches[1]
+        if ($entry -cnotmatch '(?s)^(\d+) \w+ ([0-9a-f]+)\t(.+)$') { throw "Unexpected entry from git ls-tree: $entry" }
+        $mode, $blob, $entryPath = $Matches[1], $Matches[2], $Matches[3]
+        $entries[$entryPath] = $blob
+        # A link or a submodule is compared by what its entry says, not by what it points at, and what it points at is built.
+        if ($mode -in '120000', '160000') {
+            $script:unreadReferences.Add("$entryPath at $Revision is a symbolic link or a submodule, which this check compares by its entry and not by what it points at")
+        }
     }
 
     $library = foreach ($path in $entries.Keys) {
-        if ($path.StartsWith("$libraryFolder/", [System.StringComparison]::Ordinal) -and $path -cnotmatch '(/ResonantPulse\.Core\.csproj|/README\.md|/packages\.lock\.json)$') {
+        # Only these three, in the library's own folder, are left out: the project file is compared as XML, and the other two differ between a
+        # release and a later commit. Anywhere else a file of that name is a library file like any other.
+        if ($path.StartsWith("$libraryFolder/", [System.StringComparison]::Ordinal) -and $path -cne $projectFile -and
+            $path -cne "$libraryFolder/README.md" -and $path -cne "$libraryFolder/packages.lock.json") {
             "$($entries[$path]) $(ConvertTo-Literal $path)"
         }
     }
@@ -203,6 +275,14 @@ function Get-Inputs([string] $Revision) {
         else { '(missing)' }
     }
     , $inputs
+}
+
+# The package of a release that is made at the release's own commit (release.yml does) needs no comparison.
+$releaseCommit = (Invoke-Git @('rev-parse', '--verify', "$Release^{commit}")).Trim()
+$candidateCommit = (Invoke-Git @('rev-parse', '--verify', "$Candidate^{commit}")).Trim()
+if ($releaseCommit -eq $candidateCommit) {
+    Write-Host "The candidate $Candidate is the release's own commit, ${releaseCommit}: the library is the release's."
+    return
 }
 
 $before = Get-Inputs $Release

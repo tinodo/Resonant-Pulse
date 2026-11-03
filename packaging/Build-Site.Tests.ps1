@@ -46,6 +46,9 @@ function Edit-SitePattern([string] $Page, [string] $Pattern, [string] $New) {
 # Adds a paragraph to the end of the home page.
 function Add-ToHome([string] $Html) { Edit-Site 'index.html' '</body>' "$Html`n</body>" }
 
+# Adds a paragraph to the end of the privacy page.
+function Add-ToPrivacy([string] $Html) { Edit-Site 'privacy.html' '</body>' "$Html`n</body>" }
+
 # 'accepted', or a pattern that the reason for the refusal must match.
 $cases = @(
     @{ Name = 'the site as it is, the Store listing pending'; Expect = 'accepted'; Change = { } }
@@ -67,6 +70,191 @@ $cases = @(
             Add-ToHome '<p><a href="../outside.html">x</a></p>'
         } }
     @{ Name = 'a link to a path outside the base path'; Expect = 'absolute path outside'; Change = { Add-ToHome '<p><a href="/elsewhere/x.html">x</a></p>' } }
+    @{ Name = 'links from another page to anchors of the home page, written with the base path and with the public address'; Expect = 'accepted'; Change = {
+            Add-ToPrivacy '<p><a href="/Resonant-Pulse/#download">a</a> <a href="https://tinodo.github.io/Resonant-Pulse/#features">b</a> <a href="./#download">c</a></p>'
+        } }
+    @{ Name = 'a link from another page to an anchor that the home page does not have'; Expect = 'has no #nothing-here in its target'; Change = {
+            Add-ToPrivacy '<p><a href="/Resonant-Pulse/#nothing-here">x</a></p>'
+        } }
+    @{ Name = 'a code sample on a page that shows a url() to nothing'; Expect = 'accepted'; Change = {
+            Add-ToHome '<p><code>background: url(nothing.png)</code></p>'
+        } }
+    @{ Name = 'a comment in a style sheet that mentions a url() to nothing'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '/* was: url(old.png) */ .wrap {'
+        } }
+    @{ Name = 'a style attribute with a url() to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p style="background: url(missing.png)">x</p>'
+        } }
+    @{ Name = 'a style block with a url() to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<style>.y { background: url(missing.png); }</style>'
+        } }
+    @{ Name = 'a style sheet that imports a style sheet that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@import "missing.css"; .wrap {'
+        } }
+    @{ Name = 'a link in single quotes'; Expect = 'not written name='; Change = { Add-ToHome "<p><a href='nowhere.html'>x</a></p>" } }
+    @{ Name = 'a link without quotes'; Expect = 'not written name='; Change = { Add-ToHome '<p><a href=nowhere.html>x</a></p>' } }
+    @{ Name = 'a link with spaces around the equals sign'; Expect = 'not written name='; Change = { Add-ToHome '<p><a href = "nowhere.html">x</a></p>' } }
+    @{ Name = 'a style attribute in single quotes'; Expect = 'not written name='; Change = { Add-ToHome "<p style='background: url(missing.png)'>x</p>" } }
+    @{ Name = 'a style attribute with spaces around the equals sign'; Expect = 'not written name='; Change = {
+            Add-ToHome '<p style = "background: url(missing.png)">x</p>'
+        } }
+    @{ Name = 'comment delimiters inside strings of a style sheet, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.a::before { content: "/*"; } .b { background: url(missing.png); } .c::after { content: "*/"; } .wrap {'
+        } }
+    @{ Name = 'an apostrophe in a comment of a style sheet, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' "/* it's a note */ .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a comment in a style sheet that holds a string and a url() to nothing'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '/* was: "x" and url(old.png) */ .wrap {'
+        } }
+    @{ Name = 'an unquoted url() that holds a comment delimiter, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.a { background: url(https://example.com/images/*); } .b { background: url(missing.png); } .wrap {'
+        } }
+    @{ Name = 'a style attribute that hides a comment delimiter in character references, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p style="--label: &quot;/*&quot;; background: url(missing.png)">x</p>'
+        } }
+    @{ Name = 'an @import in capitals to a style sheet that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@IMPORT "missing.css"; .wrap {'
+        } }
+    @{ Name = 'text in a string of a style sheet that looks like an @import'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".example::before { content: '@import ""missing.css""'; } .wrap {"
+        } }
+    @{ Name = 'a url() in capitals to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: URL(missing.png); } .wrap {'
+        } }
+    @{ Name = 'a string that is not closed ends at its line, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".a { content: `"oops`n} .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a string that is not closed ends at a carriage return, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".a { content: `"oops`r} .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a line continuation inside a string of a style sheet, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".a { content: `"one\`r`ntwo`"; } .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a ">" inside a quoted value, then a link in single quotes'; Expect = 'not written name='; Change = {
+            Add-ToHome '<p><a title="1 > 0" href=''nowhere.html''>x</a></p>'
+        } }
+    @{ Name = 'text inside a quoted value that looks like an attribute with spaces around the equals sign'; Expect = 'accepted'; Change = {
+            Add-ToHome '<p><a title="the id = 3" href="privacy.html">x</a></p>'
+        } }
+    @{ Name = 'a link with its attribute name in capitals, to nothing'; Expect = 'points at nothing'; Change = { Add-ToHome '<p><a HREF="nowhere.html">x</a></p>' } }
+    @{ Name = 'an @import with a comment before its address'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@import /**/ "missing.css"; .wrap {'
+        } }
+    @{ Name = 'an image-set() with an address in a string'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: image-set("missing.png" 1x); } .wrap {'
+        } }
+    @{ Name = 'a prefixed image-set()'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: -webkit-image-set("missing.png" 1x); } .wrap {'
+        } }
+    @{ Name = 'a src() with an address in a string'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: src("missing.png"); } .wrap {'
+        } }
+    @{ Name = 'an escaped keyword'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: u\72l(missing.png); } .wrap {'
+        } }
+    @{ Name = 'an escape inside a string of a style sheet'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.a::before { content: "\2192"; } .wrap {'
+        } }
+    @{ Name = 'attributes with no space between them'; Expect = 'between its attributes'; Change = {
+            Add-ToHome '<div class="a"style="background: url(missing.png)">x</div>'
+        } }
+    @{ Name = 'a link to an anchor in another letter case'; Expect = 'has no target'; Change = { Add-ToHome '<p><a href="#Features">x</a></p>' } }
+    @{ Name = 'a link from another page to an anchor in another letter case'; Expect = 'has no #Features in its target'; Change = {
+            Add-ToPrivacy '<p><a href="/Resonant-Pulse/#Features">x</a></p>'
+        } }
+    @{ Name = 'a video poster that is not there'; Expect = 'points at nothing'; Change = { Add-ToHome '<video poster="screenshots/09-nothing.png"></video>' } }
+    @{ Name = 'a preloaded picture set that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<link rel="preload" as="image" imagesrcset="screenshots/09-nothing.png 1x">'
+        } }
+    @{ Name = 'an escape in a quoted address of a style sheet'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: url("assets/\favicon-32.png"); } .wrap {'
+        } }
+    @{ Name = 'an escape in a quoted @import address'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@import "assets/\favicon.css"; .wrap {'
+        } }
+    @{ Name = 'an escape in an unquoted address of a style sheet'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: url(assets/\favicon-32.png); } .wrap {'
+        } }
+    @{ Name = 'an attribute whose name ends with the name of one that is read'; Expect = 'accepted'; Change = {
+            Add-ToHome '<button data-action="download">x</button>'
+        } }
+    @{ Name = 'a quoted value that holds text that looks like a reference'; Expect = 'accepted'; Change = {
+            Add-ToHome "<div title='background=`"missing.png`"'>x</div>"
+        } }
+    @{ Name = 'a style block whose opening tag holds a ">" in a quoted value'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<style title="1 > 0">.x { background: url(missing.png); }</style>'
+        } }
+    @{ Name = 'an id in the text of a quoted value is not an id'; Expect = 'has no target'; Change = {
+            Add-ToHome "<p title='x id=`"fake`"'>y</p><p><a href=`"#fake`">z</a></p>"
+        } }
+    @{ Name = 'an id in the text of a quoted value of another page is not an id'; Expect = 'has no #fake in its target'; Change = {
+            Add-ToPrivacy "<p title='x id=`"fake`"'>y</p>"
+            Add-ToHome '<p><a href="privacy.html#fake">z</a></p>'
+        } }
+    @{ Name = 'a tag that is commented out'; Expect = 'accepted'; Change = {
+            Add-ToHome "<!-- <a href='x'>old</a> <a href=`"nowhere.html`">older</a> -->"
+        } }
+    @{ Name = 'a refresh to a page that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=missing.html">'
+        } }
+    @{ Name = 'a refresh to a page that is there'; Expect = 'accepted'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=privacy.html">'
+        } }
+    @{ Name = 'a refresh whose address holds a semicolon'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=privacy.html;missing">'
+        } }
+    @{ Name = 'a refresh with a quoted address'; Expect = 'accepted'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0; url=''privacy.html''">'
+        } }
+    @{ Name = 'a refresh without url= and with a comma'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<meta http-equiv="refresh" content="0, missing.html">'
+        } }
+    @{ Name = 'a refresh of the same page'; Expect = 'accepted'; Change = { Add-ToHome '<meta http-equiv="refresh" content="30">' } }
+    @{ Name = 'a quoted comment marker in an attribute, then a link to nothing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<a title="<!--" href="missing.html" data-end="-->">x</a>'
+        } }
+    @{ Name = 'a canonical address with its href twice'; Expect = 'times'; Change = {
+            Add-ToHome '<link rel="canonical" href="https://example.com/" href="https://tinodo.github.io/Resonant-Pulse/">'
+        } }
+    @{ Name = 'a link with its rel twice'; Expect = 'times'; Change = {
+            Add-ToHome '<link rel="stylesheet" rel="canonical" href="https://example.com/">'
+        } }
+    @{ Name = 'a preview address with its property twice'; Expect = 'times'; Change = {
+            Add-ToHome '<meta property="og:title" property="og:image" content="https://example.com/x.png">'
+        } }
+    @{ Name = 'a canonical address among other words of rel'; Expect = 'does not point at'; Change = {
+            Add-ToHome '<link rel="alternate canonical" href="https://example.com/">'
+        } }
+    @{ Name = 'a style block that is commented out'; Expect = 'accepted'; Change = {
+            Add-ToHome '<!-- <style>.a { background: url(missing.png); }</style> -->'
+        } }
+    @{ Name = 'a comment inside a style block, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<style><!-- .a { background: url(missing.png); } --></style>'
+        } }
+    @{ Name = 'comment markers in the attributes of two tags, a style block between them'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p title="<!--"></p><style>.x { background: url(missing.png); }</style><p title="-->"></p>'
+        } }
+    @{ Name = 'tag-like text in a script'; Expect = 'accepted'; Change = {
+            Add-ToHome '<script>var t = ''<a href="missing.html">'';</script>'
+        } }
+    @{ Name = 'tag-like text in a textarea and a title'; Expect = 'accepted'; Change = {
+            Add-ToHome '<textarea><a href="missing.html"></textarea><svg><title>an <a href="missing.html"> in a title</title></svg>'
+        } }
+    @{ Name = 'a script that is not there'; Expect = 'points at nothing'; Change = { Add-ToHome '<script src="missing.js"></script>' } }
+    @{ Name = 'a custom element whose name starts with script, then a script'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<script-example><a href="missing.html">x</a></script-example><script>void 0;</script>'
+        } }
+    @{ Name = 'a link to the top of the page'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="#top">a</a> <a href="#TOP">b</a> <a href="privacy.html#top">c</a> <a href="#">d</a></p>' } }
+    @{ Name = 'an SVG link to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<svg><use xlink:href="missing.svg#a"/></svg>'
+        } }
+    @{ Name = 'an SVG link in single quotes'; Expect = 'not written name='; Change = {
+            Add-ToHome "<svg><use xlink:href='missing.svg#a'/></svg>"
+        } }
+    @{ Name = 'a preview address in single quotes'; Expect = 'not written name='; Change = {
+            Add-ToHome "<meta property='og:image' content='https://example.com/x.png'>"
+        } }
     @{ Name = 'a percent-encoded link to a file that exists'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="screenshots/01%2Dplay.png">x</a></p>' } }
     @{ Name = 'a picture with two sources, both there'; Expect = 'accepted'; Change = {
             Add-ToHome '<p><img src="screenshots/01-play.png" srcset="screenshots/01-play.png 1x, screenshots/02-studio.png 2x" alt="x"></p>'
