@@ -5,28 +5,28 @@
 A native Windows metronome and rhythm workstation in C#/.NET 10 and WinUI 3,
 with the cyan/magenta instrument aesthetic of Resonant.
 
-**Development status:** implementation in progress. The full reviewed design is
-the product target, not a claim that every feature is delivered. See
-[delivery evidence](docs/DELIVERY.md), [architecture](docs/ARCHITECTURE.md)
-and [release operations](docs/RELEASING.md).
+**Version 1.0.0.** Play, Studio, Train, Stage, Library and Settings are built and in use. The full reviewed design is a longer-term
+target, and not every part of it is built: [capabilities and limits](docs/CAPABILITIES.md), [delivery evidence](docs/DELIVERY.md),
+[architecture](docs/ARCHITECTURE.md) and [release operations](docs/RELEASING.md) say which, and the
+[release notes](docs/RELEASE-NOTES.md) say what is in 1.0.0 and what was not tried.
 
 ## Downloads
 
-**Published previews:** [GitHub downloads](https://github.com/tinodo/Resonant-Pulse/releases),
-with x64/ARM64 downloads and SHA-256 checksums. This is not the completed full product.
+**Releases:** [GitHub downloads](https://github.com/tinodo/Resonant-Pulse/releases), with x64/ARM64 downloads and SHA-256 checksums.
 
-Verified preview ZIPs are published to [GitHub Releases](https://github.com/tinodo/Resonant-Pulse/releases)
+Verified ZIPs are published to [GitHub Releases](https://github.com/tinodo/Resonant-Pulse/releases)
 only after the release workflow's engine tests and Windows builds pass. Extract
 the entire ZIP and run `ResonantPulse.exe` on Windows 11 24H2 or later with a matching
 architecture. Do not copy only the executable. Downloads include .NET and WinUI runtime
-dependencies. Unsigned previews may show SmartScreen warnings; inspect the source
+dependencies. Unsigned downloads may show SmartScreen warnings; inspect the source
 and SHA-256 checksum rather than disabling platform protection.
 
 ARM64 compilation is distinct from ARM64 hardware validation. Do not interpret
 the presence of an ARM64 artifact as proof of instrument/audio behavior.
 
 **Microsoft Store:** reserved as product `9NRFH2C8X2QL`, but not yet published.
-The exact Partner Center identity is configured. First submission, certification
+The exact Partner Center identity is configured, and the listing artwork is in
+[packaging/store-assets](packaging/store-assets). First submission, certification
 and API authorization remain required; update automation is separately guarded.
 
 ## Development and verification
@@ -110,9 +110,8 @@ dotnet test tests\ResonantPulse.App.Tests\ResonantPulse.App.Tests.csproj -c Rele
 dotnet publish src\ResonantPulse.App\ResonantPulse.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:DistributionMode=Portable --self-contained true
 ```
 
-No account, cloud service, advertising or telemetry is required for the core
-metronome. Persistence is local. Recording/input analysis, if available in a
-particular build, must be explicitly enabled. See [privacy](docs/PRIVACY.md).
+No account, cloud service, advertising or telemetry is required, or present: Resonant Pulse
+does not use the microphone or the network. Persistence is local. See [privacy](docs/PRIVACY.md).
 
 MIT licensed. Dependencies retain their respective licenses; see
 [third-party notices](THIRD-PARTY-NOTICES.md).

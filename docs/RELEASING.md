@@ -24,10 +24,13 @@ Release versions are single-use: the workflow atomically creates a new tag at
 the tested SHA and rejects an existing tag. It never attaches tested binaries
 to a different pre-existing source tag. If publication fails after tag creation,
 inspect the failure and use a new preview version; do not silently move a tag.
-Use a preview semantic version until hardware/accessibility acceptance is
-established. Failed gates prevent release publication.
+Use a preview semantic version until the owner has accepted the product (hardware/accessibility
+acceptance, or his recorded decision to accept it with the gaps stated). Failed gates prevent release publication.
 Stable releases additionally require `PRODUCT_ACCEPTANCE_COMPLETED=true`,
-configured only after full-product/device acceptance is recorded. Every ZIP
+configured only after full-product/device acceptance is recorded (for 1.0.0 the
+owner's acceptance, with what it rests on and what it does not claim, is the row
+"Release acceptance (1.0.0)" of DELIVERY.md, written before the variable was set).
+Every ZIP
 contains build-info.json with its source SHA, version, architecture and CI run.
 Public Store update submission requires the same acceptance flag; generating
 an identity-correct candidate does not claim that acceptance or publish it.

@@ -1,7 +1,7 @@
 # Capability evidence and limitations
 
-The full design in design/metronome-design.md remains the product target.
-This is not a declaration that the preview completes that target. "Implemented"
+The reviewed full product design in design/metronome-design.md remains the longer-term target.
+This is not a declaration that release 1.0.0 completes that target. "Implemented"
 below means source exists; installed-app behavior requires Windows/device
 evidence separately.
 
