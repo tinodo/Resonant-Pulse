@@ -6,8 +6,11 @@
     The repository starts as the release: the library project, Directory.Build.props, global.json and the package README exactly as they
     are in this checkout. Every case changes the copy, commits it and asks the script whether that commit still builds the release's
     library. A change that only describes the package or the version must be accepted. Any change that can alter what the library does
-    must be refused, however it is written: next to a comment, on one line, in a condition, in a target, in another build file. Fails when
-    any answer is wrong.
+    must be refused, however it is written: next to a comment, on one line, in a condition, in a target, in another build file. A project
+    that points at files the script does not read is refused even when the two commits are the same one. Fails when any answer is wrong.
+
+    The cases find what they change by pattern, not by the value it has today, so that raising the version or retargeting the library does
+    not break them.
 #>
 [CmdletBinding()]
 param(
@@ -24,14 +27,29 @@ $guard = (Resolve-Path $Guard).Path
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ('rp-release-code-' + [guid]::NewGuid().ToString('N'))
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
-$project = 'src/ResonantPulse.Core/ResonantPulse.Core.csproj'
+$library = 'src/ResonantPulse.Core'
+$project = "$library/ResonantPulse.Core.csproj"
 $props = 'Directory.Build.props'
-$readmeItem = '<None Include="..\..\packaging\nuget\README.md" Pack="true" PackagePath="\" Visible="false" />'
 $overflow = '<CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>'
+
+# The properties that may differ: the contract of the check, written out again here so that dropping one of them from the check is noticed.
+$permittedNames = @(
+    'IsPackable', 'PackageId', 'Description', 'PackageTags', 'PackageReadmeFile', 'PackageProjectUrl', 'PackageLicenseExpression',
+    'Copyright', 'RepositoryUrl', 'RepositoryType', 'PublishRepositoryUrl', 'Authors', 'Company', 'Product', 'Version')
 
 function Invoke-WorkGit([string[]] $Arguments) {
     $output = & git -C $work -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.autocrlf=false @Arguments 2>&1
     if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') failed: $output" }
+}
+
+function Save-Work([string] $Message, [bool] $IndexOnly) {
+    if (-not $IndexOnly) { Invoke-WorkGit @('add', '-A') }
+    Invoke-WorkGit @('commit', '-q', '--allow-empty', '-m', $Message)
+}
+
+function Reset-Work([string] $Commit) {
+    Invoke-WorkGit @('reset', '-q', '--hard', $Commit)
+    Invoke-WorkGit @('clean', '-fdq')
 }
 
 function Read-Text([string] $Path) { [System.IO.File]::ReadAllText((Join-Path $work $Path)) }
@@ -48,12 +66,24 @@ function Edit-Text([string] $Path, [string] $Old, [string] $New) {
     Write-Text $Path $text.Replace($Old, $New)
 }
 
-function Edit-Pattern([string] $Path, [string] $Pattern, [string] $New) {
+# Replaces the first match of a pattern with what the evaluator returns for it; fails when there is none or when nothing changes.
+function Edit-Match([string] $Path, [string] $Pattern, [scriptblock] $Evaluator) {
     $text = Read-Text $Path
-    $changed = [regex]::Replace($text, $Pattern, $New)
-    if ($changed -ceq $text) { throw "The test expects a match of '$Pattern' in $Path and finds none: update the test." }
+    $regex = [regex]::new($Pattern)
+    $match = $regex.Match($text)
+    if (-not $match.Success) { throw "The test expects a match of '$Pattern' in $Path and finds none: update the test." }
+    $changed = $text.Substring(0, $match.Index) + (& $Evaluator $match) + $text.Substring($match.Index + $match.Length)
+    if ($changed -ceq $text) { throw "The test changed nothing in $Path with '$Pattern': update the test." }
     Write-Text $Path $changed
 }
+
+function Edit-Pattern([string] $Path, [string] $Pattern, [string] $New) { Edit-Match $Path $Pattern { param($match) $New } }
+
+# Adds text right after the first match of a pattern.
+function Add-After([string] $Path, [string] $Pattern, [string] $Insert) { Edit-Match $Path $Pattern { param($match) $match.Value + $Insert } }
+
+# Adds text at the end of a project file, inside it.
+function Add-ToProject([string] $Path, [string] $Insert) { Edit-Text $Path '</Project>' "$Insert`n</Project>" }
 
 function Add-Text([string] $Path, [string] $Text) { Write-Text $Path ((Read-Text $Path) + $Text) }
 
@@ -61,170 +91,213 @@ function Remove-Work([string] $Path) { Remove-Item -LiteralPath (Join-Path $work
 
 function Move-Work([string] $From, [string] $To) { Move-Item -LiteralPath (Join-Path $work $From) -Destination (Join-Path $work $To) }
 
-# Each case: what it does to the copy, and the answer that is right. 'same' is for what only describes the package or the version.
-$cases = @(
-    @{ Name = 'nothing changed (an empty commit)'; Expect = 'same'; Change = { } }
-    @{ Name = 'description, tags and copyright changed'; Expect = 'same'; Change = {
-            Edit-Pattern $project '<Description>[^<]*</Description>' '<Description>Another text.</Description>'
-            Edit-Pattern $project '<PackageTags>[^<]*</PackageTags>' '<PackageTags>one;two</PackageTags>'
-            Edit-Pattern $project '<Copyright>[^<]*</Copyright>' '<Copyright>Someone else</Copyright>'
-        } }
-    @{ Name = 'package id, project URL and repository URL changed'; Expect = 'same'; Change = {
-            Edit-Pattern $project '<PackageId>[^<]*</PackageId>' '<PackageId>Other.Id</PackageId>'
-            Edit-Pattern $project '<PackageProjectUrl>[^<]*</PackageProjectUrl>' '<PackageProjectUrl>https://example.invalid/</PackageProjectUrl>'
-            Edit-Pattern $project '<RepositoryUrl>[^<]*</RepositoryUrl>' '<RepositoryUrl>https://example.invalid/repo</RepositoryUrl>'
-        } }
-    @{ Name = 'package metadata moved into a property group of its own'; Expect = 'same'; Change = {
-            Edit-Text $project '<PackageId>ResonantPulse.Core</PackageId>' ''
-            Edit-Text $project '</Project>' '<PropertyGroup><PackageId>Other</PackageId></PropertyGroup></Project>'
-        } }
-    @{ Name = 'the packed README taken out of the project'; Expect = 'same'; Change = { Edit-Text $project $readmeItem '' } }
-    @{ Name = 'the packed README taken out of the project together with its comment and item group'; Expect = 'same'; Change = {
-            Edit-Pattern $project '(?s)\s*<ItemGroup>.*?</ItemGroup>' ''
-        } }
-    @{ Name = 'the packed README on one line, attributes in another order'; Expect = 'same'; Change = {
-            Edit-Text $project $readmeItem '<None Visible="false" PackagePath="\" Pack="true" Include="..\..\packaging\nuget\README.md"></None>'
-        } }
-    @{ Name = 'comments, layout and line breaks changed'; Expect = 'same'; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable> <!-- a comment -->'
-            Edit-Text $project '<LangVersion>14</LangVersion>' "<LangVersion>`n      14  </LangVersion>"
-            Edit-Text $project '<PropertyGroup>' "<!-- a note -->`n  <PropertyGroup>"
-        } }
-    @{ Name = 'the version raised'; Expect = 'same'; Change = { Edit-Text $props '<Version>1.0.0</Version>' '<Version>2.3.4</Version>' } }
-    @{ Name = 'authors and product changed'; Expect = 'same'; Change = {
-            Edit-Text $props '<Authors>Tino Donderwinkel</Authors>' '<Authors>Someone</Authors>'
-            Edit-Text $props '<Product>Resonant Pulse</Product>' '<Product>Other</Product>'
-        } }
-    @{ Name = 'the integration README and the lock file changed'; Expect = 'same'; Change = {
-            Add-Text 'src/ResonantPulse.Core/README.md' "`nMore text.`n"
-            Add-Text 'src/ResonantPulse.Core/packages.lock.json' "`n"
-        } }
+# A file that exists in the commit and nowhere else (no working file): a name that no file system takes, or two that differ in case only.
+function Add-IndexEntry([string] $Path, [string] $Text) {
+    $blob = ($Text | & git -C $work hash-object -w --stdin).Trim()
+    Invoke-WorkGit @('-c', 'core.protectNTFS=false', 'update-index', '--add', '--cacheinfo', "100644,$blob,$Path")
+}
 
-    @{ Name = 'overflow checking added'; Expect = 'different'; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' "<Nullable>enable</Nullable>`n    $overflow"
-        } }
-    @{ Name = 'overflow checking on a line of its own, followed by a comment'; Expect = 'different'; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' "<Nullable>enable</Nullable>`n    $overflow <!-- checked -->"
-        } }
-    @{ Name = 'overflow checking next to another element and a comment'; Expect = 'different'; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' "<Nullable>enable</Nullable>$overflow <!-- checked -->"
-        } }
-    @{ Name = 'a file removed from the build, in an item group on a line of its own'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' "<ItemGroup><Compile Remove=`"TimingCsvExporter.cs`" /></ItemGroup>`n</Project>"
-        } }
-    @{ Name = 'a file removed from the build, in an item group on one line'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' '<ItemGroup><Compile Remove="TimingCsvExporter.cs" /></ItemGroup></Project>'
-        } }
-    @{ Name = 'overflow checking in a conditional property group'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' "<PropertyGroup Condition=`"'`$(Configuration)' == 'Release'`">$overflow</PropertyGroup></Project>"
-        } }
-    @{ Name = 'overflow checking set by a target'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' "<Target Name=`"T`" BeforeTargets=`"CoreCompile`"><PropertyGroup>$overflow</PropertyGroup></Target></Project>"
-        } }
-    @{ Name = 'an item named like a package property'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' '<ItemGroup><Description Include="x" /></ItemGroup></Project>'
-        } }
-    @{ Name = 'another file packed'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' '<ItemGroup><None Include="LICENSE" Pack="true" PackagePath="\" /></ItemGroup></Project>'
-        } }
-    @{ Name = 'a property imported from another file'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' '<Import Project="extra.props" /></Project>'
-        } }
-    @{ Name = 'nullable annotations turned off'; Expect = 'different'; Change = { Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>disable</Nullable>' } }
-    @{ Name = 'the language version changed'; Expect = 'different'; Change = { Edit-Text $project '<LangVersion>14</LangVersion>' '<LangVersion>13</LangVersion>' } }
-    @{ Name = 'the target framework changed'; Expect = 'different'; Change = { Edit-Text $project '<TargetFramework>net10.0</TargetFramework>' '<TargetFramework>net9.0</TargetFramework>' } }
-    @{ Name = 'warnings suppressed differently'; Expect = 'different'; Change = { Edit-Text $project '1591</NoWarn>' '1591;8618</NoWarn>' } }
-    @{ Name = 'a compilation symbol defined'; Expect = 'different'; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><DefineConstants>$(DefineConstants);EXTRA</DefineConstants>'
-        } }
-    @{ Name = 'a package referenced'; Expect = 'different'; Change = {
-            Edit-Text $project '</Project>' '<ItemGroup><PackageReference Include="Some.Package" Version="1.0.0" /></ItemGroup></Project>'
-        } }
-    @{ Name = 'a property written in another case'; Expect = 'different'; Change = { Edit-Text $project '<Nullable>enable</Nullable>' '<nullable>enable</nullable>' } }
-    @{ Name = 'the project file removed'; Expect = 'different'; Change = { Remove-Work $project } }
-    @{ Name = 'a source file changed'; Expect = 'different'; Change = { Add-Text 'src/ResonantPulse.Core/Rational.cs' "`n// changed`n" } }
-    @{ Name = 'a source file added'; Expect = 'different'; Change = { Write-Text 'src/ResonantPulse.Core/Added.cs' 'internal class Added { }' } }
-    @{ Name = 'a source file removed'; Expect = 'different'; Change = { Remove-Work 'src/ResonantPulse.Core/TempoMap.cs' } }
-    @{ Name = 'a source file renamed'; Expect = 'different'; Change = { Move-Work 'src/ResonantPulse.Core/TempoMap.cs' 'src/ResonantPulse.Core/TempoMap2.cs' } }
-    @{ Name = 'a resource file added to the library folder'; Expect = 'different'; Change = { Write-Text 'src/ResonantPulse.Core/Strings.resx' '<root />' } }
-    @{ Name = 'an editorconfig added to the library folder'; Expect = 'different'; Change = { Write-Text 'src/ResonantPulse.Core/.editorconfig' 'root = true' } }
-    @{ Name = 'a build property changed in Directory.Build.props'; Expect = 'different'; Change = {
-            Edit-Text $props '<Deterministic>true</Deterministic>' '<Deterministic>false</Deterministic>'
-        } }
-    @{ Name = 'the language version changed in Directory.Build.props'; Expect = 'different'; Change = {
-            Edit-Text $props '<LangVersion>latest</LangVersion>' '<LangVersion>12</LangVersion>'
-        } }
-    @{ Name = 'overflow checking next to the version in Directory.Build.props'; Expect = 'different'; Change = {
-            Edit-Text $props '<Version>1.0.0</Version>' "<Version>1.0.0</Version>$overflow <!-- x -->"
-        } }
-    @{ Name = 'Directory.Build.targets added at the root'; Expect = 'different'; Change = {
-            Write-Text 'Directory.Build.targets' "<Project><PropertyGroup>$overflow</PropertyGroup></Project>"
-        } }
-    @{ Name = 'Directory.Build.targets added in src'; Expect = 'different'; Change = {
-            Write-Text 'src/Directory.Build.targets' "<Project><PropertyGroup>$overflow</PropertyGroup></Project>"
-        } }
-    @{ Name = 'Directory.Build.props added in src'; Expect = 'different'; Change = {
-            Write-Text 'src/Directory.Build.props' "<Project><PropertyGroup>$overflow</PropertyGroup></Project>"
-        } }
-    @{ Name = 'Directory.Packages.props added'; Expect = 'different'; Change = { Write-Text 'Directory.Packages.props' '<Project />' } }
-    @{ Name = 'Directory.Build.rsp added'; Expect = 'different'; Change = { Write-Text 'Directory.Build.rsp' '-p:CheckForOverflowUnderflow=true' } }
-    @{ Name = 'NuGet.config added'; Expect = 'different'; Change = { Write-Text 'NuGet.config' '<configuration />' } }
-    @{ Name = 'the SDK version changed'; Expect = 'different'; Change = { Edit-Pattern 'global.json' '"version": "[^"]*"' '"version": "1.2.3"' } }
+# What 1.0.0 looked like before the packaging existed: no package metadata, and no packed README.
+function Remove-PackageMetadata {
+    foreach ($file in $project, $props) {
+        foreach ($name in $permittedNames) {
+            $text = Read-Text $file
+            Write-Text $file ([regex]::Replace($text, "\s*<$name>[^<]*</$name>", ''))
+        }
+    }
+    Write-Text $project ([regex]::Replace((Read-Text $project), '\s*<None [^>]*README\.md[^>]*/>', ''))
+}
 
-    # A project that points at files this check does not read is refused even when both commits are the same one.
-    @{ Name = 'a project that imports a file, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '</Project>' '<Import Project="extra.props" /></Project>'
-        } }
-    @{ Name = 'a project with an Sdk element, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '<PropertyGroup>' '<Sdk Name="Other.Sdk" Version="1.0.0" /><PropertyGroup>'
-        } }
-    @{ Name = 'a project that includes a file of another folder, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '</Project>' '<ItemGroup><Compile Include="..\Shared\Extra.cs" /></ItemGroup></Project>'
-        } }
-    @{ Name = 'a property that points outside the library folder, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><ApplicationIcon>../../assets/x.ico</ApplicationIcon>'
-        } }
-    @{ Name = 'a property made from the project directory, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><KeyFile>$(MSBuildProjectDirectory)/x.snk</KeyFile>'
-        } }
-    @{ Name = 'a property with a rooted path, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '<Nullable>enable</Nullable>' '<Nullable>enable</Nullable><KeyFile>C:\keys\x.snk</KeyFile>'
-        } }
-    @{ Name = 'a condition on a file outside the library folder, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $project '</Project>' '<PropertyGroup Condition="Exists(''..\x'')"><Nullable>enable</Nullable></PropertyGroup></Project>'
-        } }
-    @{ Name = 'Directory.Build.props that imports a file, checked against itself'; Expect = 'different'; Self = $true; Change = {
-            Edit-Text $props '</Project>' '<Import Project="common.props" /></Project>'
-        } }
-    @{ Name = 'the project as it is, checked against itself'; Expect = 'same'; Self = $true; Change = { } }
-)
+$cases = [System.Collections.Generic.List[hashtable]]::new()
+
+# Each case: what it does to the copy (Change), and the answer that is right. 'same' is for what only describes the package or the version.
+# Release changes the release's own commit first (the candidate is still the copy, changed); OnRelease makes the candidate start from that
+# commit; Self asks about the changed commit against itself; IndexOnly changes the commit without working files.
+function Add-Case([hashtable] $Case) { $cases.Add($Case) }
+
+Add-Case @{ Name = 'nothing changed (an empty commit)'; Expect = 'same'; Change = { } }
+Add-Case @{ Name = 'description, tags and copyright changed'; Expect = 'same'; Change = {
+        Edit-Pattern $project '<Description>[^<]*</Description>' '<Description>Another text.</Description>'
+        Edit-Pattern $project '<PackageTags>[^<]*</PackageTags>' '<PackageTags>one;two</PackageTags>'
+        Edit-Pattern $project '<Copyright>[^<]*</Copyright>' '<Copyright>Someone else</Copyright>'
+    } }
+Add-Case @{ Name = 'package id, project URL and repository URL changed'; Expect = 'same'; Change = {
+        Edit-Pattern $project '<PackageId>[^<]*</PackageId>' '<PackageId>Other.Id</PackageId>'
+        Edit-Pattern $project '<PackageProjectUrl>[^<]*</PackageProjectUrl>' '<PackageProjectUrl>https://example.invalid/</PackageProjectUrl>'
+        Edit-Pattern $project '<RepositoryUrl>[^<]*</RepositoryUrl>' '<RepositoryUrl>https://example.invalid/repo</RepositoryUrl>'
+    } }
+Add-Case @{ Name = 'package metadata moved into a property group of its own'; Expect = 'same'; Change = {
+        Edit-Pattern $project '\s*<PackageId>[^<]*</PackageId>' ''
+        Add-ToProject $project '<PropertyGroup><PackageId>Other</PackageId></PropertyGroup>'
+    } }
+Add-Case @{ Name = 'the packed README taken out of the project'; Expect = 'same'; Change = { Edit-Pattern $project '<None [^>]*README\.md[^>]*/>' '' } }
+Add-Case @{ Name = 'the packed README taken out of the project together with its comment and item group'; Expect = 'same'; Change = {
+        Edit-Pattern $project '(?s)\s*<ItemGroup>.*?</ItemGroup>' ''
+    } }
+Add-Case @{ Name = 'the packed README on one line, attributes in another order'; Expect = 'same'; Change = {
+        Edit-Pattern $project '<None [^>]*README\.md[^>]*/>' '<None Visible="false" PackagePath="\" Pack="true" Include="..\..\packaging\nuget\README.md"></None>'
+    } }
+Add-Case @{ Name = 'comments, layout and line breaks changed'; Expect = 'same'; Change = {
+        Add-After $project '<Nullable>[^<]*</Nullable>' ' <!-- a comment -->'
+        Edit-Match $project '<LangVersion>([^<]*)</LangVersion>' { param($match) "<LangVersion>`n      $($match.Groups[1].Value)  </LangVersion>" }
+        Edit-Text $project '<PropertyGroup>' "<!-- a note -->`n  <PropertyGroup>"
+    } }
+Add-Case @{ Name = 'the version raised'; Expect = 'same'; Change = { Edit-Pattern $props '<Version>[^<]*</Version>' '<Version>9.9.9-test</Version>' } }
+Add-Case @{ Name = 'authors and product changed'; Expect = 'same'; Change = {
+        Edit-Pattern $props '<Authors>[^<]*</Authors>' '<Authors>Someone</Authors>'
+        Edit-Pattern $props '<Product>[^<]*</Product>' '<Product>Other</Product>'
+    } }
+Add-Case @{ Name = 'the integration README and the lock file changed'; Expect = 'same'; Change = {
+        Add-Text "$library/README.md" "`nMore text.`n"
+        if (Test-Path -LiteralPath (Join-Path $work "$library/packages.lock.json")) { Add-Text "$library/packages.lock.json" "`n" }
+    } }
+Add-Case @{ Name = 'the release has no package metadata and no packed README, as 1.0.0 had'; Expect = 'same'; Release = { Remove-PackageMetadata }; Change = { } }
+foreach ($name in $permittedNames) {
+    # Built from text, not as a closure, so that the cases run in this script's scope, where the helpers are.
+    $releaseBlock = [scriptblock]::Create("Add-ToProject `$project '<PropertyGroup><$name>one</$name></PropertyGroup>'")
+    $changeBlock = [scriptblock]::Create("Add-ToProject `$project '<PropertyGroup><$name>two</$name></PropertyGroup>'")
+    Add-Case @{ Name = "the package property $name differs"; Expect = 'same'; Release = $releaseBlock; Change = $changeBlock }
+}
+Add-Case @{ Name = 'the version read by a condition (the package is made with -p:Version)'; Expect = 'same'; Self = $true; Change = {
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(Version)' == '1.0.0'`"><DefineConstants>X</DefineConstants></PropertyGroup>"
+    } }
+Add-Case @{ Name = 'the project as it is, checked against itself'; Expect = 'same'; Self = $true; Change = { } }
+
+Add-Case @{ Name = 'overflow checking added'; Expect = 'different'; Change = { Add-After $project '<Nullable>[^<]*</Nullable>' "`n    $overflow" } }
+Add-Case @{ Name = 'overflow checking on a line of its own, followed by a comment'; Expect = 'different'; Change = {
+        Add-After $project '<Nullable>[^<]*</Nullable>' "`n    $overflow <!-- checked -->"
+    } }
+Add-Case @{ Name = 'overflow checking next to another element and a comment'; Expect = 'different'; Change = {
+        Add-After $project '<Nullable>[^<]*</Nullable>' "$overflow <!-- checked -->"
+    } }
+Add-Case @{ Name = 'a file removed from the build, in an item group on a line of its own'; Expect = 'different'; Change = {
+        Add-ToProject $project '<ItemGroup><Compile Remove="TimingCsvExporter.cs" /></ItemGroup>'
+    } }
+Add-Case @{ Name = 'a file removed from the build, in an item group on one line'; Expect = 'different'; Change = {
+        Edit-Text $project '</Project>' '<ItemGroup><Compile Remove="TimingCsvExporter.cs" /></ItemGroup></Project>'
+    } }
+Add-Case @{ Name = 'overflow checking in a conditional property group'; Expect = 'different'; Change = {
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(Configuration)' == 'Release'`">$overflow</PropertyGroup>"
+    } }
+Add-Case @{ Name = 'an item named like a package property'; Expect = 'different'; Change = { Add-ToProject $project '<ItemGroup><Description Include="x" /></ItemGroup>' } }
+Add-Case @{ Name = 'another file packed'; Expect = 'different'; Change = {
+        Add-ToProject $project '<ItemGroup><None Include="LICENSE" Pack="true" PackagePath="\" /></ItemGroup>'
+    } }
+Add-Case @{ Name = 'nullable annotations changed'; Expect = 'different'; Change = { Edit-Pattern $project '<Nullable>[^<]*</Nullable>' '<Nullable>changed</Nullable>' } }
+Add-Case @{ Name = 'the language version changed'; Expect = 'different'; Change = { Edit-Pattern $project '<LangVersion>[^<]*</LangVersion>' '<LangVersion>changed</LangVersion>' } }
+Add-Case @{ Name = 'the target framework changed'; Expect = 'different'; Change = { Edit-Pattern $project '<TargetFramework>[^<]*</TargetFramework>' '<TargetFramework>changed</TargetFramework>' } }
+Add-Case @{ Name = 'warnings suppressed differently'; Expect = 'different'; Change = { Edit-Text $project '</NoWarn>' ';8618</NoWarn>' } }
+Add-Case @{ Name = 'a compilation symbol defined'; Expect = 'different'; Change = {
+        Add-After $project '<Nullable>[^<]*</Nullable>' '<DefineConstants>$(DefineConstants);EXTRA</DefineConstants>'
+    } }
+Add-Case @{ Name = 'a package referenced'; Expect = 'different'; Change = {
+        Add-ToProject $project '<ItemGroup><PackageReference Include="Some.Package" Version="1.0.0" /></ItemGroup>'
+    } }
+Add-Case @{ Name = 'a property written in another case'; Expect = 'different'; Change = {
+        Edit-Match $project '<Nullable>([^<]*)</Nullable>' { param($match) "<nullable>$($match.Groups[1].Value)</nullable>" }
+    } }
+Add-Case @{ Name = 'the project file removed'; Expect = 'different'; Change = { Remove-Work $project } }
+$sources = @(& git -C $root ls-files -- "$library/*.cs")
+if ($sources.Count -lt 2) { throw 'The test needs at least two source files in the library.' }
+Add-Case @{ Name = 'a source file changed'; Expect = 'different'; Change = { Add-Text $sources[0] "`n// changed`n" } }
+Add-Case @{ Name = 'a source file added'; Expect = 'different'; Change = { Write-Text "$library/Added.cs" 'internal class Added { }' } }
+Add-Case @{ Name = 'a source file removed'; Expect = 'different'; Change = { Remove-Work $sources[1] } }
+Add-Case @{ Name = 'a source file renamed'; Expect = 'different'; Change = { Move-Work $sources[1] "$($sources[1]).renamed.cs" } }
+Add-Case @{ Name = 'a resource file added to the library folder'; Expect = 'different'; Change = { Write-Text "$library/Strings.resx" '<root />' } }
+Add-Case @{ Name = 'an editorconfig added to the library folder'; Expect = 'different'; Change = { Write-Text "$library/.editorconfig" 'root = true' } }
+Add-Case @{ Name = 'two files whose names differ only in case, one of them changed'; Expect = 'different'; IndexOnly = $true; OnRelease = $true
+    Release = { Add-IndexEntry "$library/Dup.cs" 'one'; Add-IndexEntry "$library/dup.cs" 'two' }
+    Change = { Add-IndexEntry "$library/Dup.cs" 'changed' } }
+Add-Case @{ Name = 'a file whose name has a double quote in it, added'; Expect = 'different'; IndexOnly = $true; Change = {
+        Add-IndexEntry "$library/Q`"uote.cs" 'class Q { }'
+    } }
+Add-Case @{ Name = 'a build property changed in Directory.Build.props'; Expect = 'different'; Change = {
+        Edit-Pattern $props '<Deterministic>[^<]*</Deterministic>' '<Deterministic>changed</Deterministic>'
+    } }
+Add-Case @{ Name = 'the language version changed in Directory.Build.props'; Expect = 'different'; Change = {
+        Edit-Pattern $props '<LangVersion>[^<]*</LangVersion>' '<LangVersion>changed</LangVersion>'
+    } }
+Add-Case @{ Name = 'overflow checking next to the version in Directory.Build.props'; Expect = 'different'; Change = {
+        Add-After $props '<Version>[^<]*</Version>' "$overflow <!-- x -->"
+    } }
+Add-Case @{ Name = 'Directory.Build.targets added at the root'; Expect = 'different'; Change = {
+        Write-Text 'Directory.Build.targets' "<Project><PropertyGroup>$overflow</PropertyGroup></Project>"
+    } }
+Add-Case @{ Name = 'Directory.Build.targets added in src'; Expect = 'different'; Change = {
+        Write-Text 'src/Directory.Build.targets' "<Project><PropertyGroup>$overflow</PropertyGroup></Project>"
+    } }
+Add-Case @{ Name = 'Directory.Build.props added in src'; Expect = 'different'; Change = {
+        Write-Text 'src/Directory.Build.props' "<Project><PropertyGroup>$overflow</PropertyGroup></Project>"
+    } }
+Add-Case @{ Name = 'Directory.Packages.props added'; Expect = 'different'; Change = { Write-Text 'Directory.Packages.props' '<Project />' } }
+Add-Case @{ Name = 'Directory.Build.rsp added'; Expect = 'different'; Change = { Write-Text 'Directory.Build.rsp' '-p:CheckForOverflowUnderflow=true' } }
+Add-Case @{ Name = 'NuGet.config added'; Expect = 'different'; Change = { Write-Text 'NuGet.config' '<configuration />' } }
+Add-Case @{ Name = 'the SDK version changed'; Expect = 'different'; Change = { Edit-Pattern 'global.json' '"version": "[^"]*"' '"version": "1.2.3"' } }
+Add-Case @{ Name = 'a text that imitates the print of two texts'; Expect = 'different'
+    Release = { Add-After $project '<Nullable>[^<]*</Nullable>' '<DefineConstants>A<![CDATA[B]]></DefineConstants>' }
+    Change = { Add-After $project '<Nullable>[^<]*</Nullable>' "<DefineConstants>A`n      #text B</DefineConstants>" } }
+
+# A project that points at files this check does not read, or at things it cannot evaluate, is refused even when both commits are the same one.
+$unread = [ordered] @{
+    'a project that imports a file' = { Add-ToProject $project '<Import Project="extra.props" />' }
+    'a project with an Sdk element' = { Edit-Text $project '<PropertyGroup>' '<Sdk Name="Other.Sdk" Version="1.0.0" /><PropertyGroup>' }
+    'a project with a target' = { Add-ToProject $project '<Target Name="T" BeforeTargets="CoreCompile"><Message Text="x" /></Target>' }
+    'a project with a target that sets overflow checking' = {
+        Add-ToProject $project "<Target Name=`"T`" BeforeTargets=`"CoreCompile`"><PropertyGroup>$overflow</PropertyGroup></Target>"
+    }
+    'a project with a task' = { Add-ToProject $project '<UsingTask TaskName="X" AssemblyFile="x.dll" />' }
+    'a project with a project reference' = { Add-ToProject $project '<ItemGroup><ProjectReference Include="Other.csproj" /></ItemGroup>' }
+    'a project that includes a file of another folder' = { Add-ToProject $project '<ItemGroup><Compile Include="..\Shared\Extra.cs" /></ItemGroup>' }
+    'a property that points outside the library folder' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<ApplicationIcon>../../assets/x.ico</ApplicationIcon>' }
+    'a property made from the project directory' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<KeyFile>$(MSBuildProjectDirectory)/x.snk</KeyFile>' }
+    'a property with a rooted path' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<KeyFile>C:\keys\x.snk</KeyFile>' }
+    'a property function that reads a file' = { Add-After $project '<Nullable>[^<]*</Nullable>' "<Extra>`$([System.IO.File]::ReadAllText('x'))</Extra>" }
+    'a condition on a file outside the library folder' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"Exists('..\x')`"><Nullable>enable</Nullable></PropertyGroup>"
+    }
+    'logic that reads a package property' = {
+        Add-ToProject $props "<PropertyGroup Condition=`"'`$(Product)' == 'Resonant Pulse'`"><DefineConstants>BRANDED</DefineConstants></PropertyGroup>"
+    }
+    'an item that reads a package property' = { Add-ToProject $project "<ItemGroup><Compile Include=`"`$(Description).cs`" /></ItemGroup>" }
+    'Directory.Build.props that imports a file' = { Add-ToProject $props '<Import Project="common.props" />' }
+}
+foreach ($name in $unread.Keys) { Add-Case @{ Name = "$name, checked against itself"; Expect = 'different'; Self = $true; Change = $unread[$name] } }
 
 try {
-    $cases = @($cases | Where-Object { $_.Name -like $Filter })
-    if ($cases.Count -eq 0) { throw "No case matches '$Filter'." }
+    $selected = @($cases | Where-Object { $_.Name -like $Filter })
+    if ($selected.Count -eq 0) { throw "No case matches '$Filter'." }
+
     [void] (New-Item -ItemType Directory -Path $work)
     Invoke-WorkGit @('init', '-q')
-    $tracked = @(& git -C $root ls-files -- src/ResonantPulse.Core Directory.Build.props global.json packaging/nuget/README.md)
+    # Two files whose names differ only in case must stay two entries, whatever file system this runs on.
+    Invoke-WorkGit @('config', 'core.ignorecase', 'false')
+    $tracked = @(& git -C $root ls-files -- $library Directory.Build.props global.json packaging/nuget/README.md)
     if ($LASTEXITCODE -ne 0 -or $tracked.Count -eq 0) { throw 'Could not list the library files of this checkout.' }
     foreach ($file in $tracked) {
         Write-Text $file (([System.IO.File]::ReadAllText((Join-Path $root $file))) -replace "`r`n", "`n")
     }
-    Invoke-WorkGit @('add', '-A')
-    Invoke-WorkGit @('commit', '-q', '-m', 'release')
-    $release = (& git -C $work rev-parse HEAD).Trim()
+    Save-Work 'base' $false
+    $base = (& git -C $work rev-parse HEAD).Trim()
 
     $wrong = 0
-    foreach ($case in $cases) {
-        Invoke-WorkGit @('reset', '-q', '--hard', $release)
-        Invoke-WorkGit @('clean', '-fdq')
+    foreach ($case in $selected) {
+        $indexOnly = $case.ContainsKey('IndexOnly')
+        Reset-Work $base
+
+        $release = $base
+        if ($case.ContainsKey('Release')) {
+            & $case.Release
+            Save-Work "$($case.Name) (release)" $indexOnly
+            $release = (& git -C $work rev-parse HEAD).Trim()
+            if (-not $case.ContainsKey('OnRelease')) { Reset-Work $base }
+        }
         & $case.Change
-        Invoke-WorkGit @('add', '-A')
-        Invoke-WorkGit @('commit', '-q', '--allow-empty', '-m', $case.Name)
+        Save-Work $case.Name $indexOnly
+        if ($case.ContainsKey('Self')) { $release = 'HEAD' }
 
         $answer = 'same'
         $message = ''
-        $from = if ($case.ContainsKey('Self')) { 'HEAD' } else { $release }
-        try { & $guard -Release $from -Candidate HEAD -Repository $work 6>$null }
+        try { & $guard -Release $release -Candidate HEAD -Repository $work 6>$null }
         catch {
             if ($_.Exception.Message -notlike "The library cannot be shown to be the release's*") { throw }
             $answer = 'different'
@@ -237,8 +310,11 @@ try {
         if (-not $right -and $message) { $message }
     }
 
-    if ($wrong -gt 0) { throw "$wrong of $($cases.Count) cases got the wrong answer." }
-    "All $($cases.Count) cases got the right answer."
+    if ($wrong -gt 0) { throw "$wrong of $($selected.Count) cases got the wrong answer." }
+    "All $($selected.Count) cases got the right answer."
+    # The last command may have failed on purpose; a caller that goes by $LASTEXITCODE, as the pwsh shell of GitHub Actions does, must not
+    # take that for a failure of the tests.
+    $global:LASTEXITCODE = 0
 }
 finally {
     if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }

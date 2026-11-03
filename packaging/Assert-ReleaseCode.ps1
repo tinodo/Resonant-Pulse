@@ -11,12 +11,20 @@
       * the project file, and the Directory.Build.props, Directory.Build.targets and Directory.Packages.props files that MSBuild reads from
         the project's folder up to the root, as parsed XML. Comments and layout do not count, and neither do the properties that only
         describe the package or the version (description, tags, URLs, copyright, license, authors, version) or the README that is packed
-        into the package. Everything else counts, however it is written: a property, an item, a condition, a target, an import;
+        into the package. Everything else counts, however it is written: a property, an item, a condition, an attribute, a text;
       * the other build files (Directory.Build.rsp, MSBuild.rsp, NuGet.config, global.json), by content.
 
-    The check reads only what is listed. A project or build file that imports another file or points outside the library's folder
-    (an Import or Sdk element, a path with .., a rooted path, or one made from the project's or the solution's directory) depends on files
-    that are not read, so it is refused whatever the other commit holds, until the check is taught to read them.
+    The check reads only what is listed, so a project that depends on anything else is refused, whatever the other commit holds, until
+    the check is taught to read it:
+
+      * an Import, ImportGroup, Sdk, UsingTask or Target element, or a ProjectReference: another file, a task, or code that this check
+        does not follow or evaluate;
+      * a path outside the library's folder (with .., rooted, or made from the project's or the solution's directory), or a property
+        function, $([...]), which can read any file;
+      * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison.
+
+    The package itself is made by the candidate's own packaging script (Build-NuGetPackage.ps1), which gives the version and the
+    configuration and nothing else. It is part of the reviewed pipeline and is not compared.
 
     Throws, naming what differs or what is not read, when the library of the candidate cannot be shown to be the release's.
 
@@ -41,7 +49,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$Repository = (Resolve-Path -LiteralPath $Repository).Path
 
 $libraryFolder = 'src/ResonantPulse.Core'
 $projectFile = "$libraryFolder/ResonantPulse.Core.csproj"
@@ -54,34 +62,50 @@ $permittedProperties = @(
     'Copyright', 'RepositoryUrl', 'RepositoryType', 'PublishRepositoryUrl', 'Authors', 'Company', 'Product', 'Version')
 $permittedItems = @('../../packaging/nuget/README.md')
 
-# A project that imports another file, or points outside its own folder, depends on files that this check does not read. It is not compared
-# further: it is refused, and the check must be taught to read what it points at before such a library can be published later.
-$outsideReference = '(^|[^\w.])\.\.([^\w.]|$)|^\s*[\\/]|^\s*[A-Za-z]:[\\/]|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)'
+# What the check cannot follow or evaluate (see the description). The version is read harmlessly: the package is made with -p:Version, which
+# wins over every file, on both sides.
+$unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference')
+$outsideReference = '(^|[^\w.])\.\.([^\w.]|$)|^\s*[\\/]|^\s*[A-Za-z]:[\\/]|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)|\$\(\['
+$packageProperty = '[$%@]\((' + (($permittedProperties | Where-Object { $_ -ne 'Version' }) -join '|') + ')\b'
 $unreadReferences = [System.Collections.Generic.List[string]]::new()
 
+# git's output as one string, as it is: no lines, no console encoding, so that names and files are read exactly.
 function Invoke-Git([string[]] $Arguments) {
-    $output = & git -C $Repository -c core.quotepath=false @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE." }
+    $start = [System.Diagnostics.ProcessStartInfo]::new('git')
+    foreach ($argument in @('-C', $Repository, '-c', 'core.quotepath=false') + $Arguments) { $start.ArgumentList.Add($argument) }
+    $start.UseShellExecute = $false
+    $start.RedirectStandardOutput = $true
+    $start.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $process = [System.Diagnostics.Process]::Start($start)
+    $output = $process.StandardOutput.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { throw "git $($Arguments -join ' ') failed with exit code $($process.ExitCode)." }
     $output
+}
+
+# Text on one line, escaped, so that two different texts never print the same.
+function ConvertTo-Literal([string] $Text) {
+    '"' + $Text.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n').Replace("`t", '\t') + '"'
 }
 
 function Find-UnreadReferences($Root, [string] $Name) {
     foreach ($element in @($Root.SelectNodes('descendant-or-self::*'))) {
-        if ($element.LocalName -in 'Import', 'Sdk') { "$Name has an <$($element.LocalName)> element, and an imported file is not read" }
-        foreach ($attribute in @($element.Attributes)) {
-            if ($attribute.Value -match $outsideReference) {
-                "$Name has <$($element.LocalName) $($attribute.LocalName)=""$($attribute.Value)""> which refers outside the library's folder"
+        if ($element.LocalName -in $unreadElements) { "$Name has a <$($element.LocalName)> element, which this check does not follow or evaluate" }
+        $values = @($element.Attributes | ForEach-Object { $_.Value }) + @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA' } | ForEach-Object { $_.Value })
+        foreach ($value in $values) {
+            if ($value -match $outsideReference) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, which refers outside the library's folder or runs code"
             }
-        }
-        foreach ($node in @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA' })) {
-            if ($node.Value -match $outsideReference) { "$Name has <$($element.LocalName)> with '$($node.Value.Trim())' which refers outside the library's folder" }
+            if ($value -match $packageProperty) {
+                "$Name reads the package property $($Matches[1]) in <$($element.LocalName)>, which this check leaves out of the comparison"
+            }
         }
     }
 }
 
 function Write-CanonicalElement($Element, [int] $Depth, $Lines) {
     $pad = '  ' * $Depth
-    $attributes = @($Element.Attributes | Sort-Object Name | ForEach-Object { '{0}="{1}"' -f $_.Name, $_.Value })
+    $attributes = @($Element.Attributes | Sort-Object Name | ForEach-Object { '{0}={1}' -f $_.Name, (ConvertTo-Literal $_.Value) })
     $Lines.Add($pad + '<' + ((@($Element.Name) + $attributes) -join ' ') + '>')
     foreach ($child in $Element.ChildNodes) {
         if ($child.NodeType -eq 'Element') {
@@ -89,7 +113,7 @@ function Write-CanonicalElement($Element, [int] $Depth, $Lines) {
         }
         elseif ($child.NodeType -in 'Text', 'CDATA', 'SignificantWhitespace') {
             $text = $child.Value.Trim()
-            if ($text) { $Lines.Add($pad + '  ' + $text) }
+            if ($text) { $Lines.Add($pad + '  #text ' + (ConvertTo-Literal $text)) }
         }
     }
     $Lines.Add($pad + '</' + $Element.Name + '>')
@@ -131,21 +155,25 @@ function Get-Inputs([string] $Revision) {
     $paths = foreach ($directory in $libraryFolder, 'src', '') {
         foreach ($name in $xmlBuildFiles + $otherBuildFiles) { if ($directory) { "$directory/$name" } else { $name } }
     }
-    $entries = [ordered] @{}
-    $listing = @(Invoke-Git (@('ls-tree', '-r', $Revision, '--', $libraryFolder) + $paths)) | Where-Object { $_ }
-    foreach ($line in $listing) {
-        if ($line -notmatch '^\d+ \w+ ([0-9a-f]+)\t(.+)$') { throw "Unexpected line from git ls-tree: $line" }
+    # Names are compared exactly: two files whose names differ only in case are two files.
+    $entries = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+    $listing = Invoke-Git (@('ls-tree', '-r', '-z', $Revision, '--', $libraryFolder) + $paths)
+    foreach ($entry in $listing -split "`0") {
+        if (-not $entry) { continue }
+        if ($entry -cnotmatch '(?s)^\d+ \w+ ([0-9a-f]+)\t(.+)$') { throw "Unexpected entry from git ls-tree: $entry" }
         $entries[$Matches[2]] = $Matches[1]
     }
 
     $library = foreach ($path in $entries.Keys) {
-        if ($path.StartsWith("$libraryFolder/") -and $path -notmatch '(/ResonantPulse\.Core\.csproj|/README\.md|/packages\.lock\.json)$') {
-            "$($entries[$path]) $path"
+        if ($path.StartsWith("$libraryFolder/", [System.StringComparison]::Ordinal) -and $path -cnotmatch '(/ResonantPulse\.Core\.csproj|/README\.md|/packages\.lock\.json)$') {
+            "$($entries[$path]) $(ConvertTo-Literal $path)"
         }
     }
-    $inputs = [ordered] @{ 'library files' = (@($library) -join "`n") }
+    $inputs = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+    $inputs['library files'] = @($library) -join "`n"
 
-    $xml = @{ $projectFile = $true }
+    $xml = [System.Collections.Generic.Dictionary[string, bool]]::new([System.StringComparer]::Ordinal)
+    $xml[$projectFile] = $true
     foreach ($directory in $libraryFolder, 'src', '') {
         foreach ($name in $xmlBuildFiles) {
             $path = if ($directory) { "$directory/$name" } else { $name }
@@ -153,16 +181,16 @@ function Get-Inputs([string] $Revision) {
         }
         foreach ($name in $otherBuildFiles) {
             $path = if ($directory) { "$directory/$name" } else { $name }
-            $inputs[$path] = if ($entries.Contains($path)) { "content $($entries[$path])" } else { '(missing)' }
+            $inputs[$path] = if ($entries.ContainsKey($path)) { "content $($entries[$path])" } else { '(missing)' }
         }
     }
     foreach ($path in $xml.Keys) {
-        $inputs[$path] = if ($entries.Contains($path)) {
-            ConvertTo-CanonicalProject ((Invoke-Git @('cat-file', 'blob', $entries[$path])) -join "`n") $xml[$path] "$path at $Revision"
+        $inputs[$path] = if ($entries.ContainsKey($path)) {
+            ConvertTo-CanonicalProject (Invoke-Git @('cat-file', 'blob', $entries[$path])) $xml[$path] "$path at $Revision"
         }
         else { '(missing)' }
     }
-    $inputs
+    , $inputs
 }
 
 $before = Get-Inputs $Release

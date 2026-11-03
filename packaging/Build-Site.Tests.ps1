@@ -115,6 +115,9 @@ try {
 
     if ($wrong -gt 0) { throw "$wrong of $($cases.Count) cases got the wrong answer." }
     "All $($cases.Count) cases got the right answer."
+    # The last child process may have been a build that was refused on purpose (exit code 1). A caller that goes by $LASTEXITCODE, as the
+    # pwsh shell of GitHub Actions does, must not take that for a failure of the tests.
+    $global:LASTEXITCODE = 0
 }
 finally {
     if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }

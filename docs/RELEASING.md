@@ -105,8 +105,11 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   project file and the `Directory.Build.props`, `Directory.Build.targets` and `Directory.Packages.props` files above it as parsed XML
   (comments and layout do not count, and neither does anything that only describes the package or the version: description, tags, URLs,
   copyright, license, authors, the packed README, the version; a property, item, condition, target or import counts however it is
-  written), and `Directory.Build.rsp`, `NuGet.config` and `global.json`. A project that imports a file or points outside its own folder
-  depends on files that the check does not read, so it is refused until the check is taught to read them.
+  written), and `Directory.Build.rsp`, `NuGet.config` and `global.json`. A project that depends on something the check does not follow or
+  evaluate is refused until the check is taught to read it: an import, a target or task, a project reference, a path outside its own
+  folder, a property function, or a read of one of the package properties that the comparison leaves out. The package itself is made by
+  the candidate's own `Build-NuGetPackage.ps1`, which gives the version and the configuration and nothing else; that script is part of
+  the reviewed pipeline and is not compared (the tagged commit does not have it).
   `packaging/Assert-ReleaseCode.Tests.ps1` runs the check on changes to a copy of the real project in the "Musical correctness" job of
   every build. The workflow then runs the engine's tests, packs and checks the package, and hands it to a second job, the only one with
   `packages: write`, which has no checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never

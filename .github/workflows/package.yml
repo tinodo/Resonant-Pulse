@@ -62,7 +62,7 @@ jobs:
           tag_commit=$(git rev-parse "v$VERSION^{commit}")
           git merge-base --is-ancestor "$tag_commit" HEAD || { echo "::error::The tag v$VERSION is not an ancestor of the commit being built."; exit 1; }
           pwsh -NoProfile -File ./packaging/Assert-ReleaseCode.ps1 -Release "$tag_commit" -Candidate HEAD || {
-            echo "::error::The library or its build settings differ from those of release v$VERSION. Publish the package of a version from a commit with the released library."
+            echo "::error::The library of this commit could not be shown to be the library of release v$VERSION (the lines above say what differs, or what the check could not read). Publish the package of a version from a commit with the released library."
             exit 1
           }
           echo "Release v$VERSION is published at $tag_commit; the library at $SOURCE_SHA is the same." >> "$GITHUB_STEP_SUMMARY"
