@@ -1,93 +1,79 @@
-# Resonant Pulse preview
+# Resonant Pulse 1.0.0
 
-Native WinUI 3/.NET 10 metronome and rhythm workstation under active development.
+Resonant Pulse is a native Windows metronome and rhythm workstation (WinUI 3, .NET 10) for focused practice. It works on your own
+computer: no account, no microphone, no network and no telemetry. It is free and open source (MIT).
 
-## What's new in preview.13
+## What you can do with it
 
-Five changes since preview.12. Everything that preview.12 brought (below) is in this build too.
+- **Play** is the metronome. Type an exact tempo, or nudge it with the -, **TAP** and + buttons; switch on **Tap to start** and tap
+  the beat to start at your own tempo. Choose a time signature from a sheet-music picker (or build your own), click the beat bars to
+  change how strong each click is, add a count-in, a subdivision or swing, pick a sound, and set a practice timer in seconds, beats or
+  bars. Most changes are heard while it plays.
+- **Studio** is where you build your own rhythm in lanes: layers of clicks, each with its own pattern, sound, volume, pan and chance,
+  with a Euclidean rhythm generator. A practice program is a list of steps with tempo ramps, repeats, silent bars and a time signature
+  of their own, and it can repeat until you press Stop. A strip at the top shows the metronome while you edit. A change made in Studio
+  is saved at once and heard after Stop, then Start.
+- **Train** follows a program (status, progress and a chart of the planned tempo) and runs a keyboard timing check, whose result you
+  can export as a CSV file.
+- **Stage** is a setlist for the stand: now playing, up next, Next with a count-in, notes for each song, Lock editing and Always on top.
+- **Library** keeps your projects, starts you from ready-made rhythms, and exports WAV, MIDI, or one WAV per track in a ZIP.
+- **Settings** has the language (English, Dutch, German, French and Spanish), the theme and Reduce motion. The audio output is chosen
+  with **Audio** in the bar at the bottom.
 
-- **Studio shows the metronome.** In preview.12, the page that edits the rhythm showed nothing of the metronome: the pulse is on Play, so a person who built a lane or a step in Studio could not see the beat. Studio now has a strip pinned above its page, under the tabs, that stays in view while you scroll: the tempo and the time signature, a light for each beat of the bar (the beat that sounds is a filled disc; the first beat of the bar, and of each additive group, is larger), and, while it plays, *Count-in* or, for a program, which step plays ("Step 2 of 4: Faster", on one line, cut with an ellipsis if the name is long). Nothing is lit, and no step is named, while nothing plays or in a silent bar of a project that hides its phase cues in gaps (on by default), and a pause keeps the beat it stopped on. A bar of 13 or more beats gets small lights, so that even a bar of 64 beats takes only a few rows. It follows the time signature of the step that plays, and in a narrow window the lights wrap under the tempo. It costs the page about 55 DIP of height. Play, Train and Stage have the dial; Library and Settings are unchanged. All of it is in English, Dutch, German, French and Spanish; a screen reader reads the strip on demand ("120 BPM, beat 2 of 4"). Not tried: a real screen reader, Windows text sizes above 100%, the Contrast themes.
+Everything stays on your computer. Projects are ordinary files that you can save, open and share.
 
-- **A program can repeat until you press Stop.** In preview.12 a program ended after its last step, and the only way to keep it going was to raise the repeats of a step again and again. The practice program in Studio now has a switch, *Repeat the program*, above its steps. Off (the default, and how every project and file before this build behaves) the program stops after its last step. On, it starts again from its first step after the last and plays until you press Stop: the count-in is played once, before the first pass, a limit of the Timer panel counts through the passes, and the bars keep counting. Train says under the steps that the program starts again, and its *Next section* names the first step after the last. The switch is saved with the project, and Undo takes it back; removing the last step turns it off. An export (WAV, MIDI, separate tracks) is still one pass of the program. Not done: a program cannot stay on its last step (a step with endless repeats); with the switch on it starts over from its first step. Not changed: tempo and time signature, and anything else that changes the clock of a program, are still heard from the next Start. Not tried: a real ear on the repeat (the checks compare what the second pass renders with the first).
+## What's new since preview.12
 
-- **Studio says what it is for.** In preview.12, the one line under the title of Studio named your project and said that changes are saved as you make them and are heard after Stop and Start. Nothing said what the page is for, and the only sentence that explains a lane was shown while the project had no lane. Studio now has two lines under its title. The first says what the page is for: *Build your own rhythm here, in lanes. A lane is a layer of clicks with its own pattern, sound and volume, played along with the main beat.* (before the first lane, a shorter line that also names the practice program, because the card of the empty state explains the lane right under it). The second says how it works: *No need to save: "your project" is kept as you edit it. For a copy as a file, use Save project in the Library. To hear a change, press Stop, then Start, in the bar at the bottom.* A field that edits a lane or a step that already exists is kept once you press Enter or leave the field; the panel that makes a Euclidean lane is the exception: what you type there is a draft until you press Create, and closing the panel before that discards it. Settings, the one page that had no line under its title, has one now too. All of it is in English, Dutch, German, French and Spanish. The two lines run across the page under the row of the title, which holds Undo, Redo and, once there is a lane, Add lane (before the first lane, Add lane is in the card of the empty state, and in a narrow window the commands move under the title); where the content below them starts depends on the language and the width of the window.
+Five changes since preview.12, the last published preview.
 
-- **Repair: after *Start check*, the page is asked to bring the command that takes over into view.** In preview.12, *Start check* on Train moved the keyboard focus on to *Hit*, but in the checks on the development PC (UI Automation on a private desktop, where the pressed command's focus state was *Pointer*) nothing scrolled the page to it: when the commands were at the foot of the page, the notice that *Start check* opens (about six seconds) took room from the foot of the page and left *Hit* below the part that was shown, with the focus on it, until the notice faded. When one of the commands of the check had the focus at the press, the app now also asks for the command that takes the focus to be brought into view; in the check on the development PC, *Hit* was on screen after *Start check* at 150% and at 100%. The same request is made after *Finish and show result* for *Export result (CSV)*; nothing checked that this command ends on screen, and the page is then moved to show the result, as before. Not tried: a real mouse or keyboard.
+- **Studio shows the metronome.** In preview.12 the page that edits the rhythm showed nothing of the metronome, so you could not see
+  the beat while you built a lane or a step. Studio now has a strip pinned above its page, in view while you scroll: the tempo and the
+  time signature, a light for each beat of the bar (the beat that sounds is a filled disc; the first beat of the bar, and of each
+  additive group, is larger) and, while it plays, *Count-in* or the step that plays ("Step 2 of 4: Faster", on one line). Nothing is
+  lit, and no step is named, while nothing plays or in a silent bar of a project that hides its phase cues in gaps (on by default).
+  A bar of 13 or more beats gets small lights, so that even 64 beats take only a few rows. It follows the time signature of the step
+  that plays and wraps under the tempo in a narrow window. A screen reader reads it on demand ("120 BPM, beat 2 of 4").
+- **A program can repeat until you press Stop.** In preview.12 a program ended after its last step. The practice program in Studio now
+  has a switch, *Repeat the program*, above its steps. Off (the default, and how every project and file before this release behaves)
+  the program stops after its last step. On, it starts again from its first step and plays until you press Stop: the count-in is played
+  once, a limit of the Timer panel counts through the passes, and the bars keep counting. Train says so under the steps. The switch is
+  saved with the project and Undo takes it back; removing the last step turns it off. An export is still one pass of the program. A
+  program cannot stay on its last step: with the switch on it starts over from its first. Tempo and time signature changes are still
+  heard from the next Start.
+- **Studio says what it is for.** Studio now has two lines under its title: the first says what the page is for, the second how it
+  works (your project is kept as you edit it, a copy as a file is **Save project** in the Library, and to hear a change you press
+  Stop, then Start). Settings, the one page that had no such line, has one now too. All of it is in the five languages.
+- **Repair: Train brings the command that takes over into view.** After *Start check* the keyboard focus moves on to *Hit*, and after
+  *Finish and show result* to *Export result (CSV)*; the page is now asked to bring that command into view. In preview.12 the notice
+  that *Start check* opens could leave *Hit* below the part of the page that was shown.
+- **Repair: when a notice opens, the page follows the control that has the keyboard focus.** A notice such as *Saved* takes room from
+  the foot of the page for about six seconds, and a control at the foot that had the focus could end up out of view. The page now keeps
+  it in view. Only a notice that opens is handled.
 
-- **Repair: when a notice opens, the page follows the control that has the keyboard focus.** The notice bar (for example *Saved*) sits in its own row above the transport bar, so the page is shorter for as long as a notice is open: a notice such as *Saved* fades after about six seconds, while an error, a warning and the notice that says the tracks are being saved stay longer. In preview.12, a control at the foot of the page that had the keyboard focus when a notice opened could end up below the part of the page that was shown: in the checks (UI Automation, *Load* in the Library at 400 DIP wide, editing locked on Stage so that *Load* opens the notice that says so, the page scrolled to it), *Load* was out of view for as long as that notice stayed, at the heights 640 and 560 on the development PC and at 720, 640 and 560 on the hosted runner. When a notice opens, the app now reads the control that has the keyboard focus, if it is wholly on screen in the page and in every scrolling area around it, and when the page has got shorter it asks for that control to be brought into view; a control that was not wholly on screen is left where it is. Only a notice that opens is handled: a notice that is already open when it gets taller, and a window that is made narrower while a notice is open, are not. Not fixed: after *Save to library* the list above the button gets a row, which can push the button out of view at a narrow width, and the page does not follow it. Not tried: a real mouse or keyboard, and controls and pages other than *Load* in the Library.
+## Install and requirements
 
-Known issues of the Studio change: the Dutch, German, French and Spanish text of the new lines has not been read by a native speaker; Studio has no Help panel of its own and no button that stops and starts for you (you press Stop, then Start, in the bar at the bottom); the lines were checked for cut text at four window sizes in the five languages, not at Windows text sizes above 100%, with Narrator or in the Contrast themes. The known issues listed under preview.12 below still apply.
+- Windows 11 24H2 (build 26100) or later, on x64 or ARM64.
+- Download the ZIP for your architecture from this page, extract **all** files, and run `ResonantPulse.exe`. The ZIP includes the .NET
+  and WinUI runtime files. A `.sha256` file accompanies each ZIP.
+- The ZIPs are not signed, so Windows SmartScreen may warn. Compare the SHA-256 checksum instead of turning protection off.
+- Microsoft Store: the product is reserved and a package is prepared, but it has not been submitted or published. Nothing here claims
+  Store availability.
 
-## What's new in preview.12
+## Known limits
 
-Five new things since preview.11, and the repairs below.
+- **Sound and timing were not measured on other hardware.** No hosted runner has an audio output, and the automatic checks play at an
+  inaudible volume. The release has been listened to on the owner's PC; no listening or timing test was made on other hardware, and
+  nothing here is a claim of microsecond timing.
+- **Not tried:** Narrator, the Contrast themes, Windows text sizes above 100%, ARM64 hardware, and an install of the Store package on a
+  clean Windows.
+- **Translations:** the Dutch, German, French and Spanish texts have not been read by a native speaker.
+- **Files:** the Windows save and open dialogs were exercised by a stand-in in the automatic checks (they cannot open on a build
+  runner), and nobody has opened a tracks ZIP in music software. A long export (WAV, MIDI or CSV) shows no notice while it writes.
+- **Known and not fixed:** after *Save to library* the list above the button gets a row, which can push the button out of view in a
+  narrow window, and the page does not follow it. Studio has no Help panel of its own and no button that stops and starts for you.
 
-- **Tap to start.** A new switch next to TAP: switch it on, tap the beat on TAP (or press T on Play with no panel open), and after four steady taps the metronome starts at your tempo. Choose 2 to 16 taps in the Tempo panel. A tap that is off the beat starts the count again, a pause of more than four seconds begins a new count, Stop or Esc (with no panel open) cancels, and it is never remembered when you close the app. It works only while the metronome is stopped and an audio output is chosen, and a start or pause by hand, a tempo chosen by hand, leaving Play or a change of the output cancels it too. The tempo is measured in the note of your project, and the start follows your last tap by the time that saving and preparing the audio take, plus the count-in: it is not aligned to the phase of your taps. With a practice program, the first step starts at your tempo and the other steps keep their proportions.
-- **Help starts you off.** The Help panel on Play now begins with a five-step quick start, from the first launch to a steady click at your own tempo and time signature. It also says how Tap to start works and where it stops, what Pause, Stop and Mute do, which changes you hear at once, which from the next beat and which only after Stop and Start, where the keyboard shortcuts work, and, in a short musical reference with an example each, what *80 BPM with dotted quarter notes* means, how a time signature sets the click, what subdivision and swing do, and what each beat strength is. It is in English, Dutch, German, French and Spanish, scrolls inside the panel so that Done stays on screen at every window size down to 320x900, and can be read with the keyboard (Tab to the text, then Page Down, End and Home).
-- **The Tempo panel names the tempo.** Beside its title, the Tempo panel now shows the approximate Italian markings of the speed in the box (120 BPM: Moderato / Allegro). The names count quarter notes a minute whatever note the number counts, so 120 counted in eighth notes, the note of 6/8, reads *60 BPM in quarter notes: Largo / Larghetto*. It follows what you type before you choose Done, and it changes nothing about how the metronome plays. In English, Dutch, German, French and Spanish.
-- **Train: export a finished timing check as CSV.** When a timing check has finished, **Export result (CSV)** saves it as a file for a spreadsheet: the totals, then each click and each press. It keeps the last finished check only, until you start another one or close the app. The column names and numbers in the file are the same in every language, and the fields are separated by commas: where Windows uses a semicolon as the list separator (the Dutch, German, French and Spanish settings), Excel may need the file imported with the comma as the delimiter instead of opened by double-clicking (not tried). The text for a drift that could not be worked out now says what it needs.
-- **Library: separate tracks as WAV files in one ZIP.** In Library, **Export separate tracks (ZIP)** saves your project as one ZIP with a WAV file for the main beat and one for each lane, all starting at the same moment, so you can line them up in music software. The count-in is in the main file only, and the files added together are not guaranteed to give the exported WAV back: each one is rounded to 16 bits and kept at full scale on its own. It asks first how many tracks it will save and how much room they take, and you can cancel.
-- **Repair: a tempo you typed is no longer overwritten.** A tempo typed in the Tempo panel is no longer lost when it is applied while a nudge (the - and + buttons, TAP, the wheel or the arrow keys on the dial) is still being applied: what was typed is the tempo the project and the dial end on and the audio plays from the next pulse, and closing the window right after keeps it (closing waits for it for at most four seconds).
-- **Repair: a nudged tempo and something that replaces it.** A nudge of the tempo (the - and + buttons, TAP, the wheel or the arrow keys on the dial) that is still being applied when you open a project, start a new one, choose a ready-made rhythm or move to the next song of a setlist is no longer written into the new project, and the dial shows the new project's own tempo. A ready-made time signature that changes the click unit (6/8 from 4/4 with every beat split in two doubles the number, up to the limit of 1000 BPM) now comes after the nudges that are on their way, so the project and the dial end on the converted tempo (the audio from the next pulse); and when you choose a time signature and then another one in the Custom meter panel, the one you chose last is the one you get. A Tempo panel that you open again while an earlier Done is still being applied shows the tempo and the click unit that the project holds, and keeps what you typed in it.
-- **Repair: a file window that cannot open.** If Windows cannot open the window for choosing a file when you save or open a project, the app now says so in plain words, and that your edits stay in the window, instead of reporting a problem with the audio output.
-- **Repair: closing while a file is being written.** When you close the window while a file is being saved or exported (project, library copy, WAV, MIDI, separate tracks, timing result), the app now stops that write and removes its half-written temporary file; a file that was already there stays as it was, except that a WAV export that has already begun moving its finished files into place is not stopped and goes on to the end (or is rolled back if that fails). Closing waits up to 4 seconds for the write to stop; if it does not stop, the window closes anyway, the log names the file and a temporary file may remain. If the close is refused because the project could not be saved, the window stays and a file that is being written goes on.
-- **Repair: a file that stays behind is named.** If a save or an export fails and its half-written temporary file cannot be removed either, the app now says which file stays, for Save, Save to library, Export WAV, Export MIDI and the timing result's CSV, as it already did for the separate tracks, and that your edits remain in the window.
-- **Repair: the reason a close was refused stays on screen.** After a close was refused (the window stays open and says why), a file that was still being written, or that finishes while the close is being decided, no longer replaces that reason with *Saved*. A write that you start afterwards still tells you *Saved*.
-- **Repair: keyboard focus after the tracks export.** If *Export separate tracks* had the keyboard focus when you pressed it, it gets the focus back after you cancel its question, after it saves and after an error, unless you moved the focus yourself.
-- **Repair: where the keyboard starts.** When the app starts, the keyboard focus is on *Start* (on *Audio* while there is no audio output), not on *Settings*, so no focus ring shows on Settings when Windows activates the packaged app.
-- **Repair: the Train page keeps its place.** After *Start check* and *Finish and show result* the page no longer jumps to the top: it stays where you were, the keyboard focus moves on to the command that takes over (*Hit*, then *Export result (CSV)*), and a finished result is brought into view.
-- **Repair: narrow windows.** At the narrowest width the *Settings* tab shows its gear alone where its name does not fit (the name stays as the tooltip and for screen readers), *Stummschalten* is no longer broken in the middle of the word, and the Tempo panel shows its box for the number of taps in full at 800x600 (*Half tempo* and *Double tempo* now share its row).
-
-Under the hood: the Windows App SDK that the app is built on is updated from 2.5.1 to 2.6.4 (Microsoft's reliability fixes for WinUI 3, the app lifecycle and notifications). Nothing should look different: the hosted start-up and packaged-start checks show the same controls and sizes as before and the local gates passed on it. Whether any of Microsoft's fixes affects this app was not tested.
-
-A project in which you changed the strength of a split click (preview.11) cannot be opened by
-preview.10 or earlier, which refuse a file with a setting they do not know. Projects
-you did not change that way open everywhere.
-
-Known issues: text in Dutch, German, French and Spanish has not been read by a native speaker; nothing was listened to (no hosted runner has an audio output, and the local checks play at an inaudible volume); nobody has opened a tracks ZIP in music software; the native save dialog was not driven by an automatic check (it cannot be on a runner or on the developer PC's private desktop), so a failed or cancelled real dialog, and a close while it is open, were tried only with a stand-in; a long export (WAV, MIDI, CSV) shows no notice while it writes (only the separate tracks do); a Custom meter panel that is opened while a ready-made time signature is still being applied shows the time signature that the project held then, and its Done writes what it shows (the wait is as long as a nudge takes); Windows text sizes above 100%, Narrator, the Contrast themes and ARM64 hardware were not tried.
-
-The metronome is the large, centered primary surface on Play, with the tempo
-inside the cyan/magenta dial. Click the number to type an exact tempo; the -,
-**TAP** and + buttons answer immediately (hold to repeat; Ctrl steps by ten), and
-the switch next to TAP turns on Tap to start.
-The time signature is a sheet-music picker (2/4, 3/4, 4/4, 6/8 and more) with
-**Custom...** for the full builder, and every written beat is an audible click,
-so 8/8 gives eight. Beat strengths are a row of bars (tall, medium, short or a
-rest) that you click to change, one for every click of the bar, including the
-clicks that split a beat (a bar of more than 128 clicks, or one whose beat unit
-does not divide it, shows its beats alone). Timer, Project and Help are page tools
-in one quiet strip under Settings; every panel that changes something has Cancel
-and Done side by side, the same size, and Done applies (Help only shows text and
-has Done alone). The
-window uses a modern custom title bar, and restoring your last session is silent.
-
-A running metronome follows Play without stopping. Sound and beat strengths
-switch at the next audio quantum; tempo, time signature, tempo unit,
-subdivision, swing, groups and gap bars are spliced in at the next beat. The bar
-carries on when the meter is unchanged and restarts at beat 1 when it changes,
-and the tails of earlier clicks finish in their original sound. Count-in and
-practice-timer changes apply at the next Start. When a project has a
-Studio/Train program, tempo and meter follow that program and Play says so.
-Ctrl+M remains available inside settings panels.
-
-The practice timer is in Play's **Timer** panel. Set a duration in
-seconds and choose Done; zero disables it. Stop and Start to use a changed
-duration. Count-in and pauses do not consume practice time, and a shorter finite
-program ends first. The final five milliseconds fade out. This limits live
-playback, not export length. Manual timing reports also respect the stop boundary.
-
-Auto-stop also supports written beats and complete bars, excluding count-in.
-Use Play's **Timer** panel; zero disables an individual
-limit. The earliest seconds/beats/bars/program end wins. Mixed meters, tempo
-ramps, repeats and silence follow the authored program rather than counting
-audible click events.
-
-Download the ZIP for your architecture, extract all files, and read README.md.
-The ZIP includes .NET and WinUI runtime components and is not a Store installer.
-SHA-256 checksum files accompany each download.
-
-This is a preview, not the completed full product or a hardware-certified timing
-instrument. See the repository's docs/DELIVERY.md for current capability evidence,
-docs/CAPABILITIES.md for explicit known gaps, and docs/RELEASING.md for
-Store-publication prerequisites. No claimed Store availability,
-ARM64 hardware result or acoustic accuracy follows from this release.
+The notes of the earlier previews, with their known issues, are in
+[docs/RELEASE-NOTES-previews.md](https://github.com/tinodo/Resonant-Pulse/blob/main/docs/RELEASE-NOTES-previews.md). What is built and
+what is not is in [docs/CAPABILITIES.md](https://github.com/tinodo/Resonant-Pulse/blob/main/docs/CAPABILITIES.md), the evidence is in
+[docs/DELIVERY.md](https://github.com/tinodo/Resonant-Pulse/blob/main/docs/DELIVERY.md), and the privacy policy is
+[docs/PRIVACY.md](https://github.com/tinodo/Resonant-Pulse/blob/main/docs/PRIVACY.md).
