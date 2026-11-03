@@ -46,6 +46,9 @@ function Edit-SitePattern([string] $Page, [string] $Pattern, [string] $New) {
 # Adds a paragraph to the end of the home page.
 function Add-ToHome([string] $Html) { Edit-Site 'index.html' '</body>' "$Html`n</body>" }
 
+# Adds a paragraph to the end of the privacy page.
+function Add-ToPrivacy([string] $Html) { Edit-Site 'privacy.html' '</body>' "$Html`n</body>" }
+
 # 'accepted', or a pattern that the reason for the refusal must match.
 $cases = @(
     @{ Name = 'the site as it is, the Store listing pending'; Expect = 'accepted'; Change = { } }
@@ -67,6 +70,32 @@ $cases = @(
             Add-ToHome '<p><a href="../outside.html">x</a></p>'
         } }
     @{ Name = 'a link to a path outside the base path'; Expect = 'absolute path outside'; Change = { Add-ToHome '<p><a href="/elsewhere/x.html">x</a></p>' } }
+    @{ Name = 'links from another page to anchors of the home page, written with the base path and with the public address'; Expect = 'accepted'; Change = {
+            Add-ToPrivacy '<p><a href="/Resonant-Pulse/#download">a</a> <a href="https://tinodo.github.io/Resonant-Pulse/#features">b</a> <a href="./#download">c</a></p>'
+        } }
+    @{ Name = 'a link from another page to an anchor that the home page does not have'; Expect = 'has no #nothing-here in its target'; Change = {
+            Add-ToPrivacy '<p><a href="/Resonant-Pulse/#nothing-here">x</a></p>'
+        } }
+    @{ Name = 'a code sample on a page that shows a url() to nothing'; Expect = 'accepted'; Change = {
+            Add-ToHome '<p><code>background: url(nothing.png)</code></p>'
+        } }
+    @{ Name = 'a comment in a style sheet that mentions a url() to nothing'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '/* was: url(old.png) */ .wrap {'
+        } }
+    @{ Name = 'a style attribute with a url() to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p style="background: url(missing.png)">x</p>'
+        } }
+    @{ Name = 'a style block with a url() to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<style>.y { background: url(missing.png); }</style>'
+        } }
+    @{ Name = 'a style sheet that imports a style sheet that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@import "missing.css"; .wrap {'
+        } }
+    @{ Name = 'a link in single quotes'; Expect = 'not in double quotes'; Change = { Add-ToHome "<p><a href='nowhere.html'>x</a></p>" } }
+    @{ Name = 'a link without quotes'; Expect = 'not in double quotes'; Change = { Add-ToHome '<p><a href=nowhere.html>x</a></p>' } }
+    @{ Name = 'a preview address in single quotes'; Expect = 'not in double quotes'; Change = {
+            Add-ToHome "<meta property='og:image' content='https://example.com/x.png'>"
+        } }
     @{ Name = 'a percent-encoded link to a file that exists'; Expect = 'accepted'; Change = { Add-ToHome '<p><a href="screenshots/01%2Dplay.png">x</a></p>' } }
     @{ Name = 'a picture with two sources, both there'; Expect = 'accepted'; Change = {
             Add-ToHome '<p><img src="screenshots/01-play.png" srcset="screenshots/01-play.png 1x, screenshots/02-studio.png 2x" alt="x"></p>'

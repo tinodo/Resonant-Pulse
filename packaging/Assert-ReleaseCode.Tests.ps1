@@ -112,7 +112,8 @@ $cases = [System.Collections.Generic.List[hashtable]]::new()
 
 # Each case: what it does to the copy (Change), and the answer that is right. 'same' is for what only describes the package or the version.
 # Release changes the release's own commit first (the candidate is still the copy, changed); OnRelease makes the candidate start from that
-# commit; Self asks about the changed commit against itself; IndexOnly changes the commit without working files.
+# commit; Self asks about the changed commit against a child of it with the same content (another commit, so that it is read); Identical
+# asks about the very same commit; IndexOnly changes the commit without working files.
 function Add-Case([hashtable] $Case) { $cases.Add($Case) }
 
 Add-Case @{ Name = 'nothing changed (an empty commit)'; Expect = 'same'; Change = { } }
@@ -205,6 +206,8 @@ Add-Case @{ Name = 'a source file removed'; Expect = 'different'; Change = { Rem
 Add-Case @{ Name = 'a source file renamed'; Expect = 'different'; Change = { Move-Work $sources[1] "$($sources[1]).renamed.cs" } }
 Add-Case @{ Name = 'a resource file added to the library folder'; Expect = 'different'; Change = { Write-Text "$library/Strings.resx" '<root />' } }
 Add-Case @{ Name = 'an editorconfig added to the library folder'; Expect = 'different'; Change = { Write-Text "$library/.editorconfig" 'root = true' } }
+Add-Case @{ Name = 'an editorconfig added at the root'; Expect = 'different'; Change = { Write-Text '.editorconfig' "root = true`n[*.cs]`nbuild_property.X = 1" } }
+Add-Case @{ Name = 'a globalconfig added in src'; Expect = 'different'; Change = { Write-Text 'src/.globalconfig' "is_global = true`nbuild_property.X = 1" } }
 Add-Case @{ Name = 'two files whose names differ only in case, one of them changed'; Expect = 'different'; IndexOnly = $true; OnRelease = $true
     Release = { Add-IndexEntry "$library/Dup.cs" 'one'; Add-IndexEntry "$library/dup.cs" 'two' }
     Change = { Add-IndexEntry "$library/Dup.cs" 'changed' } }
@@ -246,6 +249,28 @@ $unread = [ordered] @{
         Add-ToProject $project "<Target Name=`"T`" BeforeTargets=`"CoreCompile`"><PropertyGroup>$overflow</PropertyGroup></Target>"
     }
     'a project with a task' = { Add-ToProject $project '<UsingTask TaskName="X" AssemblyFile="x.dll" />' }
+    'a condition on the operating system' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(OS)' == 'Windows_NT'`"><DefineConstants>WIN</DefineConstants></PropertyGroup>"
+    }
+    'a condition on an environment variable' = {
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(GITHUB_ACTIONS)' == 'true'`"><DefineConstants>CI</DefineConstants></PropertyGroup>"
+    }
+    'an include made from an environment variable' = { Add-ToProject $project "<ItemGroup><Compile Include=`"`$(HOME)/x.cs`" /></ItemGroup>" }
+    'a value made from an environment variable' = { Add-After $project '<Nullable>[^<]*</Nullable>' "<KeyFile>`$(USERPROFILE)\keys\x.snk</KeyFile>" }
+    'item metadata' = { Add-ToProject $project "<ItemGroup><Compile Update=`"x.cs`" Link=`"%(FullPath)`" /></ItemGroup>" }
+    'an item list' = { Add-ToProject $project '<ItemGroup><EmbeddedResource Include="@(None)" /></ItemGroup>' }
+    'an item list transformed with metadata' = { Add-ToProject $project "<PropertyGroup><Extra>@(None->'%(FullPath)')</Extra></PropertyGroup>" }
+    'a Choose on the runtime' = {
+        Add-ToProject $project "<Choose><When Condition=`"'`$(MSBuildRuntimeType)' == 'Core'`"><PropertyGroup><DefineConstants>CORE</DefineConstants></PropertyGroup></When></Choose>"
+    }
+    'an item definition on the operating system' = {
+        Add-ToProject $project "<ItemDefinitionGroup Condition=`"'`$(OS)' == 'Unix'`"><Compile><Link>x</Link></Compile></ItemDefinitionGroup>"
+    }
+    'a method called on a reserved property' = { Add-After $project '<Nullable>[^<]*</Nullable>' "<Extra>`$(MSBuildProjectDirectory.Replace('a','b'))</Extra>" }
+    'an escaped character' = { Add-ToProject $project '<ItemGroup><Compile Include="%2E%2E/Shared/Extra.cs" /></ItemGroup>' }
+    'a default that the environment can override' = {
+        Add-ToProject $project "<PropertyGroup><Flag Condition=`"'`$(Flag)' == ''`">x</Flag></PropertyGroup>"
+    }
     'a project with a project reference' = { Add-ToProject $project '<ItemGroup><ProjectReference Include="Other.csproj" /></ItemGroup>' }
     'a project that includes a file of another folder' = { Add-ToProject $project '<ItemGroup><Compile Include="..\Shared\Extra.cs" /></ItemGroup>' }
     'a property that points outside the library folder' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<ApplicationIcon>../../assets/x.ico</ApplicationIcon>' }
@@ -282,6 +307,17 @@ $unread = [ordered] @{
 }
 foreach ($name in $unread.Keys) { Add-Case @{ Name = "$name, checked against itself"; Expect = 'different'; Self = $true; Change = $unread[$name] } }
 
+# What a project may read, and the rule that the release's own commit is the release's, whatever it holds.
+Add-Case @{ Name = 'a read of a property that the project defines, checked against itself'; Expect = 'same'; Self = $true; Change = {
+        Add-ToProject $project "<PropertyGroup><Flag>x</Flag></PropertyGroup><PropertyGroup Condition=`"'`$(Flag)' == 'x'`"><DefineConstants>`$(DefineConstants);Y</DefineConstants></PropertyGroup>"
+    } }
+Add-Case @{ Name = 'a read of the configuration, checked against itself'; Expect = 'same'; Self = $true; Change = {
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(Configuration)' == 'Release'`"><DefineConstants>`$(DefineConstants);Z</DefineConstants></PropertyGroup>"
+    } }
+Add-Case @{ Name = 'the release''s own commit, whatever the project holds'; Expect = 'same'; Identical = $true; Change = {
+        Add-ToProject $project "<Import Project=`"extra.props`" /><PropertyGroup Condition=`"'`$(OS)' == 'Windows_NT'`">$overflow</PropertyGroup>"
+    } }
+
 try {
     $selected = @($cases | Where-Object { $_.Name -like $Filter })
     if ($selected.Count -eq 0) { throw "No case matches '$Filter'." }
@@ -312,7 +348,11 @@ try {
         }
         & $case.Change
         Save-Work $case.Name $indexOnly
-        if ($case.ContainsKey('Self')) { $release = 'HEAD' }
+        if ($case.ContainsKey('Self')) {
+            $release = (& git -C $work rev-parse HEAD).Trim()
+            Invoke-WorkGit @('commit', '-q', '--allow-empty', '-m', "$($case.Name) (the same content again)")
+        }
+        if ($case.ContainsKey('Identical')) { $release = 'HEAD' }
 
         $answer = 'same'
         $message = ''

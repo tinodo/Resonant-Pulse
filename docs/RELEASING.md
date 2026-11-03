@@ -105,11 +105,14 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   project file and the `Directory.Build.props`, `Directory.Build.targets` and `Directory.Packages.props` files above it as parsed XML
   (comments and layout do not count, and neither does anything that only describes the package or the version: description, tags, URLs,
   copyright, license, authors, the packed README, the version; a property, item, condition, target or import counts however it is
-  written), and `Directory.Build.rsp`, `NuGet.config` and `global.json`. A project that depends on something the check does not follow or
-  evaluate is refused until the check is taught to read it: an import, a target or task, a project reference, a path outside its own
-  folder (also a rooted one, in a value or in a condition), a condition on the file system, a property function, `TreatAsLocalProperty`
-  (which lets a project override the version that the package is made with), or a read of one of the package properties that the
-  comparison leaves out. The package itself is made by
+  written), and `Directory.Build.rsp`, `NuGet.config`, `global.json`, `.editorconfig` and `.globalconfig`. A project that depends on
+  something the check does not follow or evaluate is refused until the check is taught to read it: an import, a target or task, a project
+  reference, a path outside its own folder (also a rooted one, in a value or in a condition), a condition on the file system, a property
+  function, an escaped character, `TreatAsLocalProperty` (which lets a project override the version that the package is made with), a
+  read of one of the package properties that the comparison leaves out, or a read of anything that the project's files do not define
+  without a condition (an environment variable, the operating system, a reserved property, an item list or item metadata: only
+  `NoWarn`, `DefineConstants`, `Version` and `Configuration` are given by the pipeline). When the candidate is the release's own commit
+  (as it is when `release.yml` calls the workflow) nothing is compared. The package itself is made by
   the candidate's own `Build-NuGetPackage.ps1`, which gives the version and the configuration and nothing else; that script is part of
   the reviewed pipeline and is not compared (the tagged commit does not have it).
   `packaging/Assert-ReleaseCode.Tests.ps1` runs the check on changes to a copy of the real project in the "Musical correctness" job of
@@ -132,11 +135,13 @@ days as the artifact `website-preview`.
 - The pictures of the application on the page are the English screenshots in `packaging/store-assets/screenshots/en-US`, copied in at
   build time so that there is one copy of them. The icon and the preview image of the site are made from the Store artwork by
   `packaging/Generate-SiteAssets.ps1`.
-- The build fails when a link or a picture points at nothing or outside the site, a page has no language, title, description or alt text,
-  a link is not https, text is unfinished, or `site/privacy.html` and `docs/PRIVACY.md` differ in their effective date or in a word
-  (formatting and the last section, which says where the policy is published, are left out of the comparison). The privacy policy has
-  those two copies and they must say the same: change both in one pull request. `packaging/Build-Site.Tests.ps1` proves the check on
-  each of those defects (and that the site as it is passes, in both Store states); `pages.yml` runs it before the build.
+- The build fails when a link, a picture, a style-sheet `url()` or `@import`, or an entry of the sitemap or `robots.txt` points at nothing or
+  outside the site, a canonical or preview address is not this site's, a page has no language, title, description or alt text, an
+  attribute is not in double quotes (the checks read double quotes only), a link is not https, text is unfinished, or `site/privacy.html`
+  and `docs/PRIVACY.md` differ in their effective date or in a word (formatting and the last section, which says where the policy is
+  published, are left out of the comparison). The privacy policy has those two copies and they must say the same: change both in one pull
+  request. `packaging/Build-Site.Tests.ps1` proves the check on each of those defects (and that the site as it is passes, in both Store
+  states); `pages.yml` runs it before the build.
 - The Microsoft Store block of the home page follows `STORE_FIRST_PUBLICATION_COMPLETED`: `false` shows "coming soon", `true` shows the
   Store badge and a link to `STORE_PRODUCT_ID`. After the variable is changed, run `pages.yml` (or wait for Monday).
 - After a deployment the job requests the live site: the home page, the privacy policy, the stylesheet, six pictures and a 404 page.

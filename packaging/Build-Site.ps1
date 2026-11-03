@@ -96,7 +96,7 @@ function Test-Reference([string]$Where, [string]$Label, [string]$Raw, [string]$F
     $fragment = $null
     if ($value.Contains('#')) { $fragment = $value.Substring($value.IndexOf('#') + 1); $value = $value.Substring(0, $value.IndexOf('#')) }
     if ($value.Contains('?')) { $value = $value.Substring(0, $value.IndexOf('?')) }
-    if ($value -eq '' -and $fragment) {
+    if ($value -eq '' -and $fragment -and -not $fromRoot) {
         if ($PageIds -notcontains $fragment) { Fail "${Where}: the link #$fragment has no target." }
         return
     }
@@ -123,11 +123,16 @@ function Test-SharedAddress([string]$Where, [string]$Tag) {
     if (-not $address.Success -or -not $address.Groups[1].Value.StartsWith($PublicBase)) { Fail "${Where}: $Tag does not point at $PublicBase." }
 }
 
-# url(...) in a style sheet, a style block or a style attribute.
-function Test-StyleUrls([string]$Where, [string]$Text, [string]$FromDirectory, [string[]]$PageIds) {
-    foreach ($url in [regex]::Matches($Text, 'url\(\s*["'']?(?<value>[^)"'']*)["'']?\s*\)')) {
+# url(...) and @import in style text: a style sheet, a style block or a style attribute. Comments are left out, and so is text on a page that
+# is not style (a code sample that shows a url() is not a reference).
+function Test-StyleUrls([string]$Where, [string]$Css, [string]$FromDirectory, [string[]]$PageIds) {
+    $css = [regex]::Replace($Css, '(?s)/\*.*?\*/', '')
+    foreach ($url in [regex]::Matches($css, 'url\(\s*["'']?(?<value>[^)"'']*)["'']?\s*\)')) {
         $value = $url.Groups['value'].Value.Trim()
         if ($value -and -not $value.StartsWith('#')) { Test-Reference $Where 'url()' $value $FromDirectory $PageIds }
+    }
+    foreach ($import in [regex]::Matches($css, '@import\s+["''](?<value>[^"'']+)["'']')) {
+        Test-Reference $Where '@import' $import.Groups['value'].Value.Trim() $FromDirectory $PageIds
     }
 }
 
@@ -143,6 +148,12 @@ foreach ($page in $pages) {
         if ($image.Value -notmatch '\salt="') { Fail "${relative}: a picture has no alt text: $($image.Value.Substring(0, [Math]::Min(80, $image.Value.Length)))" }
     }
     $ids = @([regex]::Matches($text, '\sid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+    # The checks read attributes in double quotes only: an attribute in single quotes, or in none, would be passed over without a word.
+    foreach ($tag in [regex]::Matches($text, '<[a-zA-Z][^>]*>')) {
+        if ($tag.Value -match '\s(?:href|src|srcset|content|alt|lang|id|rel|property|name)\s*=\s*(?:''|[^"''\s>])') {
+            Fail "${relative}: $($tag.Value) has an attribute that is not in double quotes, and the checks read double quotes only."
+        }
+    }
     foreach ($tag in [regex]::Matches($text, '<(?:link|meta)\b[^>]*>')) { Test-SharedAddress $relative $tag.Value }
     foreach ($reference in [regex]::Matches($text, '\b(?<attribute>href|src|srcset|content)="(?<value>[^"]*)"')) {
         $attribute = $reference.Groups['attribute'].Value
@@ -151,7 +162,8 @@ foreach ($page in $pages) {
         $candidates = if ($attribute -eq 'srcset') { @($value -split ',' | ForEach-Object { ($_.Trim() -split '\s+')[0] } | Where-Object { $_ }) } else { @($value) }
         foreach ($candidate in $candidates) { Test-Reference $relative $attribute $candidate $page.DirectoryName $ids }
     }
-    Test-StyleUrls $relative $text $page.DirectoryName $ids
+    foreach ($style in [regex]::Matches($text, '(?is)<style\b[^>]*>(?<css>.*?)</style>')) { Test-StyleUrls $relative $style.Groups['css'].Value $page.DirectoryName $ids }
+    foreach ($style in [regex]::Matches($text, '(?i)\sstyle="(?<css>[^"]*)"')) { Test-StyleUrls $relative $style.Groups['css'].Value $page.DirectoryName $ids }
 }
 
 foreach ($style in @(Get-ChildItem -LiteralPath $Output -Filter '*.css' -File -Recurse)) {

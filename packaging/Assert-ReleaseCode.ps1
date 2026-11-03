@@ -12,7 +12,8 @@
         the project's folder up to the root, as parsed XML. Comments and layout do not count, and neither do the properties that only
         describe the package or the version (description, tags, URLs, copyright, license, authors, version) or the README that is packed
         into the package. Everything else counts, however it is written: a property, an item, a condition, an attribute, a text;
-      * the other build files (Directory.Build.rsp, MSBuild.rsp, NuGet.config, global.json), by content.
+      * the other build files (Directory.Build.rsp, MSBuild.rsp, NuGet.config, global.json) and the analyzer configuration (.editorconfig,
+        .globalconfig, which can configure source generators), by content.
 
     The check reads only what is listed, so a project that depends on anything else is refused, whatever the other commit holds, until
     the check is taught to read it:
@@ -20,10 +21,17 @@
       * an Import, ImportGroup, Sdk, UsingTask or Target element, or a ProjectReference: another file, a task, or code that this check
         does not follow or evaluate;
       * a path outside the library's folder (with .., rooted, wherever it stands, or made from the project's or the solution's directory),
-        a condition that looks at the file system (Exists, HasTrailingSlash), or a property function, $([...]), which can read any file;
+        a condition that looks at the file system (Exists, HasTrailingSlash), a property function, $([...]), which can read any file, or an
+        escaped character (%2E), which can hide any of these;
+      * a read of anything that neither the compared files define unconditionally nor the pipeline gives: an environment variable, the
+        operating system, a reserved property, an item list, item metadata. Only the properties that the files themselves define, and
+        NoWarn, DefineConstants, Version and Configuration, may be read. (That a definition comes before the read is not checked);
       * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison;
       * TreatAsLocalProperty, which lets a project override the properties given on the command line: the package is made with
         -p:Version, so the version can be left out of the comparison and read freely only while nothing can override it.
+
+    When the candidate is the release's own commit (release.yml makes the package at the commit it has just released) nothing is compared:
+    the library is the release's.
 
     The package itself is made by the candidate's own packaging script (Build-NuGetPackage.ps1), which gives the version and the
     configuration and nothing else. It is part of the reviewed pipeline and is not compared.
@@ -56,7 +64,7 @@ $Repository = (Resolve-Path -LiteralPath $Repository).Path
 $libraryFolder = 'src/ResonantPulse.Core'
 $projectFile = "$libraryFolder/ResonantPulse.Core.csproj"
 $xmlBuildFiles = @('Directory.Build.props', 'Directory.Build.targets', 'Directory.Packages.props')
-$otherBuildFiles = @('Directory.Build.rsp', 'MSBuild.rsp', 'NuGet.config', 'nuget.config', 'NuGet.Config', 'global.json')
+$otherBuildFiles = @('Directory.Build.rsp', 'MSBuild.rsp', 'NuGet.config', 'nuget.config', 'NuGet.Config', 'global.json', '.editorconfig', '.globalconfig')
 
 # What only describes the package or the version, and so cannot change what the library does.
 $permittedProperties = @(
@@ -74,6 +82,13 @@ $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path t
     '|\$\((MSBuild(This|Project|Startup)\w*|Solution(Dir|Path))\)' +  # a path made from the project's or the solution's place
     '|\$\(\['                                                         # a property function, which can read anything
 $packageProperty = '[$%@]\((' + (($permittedProperties | Where-Object { $_ -ne 'Version' }) -join '|') + ')\b'
+# An escaped character (%2E, %24) can write any of the characters above without them showing.
+$escapedCharacter = '%[0-9A-Fa-f]{2}'
+# What a value or a condition reads: $(Name), %(Name), @(Name). Only these may be read; the files' own unconditional definitions are added.
+$readPattern = '[$%@]\(\s*([A-Za-z_][\w\-]*)'
+$allowedReads = @('NoWarn', 'DefineConstants', 'Version', 'Configuration')
+$defined = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$reads = [System.Collections.Generic.List[object]]::new()
 $unreadReferences = [System.Collections.Generic.List[string]]::new()
 
 # git's output as one string, as it is: no lines, no console encoding, so that names and files are read exactly.
@@ -110,6 +125,12 @@ function Find-UnreadReferences($Root, [string] $Name) {
             }
             if ($value -match $packageProperty) {
                 "$Name reads the package property $($Matches[1]) in <$($element.LocalName)>, which this check leaves out of the comparison"
+            }
+            if ($value -match $escapedCharacter) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, an escaped character, which can hide what this check looks for"
+            }
+            foreach ($read in [regex]::Matches($value, $readPattern)) {
+                $script:reads.Add([pscustomobject] @{ Where = $Name; Name = $read.Groups[1].Value; Token = $read.Value; Element = $element.LocalName })
             }
         }
     }
@@ -157,6 +178,8 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
         if (-not $group.HasChildNodes) { [void] $root.RemoveChild($group) }
     }
     foreach ($reference in @(Find-UnreadReferences $root $Name)) { $script:unreadReferences.Add($reference) }
+    # A property that a file defines with no condition has the value that it says, whatever the environment: it may be read.
+    foreach ($property in @($root.SelectNodes("//*[local-name()='PropertyGroup'][not(@Condition)]/*[not(@Condition)]"))) { [void] $script:defined.Add($property.LocalName) }
 
     $lines = [System.Collections.Generic.List[string]]::new()
     Write-CanonicalElement $root 0 $lines
@@ -164,6 +187,8 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
 }
 
 function Get-Inputs([string] $Revision) {
+    $script:defined.Clear()
+    $script:reads.Clear()
     $paths = foreach ($directory in $libraryFolder, 'src', '') {
         foreach ($name in $xmlBuildFiles + $otherBuildFiles) { if ($directory) { "$directory/$name" } else { $name } }
     }
@@ -202,7 +227,20 @@ function Get-Inputs([string] $Revision) {
         }
         else { '(missing)' }
     }
+    foreach ($read in $script:reads) {
+        if ($allowedReads -notcontains $read.Name -and -not $script:defined.Contains($read.Name)) {
+            $script:unreadReferences.Add("$($read.Where) reads $($read.Token) in <$($read.Element)>, which the compared files do not define without a condition and the pipeline does not give (an environment variable, the operating system, a reserved property, an item list or item metadata)")
+        }
+    }
     , $inputs
+}
+
+# The package of a release that is made at the release's own commit (release.yml does) needs no comparison.
+$releaseCommit = (Invoke-Git @('rev-parse', '--verify', "$Release^{commit}")).Trim()
+$candidateCommit = (Invoke-Git @('rev-parse', '--verify', "$Candidate^{commit}")).Trim()
+if ($releaseCommit -eq $candidateCommit) {
+    Write-Host "The candidate $Candidate is the release's own commit, ${releaseCommit}: the library is the release's."
+    return
 }
 
 $before = Get-Inputs $Release
