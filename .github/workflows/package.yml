@@ -56,28 +56,16 @@ jobs:
           expected_prerelease=false
           [[ "$VERSION" == *-* ]] && expected_prerelease=true
           [[ "$(jq -r '.prerelease' <<<"$release")" == "$expected_prerelease" ]] || { echo "::error::Release v$VERSION and version $VERSION disagree about being a pre-release."; exit 1; }
-          # The library in the package is the library of the release: the commit being built comes from the tagged one, and everything that
-          # compiles the library is the same. The package metadata of the project file is the one thing allowed to differ (and the integration
-          # README, the lock file of a project without dependencies, and the version number), so a package can be published later for a release
-          # that has no packaging of its own (1.0.0). The project file is compared with exactly those lines taken out, so that any other
-          # setting counts, such as CheckForOverflowUnderflow.
+          # The library in the package is the library of the release: the commit being built comes from the tagged one, and what the library
+          # is compiled from is the same (packaging/Assert-ReleaseCode.ps1: only the package metadata and the version may differ), so a package
+          # can be published later for a release that has no packaging of its own (1.0.0).
           tag_commit=$(git rev-parse "v$VERSION^{commit}")
           git merge-base --is-ancestor "$tag_commit" HEAD || { echo "::error::The tag v$VERSION is not an ancestor of the commit being built."; exit 1; }
-          compile_inputs() {
-            git ls-tree -r "$1" -- src/ResonantPulse.Core | grep -v -E '(ResonantPulse\.Core\.csproj|/README\.md|/packages\.lock\.json)$' || true
-            git show "$1:src/ResonantPulse.Core/ResonantPulse.Core.csproj" \
-              | grep -v -E '<(IsPackable|PackageId|Description|PackageTags|PackageReadmeFile|PackageProjectUrl|Copyright|RepositoryUrl|RepositoryType|PublishRepositoryUrl)>|<!--|<None |</?ItemGroup>' \
-              | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$' || true
-            for file in Directory.Build.props Directory.Build.targets Directory.Packages.props global.json NuGet.config nuget.config; do
-              echo "== $file"
-              git show "$1:$file" 2>/dev/null | grep -v -E '<Version>' || true
-            done
-          }
-          if ! diff <(compile_inputs "$tag_commit") <(compile_inputs HEAD) >/dev/null; then
-            echo "::error::The code or the build settings of the library differ from those of release v$VERSION. Publish the package of a version from a commit with the released code."
+          pwsh -NoProfile -File ./packaging/Assert-ReleaseCode.ps1 -Release "$tag_commit" -Candidate HEAD || {
+            echo "::error::The library or its build settings differ from those of release v$VERSION. Publish the package of a version from a commit with the released library."
             exit 1
-          fi
-          echo "Release v$VERSION is published at $tag_commit; the library code at $SOURCE_SHA is the same." >> "$GITHUB_STEP_SUMMARY"
+          }
+          echo "Release v$VERSION is published at $tag_commit; the library at $SOURCE_SHA is the same." >> "$GITHUB_STEP_SUMMARY"
           # The exact commit must have passed the full build and the security analysis on main, as a release requires.
           for workflow in ci.yml codeql.yml; do
             run_id=$(gh run list --workflow "$workflow" --commit "$SOURCE_SHA" --event push --json databaseId --jq '.[0].databaseId // empty')

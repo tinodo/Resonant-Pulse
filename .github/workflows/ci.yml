@@ -39,6 +39,12 @@ jobs:
         # does so for the version of a published release.
         shell: pwsh
         run: ./packaging/Build-NuGetPackage.ps1 -Version 0.0.0-ci
+      - name: Test the release-code check of the package workflow
+        # package.yml publishes the package of an existing release from a later commit only if that commit builds the release's library.
+        # This proves the check on the real project: a change that only describes the package is accepted, any change that can alter the
+        # library is refused.
+        shell: pwsh
+        run: ./packaging/Assert-ReleaseCode.Tests.ps1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
