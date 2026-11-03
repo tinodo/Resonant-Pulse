@@ -99,12 +99,12 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
 - `release.yml` calls `package.yml` after it has published a release. `package.yml` can also be run by hand from main
   (`gh workflow run package.yml -R tinodo/Resonant-Pulse --ref main -f version=1.0.0`), for a release that was published before it
   existed (1.0.0) or to repeat a push that failed. It refuses a version without a published GitHub release, a release whose pre-release
-  flag disagrees with the version, a commit that is not the release's or one of its descendants, a commit whose library code
-  (`src/ResonantPulse.Core/*.cs`) or compile settings (the compile properties of the project, `Directory.Build.props` apart from the
-  version, `global.json`) differ from the release's, and a commit without a successful main-branch run of `ci.yml` and
-  `codeql.yml`. It runs the engine's tests, packs and checks the package, and hands it to a second job, the only one with
-  `packages: write`, which has no checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never
-  overwritten.
+  flag disagrees with the version, a commit that is not the release's or one of its descendants, a commit whose library or build
+  settings differ from the release's (every file under `src/ResonantPulse.Core` except its README, the project file with only its
+  package metadata taken out, `Directory.Build.props` apart from the version, `Directory.Build.targets`, `Directory.Packages.props`,
+  `NuGet.config` and `global.json`), and a commit without a successful main-branch run of `ci.yml` and `codeql.yml`. It runs the
+  engine's tests, packs and checks the package, and hands it to a second job, the only one with `packages: write`, which has no
+  checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never overwritten.
 - GitHub publishes the first version of a package as private and has no API to change that. Once, after the first push: open the
   package (<https://github.com/tinodo?tab=packages&repo_name=Resonant-Pulse>), Package settings, Danger Zone, Change visibility,
   Public. That cannot be undone, so it is the owner's decision; the summary of the run says whether the package is public. Restoring
