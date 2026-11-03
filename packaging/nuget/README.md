@@ -37,8 +37,8 @@ await WaveExporter.ExportAsync("waltz.wav", plan);
 await MidiExporter.ExportAsync("waltz.mid", document, bars: 4);
 ```
 
-Each package version is built from the tagged release of the application with the same version number, and the release workflow of the
-repository pushes it only after the release itself is published. The library is the application's engine: it is versioned with the
+Each package version has the version number of a published release of the application and is built from a commit whose library code is the
+code of that release; the release workflow of the repository pushes it only after the release itself is published. The library is the application's engine: it is versioned with the
 application and has no separate stability guarantee, so read the
 [release notes](https://github.com/tinodo/Resonant-Pulse/blob/main/docs/RELEASE-NOTES.md) before you move to a new version.
 

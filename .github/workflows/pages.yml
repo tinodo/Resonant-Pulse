@@ -27,9 +27,10 @@ on:
 permissions:
   contents: read
 
-# A deployment is never cancelled half way, and a pull request's check never replaces a deployment that is waiting.
+# A deployment is never cancelled half way. A pull request's check never replaces a deployment that is waiting, and neither does a run
+# from another branch (GitHub keeps one pending run per group): only main shares the group "pages".
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || github.ref == 'refs/heads/main' && 'pages' || format('pages-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -93,7 +94,8 @@ jobs:
           else
             grep -q 'coming soon' <<<"$home" || { echo "::error::The Store listing is not published but the home page does not say so."; exit 1; }
           fi
-          fetch "privacy.html" | grep -q 'Privacy policy' || { echo "::error::The privacy policy page does not have the expected content."; exit 1; }
+          privacy=$(fetch "privacy.html")
+          grep -q 'Privacy policy' <<<"$privacy" || { echo "::error::The privacy policy page does not have the expected content."; exit 1; }
           fetch "assets/site.css" >/dev/null
           for picture in screenshots/01-play.png screenshots/02-studio.png screenshots/03-train.png screenshots/04-stage.png screenshots/05-library.png assets/og-image.png; do
             type=$(curl --fail --silent --show-error --location --retry 8 --retry-delay 10 --retry-all-errors --output /dev/null --write-out '%{content_type}' "$base/$picture")

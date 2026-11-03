@@ -56,11 +56,19 @@ jobs:
           expected_prerelease=false
           [[ "$VERSION" == *-* ]] && expected_prerelease=true
           [[ "$(jq -r '.prerelease' <<<"$release")" == "$expected_prerelease" ]] || { echo "::error::Release v$VERSION and version $VERSION disagree about being a pre-release."; exit 1; }
-          # The library in the package is the library of the release: the commit being built comes from the tagged one and its code is the same.
+          # The library in the package is the library of the release: the commit being built comes from the tagged one, and the code and the
+          # settings that compile it are the same. Only the package metadata of the project, the version number and the project's
+          # integration README may differ, so a package can be published later for a release that has no packaging of its own (1.0.0).
           tag_commit=$(git rev-parse "v$VERSION^{commit}")
           git merge-base --is-ancestor "$tag_commit" HEAD || { echo "::error::The tag v$VERSION is not an ancestor of the commit being built."; exit 1; }
-          if ! git diff --quiet "$tag_commit" HEAD -- 'src/ResonantPulse.Core/*.cs'; then
-            echo "::error::The code of the library differs from the code of release v$VERSION. Publish the package of a version from a commit with the released code."
+          compile_inputs() {
+            git ls-tree -r "$1" -- src/ResonantPulse.Core | grep -E '\.cs$' || true
+            git show "$1:src/ResonantPulse.Core/ResonantPulse.Core.csproj" | grep -E '<(TargetFramework|LangVersion|Nullable|ImplicitUsings|GenerateDocumentationFile|NoWarn)>' || true
+            git show "$1:Directory.Build.props" | grep -v -E '<Version>' || true
+            git show "$1:global.json" || true
+          }
+          if ! diff <(compile_inputs "$tag_commit") <(compile_inputs HEAD) >/dev/null; then
+            echo "::error::The code or the compile settings of the library differ from those of release v$VERSION. Publish the package of a version from a commit with the released code."
             exit 1
           fi
           echo "Release v$VERSION is published at $tag_commit; the library code at $SOURCE_SHA is the same." >> "$GITHUB_STEP_SUMMARY"
@@ -138,6 +146,7 @@ jobs:
             if ($LASTEXITCODE -eq 0 -and $json) { $package = $json | ConvertFrom-Json; $packageName = $name; break }
           }
           $lines = @('### ResonantPulse.Core on GitHub Packages', '')
+          $visibilityKnown = $false
           $public = $false
           if ($package) {
             $listed = $false
@@ -150,15 +159,21 @@ jobs:
             $lines += "- Visibility: $($package.visibility)"
             $lines += "- Package: $($package.html_url)"
             if (-not $listed) { Write-Host "::warning title=Version not listed yet::$version was pushed but is not in the package's version list yet. Re-run this job to check again." }
+            $visibilityKnown = $true
             $public = $package.visibility -eq 'public'
           }
           else {
+            # A failed lookup (an outage, a delay, a package this token cannot read) does not say that the package is private.
             $lines += "- Version $version was pushed."
-            $lines += '- The package is not readable as a public package, so it is private: GitHub publishes the first version of a package as private.'
+            $lines += '- Whether it is listed, and who can see the package, could not be read with the workflow token just now. The push itself succeeded.'
+            Write-Host '::warning title=Package visibility unknown::The package was pushed, but its listing and visibility could not be read. Open the package page to see who can see it, and re-run this job to check again.'
           }
-          if (-not $public) {
+          if ($visibilityKnown -and -not $public) {
             $lines += '- To list it on the repository page: open the package, then Package settings, Danger Zone, Change visibility, Public. GitHub has no API for this and it cannot be undone.'
             Write-Host '::notice title=Make ResonantPulse.Core public::GitHub publishes the first version of a package as private and has no API to change that. To list it on the repository page: open the package, then Package settings, Danger Zone, Change visibility, Public. This cannot be undone.'
+          }
+          elseif (-not $visibilityKnown) {
+            $lines += '- If the package is private: open it, then Package settings, Danger Zone, Change visibility, Public (GitHub publishes the first version of a package as private, has no API to change that, and the change cannot be undone).'
           }
           $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           exit 0

@@ -125,14 +125,36 @@ foreach ($name in $screenshotNames) {
 $ogSize = Get-PngSize (Join-Path $Output 'assets/og-image.png')
 if (-not $ogSize -or $ogSize[0] -ne 1200 -or $ogSize[1] -ne 630) { Fail 'assets/og-image.png is not a 1200x630 PNG.' }
 
-# The privacy policy has one wording. docs/PRIVACY.md and the page say the same effective date, and the page must carry it.
+# The privacy policy has one wording. docs/PRIVACY.md and the page say the same effective date and, up to the last section (which says where
+# the policy is published, differently in each), the same words: formatting and links are ignored, a changed or missing word is not.
 $dateExpression = 'Effective date:\s*(\d{1,2} [A-Za-z]+ \d{4})'
-$markdownDate = [regex]::Match([System.IO.File]::ReadAllText($privacyMarkdown), $dateExpression)
-$pageDate = [regex]::Match([System.IO.File]::ReadAllText((Join-Path $Output 'privacy.html')), $dateExpression)
+$markdownText = [System.IO.File]::ReadAllText($privacyMarkdown)
+$pageText = [System.IO.File]::ReadAllText((Join-Path $Output 'privacy.html'))
+$markdownDate = [regex]::Match($markdownText, $dateExpression)
+$pageDate = [regex]::Match($pageText, $dateExpression)
 if (-not $markdownDate.Success) { Fail 'docs/PRIVACY.md has no "Effective date: D Month YYYY".' }
 if (-not $pageDate.Success) { Fail 'privacy.html has no "Effective date: D Month YYYY".' }
 if ($markdownDate.Success -and $pageDate.Success -and $markdownDate.Groups[1].Value -ne $pageDate.Groups[1].Value) {
     Fail "The privacy policy is dated $($pageDate.Groups[1].Value) on the website and $($markdownDate.Groups[1].Value) in docs/PRIVACY.md."
+}
+function Get-Words([string]$text) { @([regex]::Matches($text.ToLowerInvariant(), '[\p{L}\p{N}]+') | ForEach-Object { $_.Value }) }
+$markdownBody = [regex]::Match($markdownText, '(?s)^\s*#[^\r\n]*\r?\n(.*?)\r?\n## Changes and contact')
+$pageBody = [regex]::Match($pageText, '(?s)<h1>[^<]*</h1>(.*?)<h2>Changes and contact</h2>')
+if (-not $markdownBody.Success) { Fail 'docs/PRIVACY.md has no title followed by sections that end with "## Changes and contact".' }
+if (-not $pageBody.Success) { Fail 'privacy.html has no h1 followed by sections that end with <h2>Changes and contact</h2>.' }
+if ($markdownBody.Success -and $pageBody.Success) {
+    $markdownWords = Get-Words ([regex]::Replace($markdownBody.Groups[1].Value, '\[([^\]]*)\]\([^)]*\)', '$1'))
+    $pageWords = Get-Words ([System.Net.WebUtility]::HtmlDecode([regex]::Replace($pageBody.Groups[1].Value, '<[^>]+>', ' ')))
+    $common = [Math]::Min($markdownWords.Count, $pageWords.Count)
+    $at = -1
+    for ($i = 0; $i -lt $common; $i++) { if ($markdownWords[$i] -ne $pageWords[$i]) { $at = $i; break } }
+    if ($at -lt 0 -and $markdownWords.Count -ne $pageWords.Count) { $at = $common }
+    if ($at -ge 0) {
+        $from = [Math]::Max(0, $at - 4)
+        $markdownContext = ($markdownWords[$from..([Math]::Min($markdownWords.Count - 1, $at + 4))]) -join ' '
+        $pageContext = ($pageWords[$from..([Math]::Min($pageWords.Count - 1, $at + 4))]) -join ' '
+        Fail "The privacy policy differs between docs/PRIVACY.md and privacy.html at word $at; docs/PRIVACY.md has '$markdownContext', privacy.html has '$pageContext'."
+    }
 }
 
 $total = ($allFiles | Measure-Object Length -Sum).Sum

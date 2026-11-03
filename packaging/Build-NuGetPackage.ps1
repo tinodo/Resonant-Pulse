@@ -124,8 +124,8 @@ if (-not $SkipConsumer) {
     }
     try {
         Copy-Item -Path (Join-Path $root 'packaging/nuget/Consumer/*') -Destination $work -Recurse
-        $feed = $output
-        $cache = Join-Path $work 'packages'
+        $feed = [System.Security.SecurityElement]::Escape($output)
+        $cache = [System.Security.SecurityElement]::Escape((Join-Path $work 'packages'))
         $config = @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>

@@ -28,7 +28,6 @@
         <a href="#features">Features</a>
         <a href="#screenshots">Screenshots</a>
         <a href="#download">Download</a>
-        <a href="#developers">Developers</a>
         <a href="privacy.html">Privacy</a>
         <a href="https://github.com/tinodo/Resonant-Pulse">GitHub</a>
       </nav>
@@ -108,19 +107,6 @@
               <li>Extract the whole ZIP anywhere and run <code>ResonantPulse.exe</code>. Do not copy the executable on its own.</li>
             </ol>
             <p class="note">The portable build is not code-signed, so Windows SmartScreen may ask for confirmation the first time you run it. Each ZIP has a <code>.sha256</code> file next to it: compare it with <code>Get-FileHash .\ResonantPulse-win-x64.zip</code> in PowerShell before you run it. The ARM64 build has not been tried on ARM64 hardware.</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="developers">
-        <div class="wrap" style="padding:0">
-          <h2>For developers</h2>
-          <p class="sub">The engine of the app, without any user interface, is a NuGet package on GitHub Packages: <code>ResonantPulse.Core</code> for .NET 10. It compiles a rhythm document into an exact schedule of clicks, renders it to audio and writes WAV, per-track WAV or MIDI. It has no dependencies.</p>
-          <div class="panel">
-            <pre><code>dotnet nuget add source "https://nuget.pkg.github.com/tinodo/index.json" `
-  --name github --username &lt;github-user&gt; --password &lt;token&gt;
-dotnet add package ResonantPulse.Core</code></pre>
-            <p class="note">GitHub Packages asks for a personal access token with the <code>read:packages</code> scope, also for a public package. The <a href="https://github.com/tinodo/Resonant-Pulse#using-resonantpulsecore">repository README</a> has the details and a short example.</p>
           </div>
         </div>
       </section>

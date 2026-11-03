@@ -100,7 +100,8 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   (`gh workflow run package.yml -R tinodo/Resonant-Pulse --ref main -f version=1.0.0`), for a release that was published before it
   existed (1.0.0) or to repeat a push that failed. It refuses a version without a published GitHub release, a release whose pre-release
   flag disagrees with the version, a commit that is not the release's or one of its descendants, a commit whose library code
-  (`src/ResonantPulse.Core/*.cs`) differs from the release's, and a commit without a successful main-branch run of `ci.yml` and
+  (`src/ResonantPulse.Core/*.cs`) or compile settings (the compile properties of the project, `Directory.Build.props` apart from the
+  version, `global.json`) differ from the release's, and a commit without a successful main-branch run of `ci.yml` and
   `codeql.yml`. It runs the engine's tests, packs and checks the package, and hands it to a second job, the only one with
   `packages: write`, which has no checkout and runs no repository code. A version that is already on GitHub Packages is skipped, never
   overwritten.
@@ -121,8 +122,9 @@ days as the artifact `website-preview`.
   build time so that there is one copy of them. The icon and the preview image of the site are made from the Store artwork by
   `packaging/Generate-SiteAssets.ps1`.
 - The build fails when a link or a picture points at nothing, a page has no language, title, description or alt text, a link is not
-  https, text is unfinished, or the effective date of `site/privacy.html` differs from that of `docs/PRIVACY.md`. The privacy policy has
-  those two copies and they must say the same: change both in one pull request.
+  https, text is unfinished, or `site/privacy.html` and `docs/PRIVACY.md` differ in their effective date or in a word (formatting and the
+  last section, which says where the policy is published, are left out of the comparison). The privacy policy has those two copies and
+  they must say the same: change both in one pull request.
 - The Microsoft Store block of the home page follows `STORE_FIRST_PUBLICATION_COMPLETED`: `false` shows "coming soon", `true` shows the
   Store badge and a link to `STORE_PRODUCT_ID`. After the variable is changed, run `pages.yml` (or wait for Monday).
 - After a deployment the job requests the live site: the home page, the privacy policy, the stylesheet, six pictures and a 404 page.
