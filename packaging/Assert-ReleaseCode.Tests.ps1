@@ -92,9 +92,9 @@ function Remove-Work([string] $Path) { Remove-Item -LiteralPath (Join-Path $work
 function Move-Work([string] $From, [string] $To) { Move-Item -LiteralPath (Join-Path $work $From) -Destination (Join-Path $work $To) }
 
 # A file that exists in the commit and nowhere else (no working file): a name that no file system takes, or two that differ in case only.
-function Add-IndexEntry([string] $Path, [string] $Text) {
+function Add-IndexEntry([string] $Path, [string] $Text, [string] $Mode = '100644') {
     $blob = ($Text | & git -C $work hash-object -w --stdin).Trim()
-    Invoke-WorkGit @('-c', 'core.protectNTFS=false', 'update-index', '--add', '--cacheinfo', "100644,$blob,$Path")
+    Invoke-WorkGit @('-c', 'core.protectNTFS=false', 'update-index', '--add', '--cacheinfo', "$Mode,$blob,$Path")
 }
 
 # What 1.0.0 looked like before the packaging existed: no package metadata, and no packed README.
@@ -279,6 +279,41 @@ $unread = [ordered] @{
     'a property that is defined only inside a Choose, read outside it' = {
         Add-ToProject $project "<Choose><When Condition=`"'`$(Configuration)' == 'Debug'`"><PropertyGroup><Flag>x</Flag></PropertyGroup></When></Choose><PropertyGroup Condition=`"'`$(Flag)' == 'x'`"><DefineConstants>Y</DefineConstants></PropertyGroup>"
     }
+    'a read of a property that the project defines' = {
+        Add-ToProject $project "<PropertyGroup><Flag>x</Flag></PropertyGroup><PropertyGroup Condition=`"'`$(Flag)' == 'x'`"><DefineConstants>Y</DefineConstants></PropertyGroup>"
+    }
+    'a property that reads itself, so that it takes the value of the environment' = {
+        Add-ToProject $project "<PropertyGroup><ExternalSources>`$(ExternalSources)</ExternalSources></PropertyGroup><ItemGroup><Compile Include=`"`$(ExternalSources)`" /></ItemGroup>"
+    }
+    'a path written one piece at a time' = {
+        Add-ToProject $project "<PropertyGroup><Dot>.</Dot></PropertyGroup><ItemGroup><Compile Include=`"`$(Dot)`$(Dot)/Shared/Extra.cs`" /></ItemGroup>"
+    }
+    'properties that read each other' = { Add-ToProject $project "<PropertyGroup><First>`$(Second)</First><Second>`$(First)</Second></PropertyGroup>" }
+    'the default of the compilation symbols, read' = { Add-ToProject $project "<PropertyGroup><DefineConstants>`$(DefineConstants);Y</DefineConstants></PropertyGroup>" }
+    'the suppressed warnings, read outside their own property' = { Add-ToProject $project "<PropertyGroup><Extra>`$(NoWarn)</Extra></PropertyGroup>" }
+    'the suppressed warnings, read in a path' = { Add-ToProject $project "<ItemGroup><Compile Include=`"`$(NoWarn)/x.cs`" /></ItemGroup>" }
+    'the suppressed warnings, read in a condition' = {
+        Add-ToProject $project "<PropertyGroup><NoWarn Condition=`"'`$(NoWarn)' == ''`">1591</NoWarn></PropertyGroup>"
+    }
+    'the suppressed warnings, read in an item group' = { Add-ToProject $project "<ItemGroup><NoWarn>`$(NoWarn)</NoWarn></ItemGroup>" }
+    'text that a comment splits, with a read in it' = { Add-ToProject $project '<PropertyGroup><DefineConstants>X;$<!---->(OS)</DefineConstants></PropertyGroup>' }
+    'a path that a comment splits' = { Add-ToProject $project '<PropertyGroup><KeyFile>.<!---->./keys/x.snk</KeyFile></PropertyGroup>' }
+    'text that a CDATA section splits, with a read in it' = { Add-ToProject $project '<PropertyGroup><DefineConstants>X;$<![CDATA[(OS)]]></DefineConstants></PropertyGroup>' }
+    'a CDATA section' = { Add-ToProject $project '<PropertyGroup><DefineConstants><![CDATA[X]]></DefineConstants></PropertyGroup>' }
+    'a package reference with a fixed version' = {
+        Add-ToProject $project '<ItemGroup><PackageReference Include="Some.Generator" Version="1.0.0" PrivateAssets="all" /></ItemGroup>'
+    }
+    'a package reference with a floating version' = {
+        Add-ToProject $project '<ItemGroup><PackageReference Include="Some.Generator" Version="1.*" PrivateAssets="all" /></ItemGroup>'
+    }
+    'a package reference for every project' = {
+        Add-ToProject $props '<ItemGroup><GlobalPackageReference Include="Some.Analyzer" Version="1.0.0" /></ItemGroup>'
+    }
+    'the README of the library taken into the build' = { Add-ToProject $project '<ItemGroup><EmbeddedResource Include="README.md" /></ItemGroup>' }
+    'the lock file taken into the build' = { Add-ToProject $project '<ItemGroup><AdditionalFiles Include="packages.lock.json" /></ItemGroup>' }
+    'a wildcard that could take in a file that the comparison leaves out' = {
+        Add-ToProject $project '<ItemGroup><AdditionalFiles Include="**/*.json" /></ItemGroup>'
+    }
     'a project with a project reference' = { Add-ToProject $project '<ItemGroup><ProjectReference Include="Other.csproj" /></ItemGroup>' }
     'a project that includes a file of another folder' = { Add-ToProject $project '<ItemGroup><Compile Include="..\Shared\Extra.cs" /></ItemGroup>' }
     'a property that points outside the library folder' = { Add-After $project '<Nullable>[^<]*</Nullable>' '<ApplicationIcon>../../assets/x.ico</ApplicationIcon>' }
@@ -316,12 +351,24 @@ $unread = [ordered] @{
 foreach ($name in $unread.Keys) { Add-Case @{ Name = "$name, checked against itself"; Expect = 'different'; Self = $true; Change = $unread[$name] } }
 
 # What a project may read, and the rule that the release's own commit is the release's, whatever it holds.
-Add-Case @{ Name = 'a read of a property that the project defines, checked against itself'; Expect = 'same'; Self = $true; Change = {
-        Add-ToProject $project "<PropertyGroup><Flag>x</Flag></PropertyGroup><PropertyGroup Condition=`"'`$(Flag)' == 'x'`"><DefineConstants>`$(DefineConstants);Y</DefineConstants></PropertyGroup>"
-    } }
 Add-Case @{ Name = 'a read of the configuration, checked against itself'; Expect = 'same'; Self = $true; Change = {
-        Add-ToProject $project "<PropertyGroup Condition=`"'`$(Configuration)' == 'Release'`"><DefineConstants>`$(DefineConstants);Z</DefineConstants></PropertyGroup>"
+        Add-ToProject $project "<PropertyGroup Condition=`"'`$(Configuration)' == 'Release'`"><DefineConstants>Z</DefineConstants></PropertyGroup>"
     } }
+Add-Case @{ Name = 'warnings added to the default of the suppressed warnings, checked against itself'; Expect = 'same'; Self = $true; Change = {
+        Add-ToProject $project '<PropertyGroup><NoWarn>$(NoWarn);CS1573</NoWarn></PropertyGroup>'
+    } }
+Add-Case @{ Name = 'a symbolic link among the library files, checked against itself'; Expect = 'different'; IndexOnly = $true; Self = $true; Change = {
+        Add-IndexEntry "$library/Link.cs" '../Shared/Extra.cs' '120000'
+    } }
+Add-Case @{ Name = 'a submodule among the library files, checked against itself'; Expect = 'different'; IndexOnly = $true; Self = $true; Change = {
+        Add-IndexEntry "$library/Sub" 'not a real commit' '160000'
+    } }
+Add-Case @{ Name = 'a file that a path written one piece at a time includes, then changed'; Expect = 'different'; OnRelease = $true
+    Release = {
+        Add-ToProject $project "<PropertyGroup><Dot>.</Dot></PropertyGroup><ItemGroup><Compile Include=`"`$(Dot)`$(Dot)/Shared/Extra.cs`" /></ItemGroup>"
+        Write-Text 'src/Shared/Extra.cs' 'namespace Shared { class Extra { } }'
+    }
+    Change = { Write-Text 'src/Shared/Extra.cs' 'namespace Shared { class Extra { int Changed; } }' } }
 Add-Case @{ Name = 'the release''s own commit, whatever the project holds'; Expect = 'same'; Identical = $true; Change = {
         Add-ToProject $project "<Import Project=`"extra.props`" /><PropertyGroup Condition=`"'`$(OS)' == 'Windows_NT'`">$overflow</PropertyGroup>"
     } }

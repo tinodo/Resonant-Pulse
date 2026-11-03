@@ -153,6 +153,9 @@ section > .wrap > p.sub { color: var(--muted); margin: 0 0 28px; max-width: 680p
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
 }
+@media (max-width: 360px) {
+  .grid { grid-template-columns: 1fr; }
+}
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

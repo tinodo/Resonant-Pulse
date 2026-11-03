@@ -23,12 +23,20 @@
       * a path outside the library's folder (with .., rooted, wherever it stands, or made from the project's or the solution's directory),
         a condition that looks at the file system (Exists, HasTrailingSlash), a property function, $([...]), which can read any file, or an
         escaped character (%2E), which can hide any of these;
-      * a read of anything that neither the compared files define unconditionally (at the top level, not under a condition or inside
-        Choose) nor the pipeline gives: an environment variable, the operating system, a reserved property, an item list, item metadata.
-        Only a plain $(Name) is understood, and only the properties that the files themselves define, and NoWarn, DefineConstants,
-        Version and Configuration, may be read that way; $(Name.Method()), %(Metadata) and @(Items) are refused whatever their names.
-        (That a definition comes before the read is not checked);
+      * a read of anything that the pipeline does not fix. Only $(Version) and $(Configuration), which the package is made with (-p:Version
+        and --configuration Release: a global property wins over every file, so both commits read the same value), and $(NoWarn) inside
+        the NoWarn property itself (<NoWarn>$(NoWarn);1591</NoWarn>, which adds to the default and hands it on to nothing else) may be
+        read. A property that the files define themselves may not, however it is defined: its value can come from the environment
+        (<P>$(P)</P> reads the environment's P), from itself, from a cycle, or write a path (..) one piece at a time. Nor may an
+        environment variable, the operating system, a reserved property, an item list or item metadata; $(Name.Method()), %(Metadata)
+        and @(Items) are refused whatever their names;
       * a package property that the rest of the project reads ($(Product), ...), because that property is left out of the comparison;
+      * a package reference (the library has no package dependencies, and a package that restore resolves is code that is not among the
+        compared files), and a name or a wildcard that could take in a file that this check leaves out of the comparison (README.md, the
+        lock file), which would then be a build input that nobody compares;
+      * a CDATA section, which MSBuild reads in a way that this check does not follow, and a symbolic link or a submodule among the
+        library's files, which are compared by their entries and not by what they point at. (Text that a comment splits is read joined,
+        as MSBuild joins it: $<!---->(OS) is read as $(OS).)
       * TreatAsLocalProperty, which lets a project override the properties given on the command line: the package is made with
         -p:Version, so the version can be left out of the comparison and read freely only while nothing can override it.
 
@@ -76,7 +84,11 @@ $permittedItems = @('../../packaging/nuget/README.md')
 
 # What the check cannot follow or evaluate (see the description). The version is read harmlessly: the package is made with -p:Version, which
 # wins over every file, on both sides, unless the project treats the version as local (TreatAsLocalProperty), which is refused too.
-$unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference')
+# The library has no package dependencies, and a package that restore resolves (a floating version, the lock file that this check leaves out)
+# is code that is not among the compared files.
+$unreadElements = @('Import', 'ImportGroup', 'Sdk', 'UsingTask', 'Target', 'ProjectReference', 'PackageReference', 'GlobalPackageReference', 'PackageDownload')
+# The files that the comparison of the library's folder leaves out (they differ between a release and a later commit), and what could name them.
+$leftOutOrWildcard = '(?i)README|packages\.lock\.json|[*?]'
 $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path that climbs out of a folder
     '|(^|[\s''"(;=,])[\\/][^\s''")]' +                                # a rooted path, at the start of a value or inside one (a condition)
     '|(^|\W)[A-Za-z]:[\\/]' +                                         # a path with a drive letter
@@ -86,13 +98,13 @@ $outsideReference = '(^|[^\w.])\.\.([^\w.]|$)' +                      # a path t
 $packageProperty = '[$%@]\((' + (($permittedProperties | Where-Object { $_ -ne 'Version' }) -join '|') + ')\b'
 # An escaped character (%2E, %24) can write any of the characters above without them showing.
 $escapedCharacter = '%[0-9A-Fa-f]{2}'
-# What a value or a condition reads. Only a plain $(Name) is understood: the files' own unconditional definitions, and the properties that
-# the pipeline gives, may be read that way. Anything else that starts an expression, $(Name.Method()), %(Metadata), @(Items), is refused.
+# What a value or a condition reads. Only a plain $(Name) is understood. Anything else that starts an expression, $(Name.Method()), %(Metadata),
+# @(Items), is refused.
 $plainRead = '\$\(([A-Za-z_][\w\-]*)\)'
 $expression = '[$%@]\('
-$allowedReads = @('NoWarn', 'DefineConstants', 'Version', 'Configuration')
-$defined = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$reads = [System.Collections.Generic.List[object]]::new()
+# The properties that the pipeline fixes for both commits (-p:Version, --configuration Release): no file can change them (TreatAsLocalProperty,
+# which could, is refused), so a read of one gives the same value on both sides and can be neither made from the environment nor a path.
+$pipelineGiven = @('Version', 'Configuration')
 $unreadReferences = [System.Collections.Generic.List[string]]::new()
 
 # git's output as one string, as it is: no lines, no console encoding, so that names and files are read exactly.
@@ -122,10 +134,21 @@ function Find-UnreadReferences($Root, [string] $Name) {
                 "$Name has TreatAsLocalProperty=""$($attribute.Value)"" on <$($element.LocalName)>, which lets the project override the properties given on the command line"
             }
         }
-        $values = @($element.Attributes | ForEach-Object { $_.Value }) + @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA' } | ForEach-Object { $_.Value })
-        foreach ($value in $values) {
+        # MSBuild joins the pieces of the text of an element (a comment may stand between them: $<!---->(OS) is $(OS)), so they are read joined, and
+        # it reads a CDATA section in a way that this check does not follow.
+        if (@($element.ChildNodes | Where-Object { $_.NodeType -eq 'CDATA' }).Count -gt 0) {
+            "$Name has a CDATA section in <$($element.LocalName)>, which MSBuild reads in a way that this check does not follow"
+        }
+        $content = -join @($element.ChildNodes | Where-Object { $_.NodeType -in 'Text', 'CDATA', 'SignificantWhitespace', 'Whitespace' } | ForEach-Object { $_.Value })
+        $values = @($element.Attributes | ForEach-Object { [pscustomobject] @{ Text = $_.Value; IsContent = $false } }) +
+            @([pscustomobject] @{ Text = $content; IsContent = $true })
+        foreach ($item in $values) {
+            $value = $item.Text
             if ($value -match $outsideReference) {
                 "$Name has '$($value.Trim())' in <$($element.LocalName)>, which refers outside the library's folder or runs code"
+            }
+            if ($value -match $leftOutOrWildcard) {
+                "$Name has '$($value.Trim())' in <$($element.LocalName)>, which names a file that this check leaves out of the comparison (a README, a lock file) or could match one (a wildcard)"
             }
             if ($value -match $packageProperty) {
                 "$Name reads the package property $($Matches[1]) in <$($element.LocalName)>, which this check leaves out of the comparison"
@@ -134,7 +157,12 @@ function Find-UnreadReferences($Root, [string] $Name) {
                 "$Name has '$($value.Trim())' in <$($element.LocalName)>, an escaped character, which can hide what this check looks for"
             }
             foreach ($read in [regex]::Matches($value, $plainRead)) {
-                $script:reads.Add([pscustomobject] @{ Where = $Name; Name = $read.Groups[1].Value; Token = $read.Value; Element = $element.LocalName })
+                $readName = $read.Groups[1].Value
+                # <NoWarn>$(NoWarn);1591</NoWarn> adds to the default value of the property and hands it on to nothing else.
+                $accumulates = $item.IsContent -and $element.LocalName -eq 'NoWarn' -and $readName -eq 'NoWarn' -and $element.ParentNode.LocalName -eq 'PropertyGroup'
+                if ($pipelineGiven -notcontains $readName -and -not $accumulates) {
+                    "$Name reads $($read.Value) in <$($element.LocalName)>, which can come from the environment, from a definition of the project or from the operating system, or be a piece of a path, and this check does not follow that"
+                }
             }
             if ([regex]::Replace($value, $plainRead, '') -match $expression) {
                 "$Name has '$($value.Trim())' in <$($element.LocalName)>, an expression, item list or item metadata (not a plain `$(Name)), which this check does not evaluate"
@@ -185,9 +213,6 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
         if (-not $group.HasChildNodes) { [void] $root.RemoveChild($group) }
     }
     foreach ($reference in @(Find-UnreadReferences $root $Name)) { $script:unreadReferences.Add($reference) }
-    # A property that a file defines at the top level with no condition has the value that it says, whatever the environment: it may be read.
-    # (A definition inside Choose, When or Otherwise is under a condition, even if no Condition attribute says so.)
-    foreach ($property in @($root.SelectNodes("*[local-name()='PropertyGroup'][not(@Condition)]/*[not(@Condition)]"))) { [void] $script:defined.Add($property.LocalName) }
 
     $lines = [System.Collections.Generic.List[string]]::new()
     Write-CanonicalElement $root 0 $lines
@@ -195,8 +220,6 @@ function ConvertTo-CanonicalProject([string] $Xml, [bool] $DropPackageMetadata, 
 }
 
 function Get-Inputs([string] $Revision) {
-    $script:defined.Clear()
-    $script:reads.Clear()
     $paths = foreach ($directory in $libraryFolder, 'src', '') {
         foreach ($name in $xmlBuildFiles + $otherBuildFiles) { if ($directory) { "$directory/$name" } else { $name } }
     }
@@ -205,8 +228,13 @@ function Get-Inputs([string] $Revision) {
     $listing = Invoke-Git (@('ls-tree', '-r', '-z', $Revision, '--', $libraryFolder) + $paths)
     foreach ($entry in $listing -split "`0") {
         if (-not $entry) { continue }
-        if ($entry -cnotmatch '(?s)^\d+ \w+ ([0-9a-f]+)\t(.+)$') { throw "Unexpected entry from git ls-tree: $entry" }
-        $entries[$Matches[2]] = $Matches[1]
+        if ($entry -cnotmatch '(?s)^(\d+) \w+ ([0-9a-f]+)\t(.+)$') { throw "Unexpected entry from git ls-tree: $entry" }
+        $mode, $blob, $entryPath = $Matches[1], $Matches[2], $Matches[3]
+        $entries[$entryPath] = $blob
+        # A link or a submodule is compared by what its entry says, not by what it points at, and what it points at is built.
+        if ($mode -in '120000', '160000') {
+            $script:unreadReferences.Add("$entryPath at $Revision is a symbolic link or a submodule, which this check compares by its entry and not by what it points at")
+        }
     }
 
     $library = foreach ($path in $entries.Keys) {
@@ -234,11 +262,6 @@ function Get-Inputs([string] $Revision) {
             ConvertTo-CanonicalProject (Invoke-Git @('cat-file', 'blob', $entries[$path])) $xml[$path] "$path at $Revision"
         }
         else { '(missing)' }
-    }
-    foreach ($read in $script:reads) {
-        if ($allowedReads -notcontains $read.Name -and -not $script:defined.Contains($read.Name)) {
-            $script:unreadReferences.Add("$($read.Where) reads $($read.Token) in <$($read.Element)>, which the compared files do not define without a condition and the pipeline does not give (an environment variable, the operating system, a reserved property, an item list or item metadata)")
-        }
     }
     , $inputs
 }

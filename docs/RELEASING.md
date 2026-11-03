@@ -109,10 +109,15 @@ package 1.1.0-preview.1. The library is the application's engine and is versione
   something the check does not follow or evaluate is refused until the check is taught to read it: an import, a target or task, a project
   reference, a path outside its own folder (also a rooted one, in a value or in a condition), a condition on the file system, a property
   function, an escaped character, `TreatAsLocalProperty` (which lets a project override the version that the package is made with), a
-  read of one of the package properties that the comparison leaves out, or a read of anything that the project's files do not define
-  at the top level without a condition (an environment variable, the operating system, a reserved property, an item list or item
-  metadata: only `NoWarn`, `DefineConstants`, `Version` and `Configuration` are given by the pipeline; only a plain `$(Name)` is
-  understood, so a method called on a property, `%(Metadata)` and `@(Items)` are refused whatever their names). When the candidate is
+  read of one of the package properties that the comparison leaves out, or a read of anything that the pipeline does not fix: only
+  `$(Version)` and `$(Configuration)` (given on the command line) and `$(NoWarn)` inside the `NoWarn` property itself (which adds to
+  the default) may be read. An environment variable, the operating system, a reserved property, an item list and item metadata may
+  not, and neither may a property that the project defines itself: its value can come from the environment (`<P>$(P)</P>`), from
+  itself or from a cycle, or write a path one piece at a time. Only a plain `$(Name)` is understood, so a method called on a property,
+  `%(Metadata)` and `@(Items)` are refused whatever their names. So are a package reference (the library has no package
+  dependencies, and a package that restore resolves is code that is not among the compared files), a name or a wildcard that could
+  take in a file that the comparison leaves out (a README, the lock file), a CDATA section, and a symbolic link or a submodule among the
+  library's files. Text that a comment splits is read joined, as MSBuild joins it. When the candidate is
   the release's own commit
   (as it is when `release.yml` calls the workflow) nothing is compared. The package itself is made by
   the candidate's own `Build-NuGetPackage.ps1`, which gives the version and the configuration and nothing else; that script is part of
@@ -141,7 +146,10 @@ days as the artifact `website-preview`.
   `packaging/Generate-SiteAssets.ps1`.
 - The build fails when a link, a picture, a style-sheet `url()` or `@import`, or an entry of the sitemap or `robots.txt` points at nothing or
   outside the site, a canonical or preview address is not this site's, a page has no language, title, description or alt text, an
-  attribute is not in double quotes (the checks read double quotes only), a link is not https, text is unfinished, or `site/privacy.html`
+  attribute that the checks read is not written `name="value"` (single quotes, no quotes, spaces around the equals sign, or no space
+  before the attribute are refused), a fragment is not in the letter case of its id, a style sheet, style block or style attribute has
+  something that the check does not read (`image-set()`, `src()`, an escape outside a string), a link is not https, text is unfinished,
+  or `site/privacy.html`
   and `docs/PRIVACY.md` differ in their effective date or in a word (formatting and the last section, which says where the policy is
   published, are left out of the comparison). The privacy policy has those two copies and they must say the same: change both in one pull
   request. `packaging/Build-Site.Tests.ps1` proves the check on each of those defects (and that the site as it is passes, in both Store

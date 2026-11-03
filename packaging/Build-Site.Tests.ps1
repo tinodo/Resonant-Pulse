@@ -107,6 +107,66 @@ $cases = @(
     @{ Name = 'a comment in a style sheet that holds a string and a url() to nothing'; Expect = 'accepted'; Change = {
             Edit-Site 'assets/site.css' '.wrap {' '/* was: "x" and url(old.png) */ .wrap {'
         } }
+    @{ Name = 'an unquoted url() that holds a comment delimiter, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.a { background: url(https://example.com/images/*); } .b { background: url(missing.png); } .wrap {'
+        } }
+    @{ Name = 'a style attribute that hides a comment delimiter in character references, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<p style="--label: &quot;/*&quot;; background: url(missing.png)">x</p>'
+        } }
+    @{ Name = 'an @import in capitals to a style sheet that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@IMPORT "missing.css"; .wrap {'
+        } }
+    @{ Name = 'text in a string of a style sheet that looks like an @import'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".example::before { content: '@import ""missing.css""'; } .wrap {"
+        } }
+    @{ Name = 'a url() in capitals to a file that is not there'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: URL(missing.png); } .wrap {'
+        } }
+    @{ Name = 'a string that is not closed ends at its line, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".a { content: `"oops`n} .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a string that is not closed ends at a carriage return, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".a { content: `"oops`r} .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a line continuation inside a string of a style sheet, then a url() to nothing'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' ".a { content: `"one\`r`ntwo`"; } .b { background: url(missing.png); } .wrap {"
+        } }
+    @{ Name = 'a ">" inside a quoted value, then a link in single quotes'; Expect = 'not written name='; Change = {
+            Add-ToHome '<p><a title="1 > 0" href=''nowhere.html''>x</a></p>'
+        } }
+    @{ Name = 'text inside a quoted value that looks like an attribute with spaces around the equals sign'; Expect = 'accepted'; Change = {
+            Add-ToHome '<p><a title="the id = 3" href="privacy.html">x</a></p>'
+        } }
+    @{ Name = 'a link with its attribute name in capitals, to nothing'; Expect = 'points at nothing'; Change = { Add-ToHome '<p><a HREF="nowhere.html">x</a></p>' } }
+    @{ Name = 'an @import with a comment before its address'; Expect = 'points at nothing'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '@import /**/ "missing.css"; .wrap {'
+        } }
+    @{ Name = 'an image-set() with an address in a string'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: image-set("missing.png" 1x); } .wrap {'
+        } }
+    @{ Name = 'a prefixed image-set()'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: -webkit-image-set("missing.png" 1x); } .wrap {'
+        } }
+    @{ Name = 'a src() with an address in a string'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: src("missing.png"); } .wrap {'
+        } }
+    @{ Name = 'an escaped keyword'; Expect = 'does not read'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.x { background: u\72l(missing.png); } .wrap {'
+        } }
+    @{ Name = 'an escape inside a string of a style sheet'; Expect = 'accepted'; Change = {
+            Edit-Site 'assets/site.css' '.wrap {' '.a::before { content: "\2192"; } .wrap {'
+        } }
+    @{ Name = 'attributes with no space between them'; Expect = 'between its attributes'; Change = {
+            Add-ToHome '<div class="a"style="background: url(missing.png)">x</div>'
+        } }
+    @{ Name = 'a link to an anchor in another letter case'; Expect = 'has no target'; Change = { Add-ToHome '<p><a href="#Features">x</a></p>' } }
+    @{ Name = 'a link from another page to an anchor in another letter case'; Expect = 'has no #Features in its target'; Change = {
+            Add-ToPrivacy '<p><a href="/Resonant-Pulse/#Features">x</a></p>'
+        } }
+    @{ Name = 'a video poster that is not there'; Expect = 'points at nothing'; Change = { Add-ToHome '<video poster="screenshots/09-nothing.png"></video>' } }
+    @{ Name = 'a preloaded picture set that is not there'; Expect = 'points at nothing'; Change = {
+            Add-ToHome '<link rel="preload" as="image" imagesrcset="screenshots/09-nothing.png 1x">'
+        } }
     @{ Name = 'a preview address in single quotes'; Expect = 'not written name='; Change = {
             Add-ToHome "<meta property='og:image' content='https://example.com/x.png'>"
         } }
