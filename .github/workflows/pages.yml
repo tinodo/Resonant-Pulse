@@ -93,7 +93,9 @@ jobs:
         run: |
           set -euo pipefail
           base="${PAGE_URL%/}"
-          fetch() { curl --fail --silent --show-error --location --retry 8 --retry-delay 10 --retry-all-errors "$base/$1"; }
+          # The query string gives this run its own copy of each page: the CDN keeps a page for up to ten minutes, and the copy from before
+          # a change of the Store block made the check of the deployment that changed it fail (5 November 2026).
+          fetch() { curl --fail --silent --show-error --location --retry 8 --retry-delay 10 --retry-all-errors "$base/$1?run=${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"; }
           home=$(fetch "")
           grep -q 'Keep time.' <<<"$home" || { echo "::error::The home page does not have the expected content."; exit 1; }
           if [[ "${STORE_PUBLISHED,,}" == "true" ]]; then

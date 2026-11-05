@@ -3,17 +3,20 @@
 Product name: **Resonant Pulse**. The owner supplied the reserved Partner Center
 product identity on 25 October 2026; the exact nonsecret values are recorded in
 packaging/StoreIdentity.json and configured as GitHub repository variables.
-Trademark clearance, commercial terms, markets and first certification remain
-external prerequisites. Do not claim the entire design as shipping functionality.
+The listing is live: https://apps.microsoft.com/detail/9nrfh2c8x2ql (docs/DELIVERY.md,
+Store first publication). Trademark clearance, commercial terms, markets and the certification
+itself were the owner's, in Partner Center, and are not recorded here. Do not claim the entire
+design as shipping functionality.
 
 | Field | Prepared value |
 |---|---|
 | Product name | Resonant Pulse |
-| Reserved Store product ID | 9NRFH2C8X2QL |
+| Store product ID | 9NRFH2C8X2QL |
+| Store listing | https://apps.microsoft.com/detail/9nrfh2c8x2ql (live; the badge on the website and in the README links to it) |
 | Package version | 1.0.0.0 (the fourth part of a Store version is reserved and stays 0), built by the Microsoft Store workflow |
-| Category candidate | Music |
+| Category | Music (as listed in the Store) |
 | Support | https://github.com/tinodo/Resonant-Pulse/issues |
-| Website | https://tinodo.github.io/Resonant-Pulse/ (GitHub Pages; the home page says "coming soon" for the Store until `STORE_FIRST_PUBLICATION_COMPLETED` is `true`) |
+| Website | https://tinodo.github.io/Resonant-Pulse/ (GitHub Pages; the home page shows the Store badge and a link while `STORE_FIRST_PUBLICATION_COMPLETED` is `true`, as it has been since 5 November 2026, and says "coming soon" otherwise) |
 | Privacy | https://tinodo.github.io/Resonant-Pulse/privacy.html (the same text as docs/PRIVACY.md; `pages.yml` fails when their effective dates or words differ) |
 | Source/license | https://github.com/tinodo/Resonant-Pulse / MIT |
 | Package languages | en-US, nl-NL, de-DE, fr-FR, es-ES |

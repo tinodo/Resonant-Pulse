@@ -56,8 +56,9 @@ Five changes since preview.12, the last published preview.
 - Download the ZIP for your architecture from this page, extract **all** files, and run `ResonantPulse.exe`. The ZIP includes the .NET
   and WinUI runtime files. A `.sha256` file accompanies each ZIP.
 - The ZIPs are not signed, so Windows SmartScreen may warn. Compare the SHA-256 checksum instead of turning protection off.
-- Microsoft Store: the product is reserved and a package is prepared, but it has not been submitted or published. Nothing here claims
-  Store availability.
+- Microsoft Store: since 4 November 2026 (the release date in the Store's catalog; added to these notes on 5 November) Resonant Pulse is in
+  the [Microsoft Store](https://apps.microsoft.com/detail/9nrfh2c8x2ql): free, one click to install, kept up to date by the Store. A new
+  version reaches the Store only after Microsoft has certified it, so the Store can be behind the download on this page.
 
 ## Known limits
 

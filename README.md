@@ -5,6 +5,8 @@
 A native Windows metronome and rhythm workstation in C#/.NET 10 and WinUI 3,
 with the cyan/magenta instrument aesthetic of Resonant. Website: <https://tinodo.github.io/Resonant-Pulse/>
 
+<a href="https://apps.microsoft.com/detail/9nrfh2c8x2ql"><picture><source media="(prefers-color-scheme: dark)" srcset="site/assets/microsoft-store-badge-for-dark-bg.svg"><img src="site/assets/microsoft-store-badge-for-light-bg.svg" alt="Get Resonant Pulse from Microsoft Store" width="200"></picture></a>
+
 **Version 1.0.0.** Play, Studio, Train, Stage, Library and Settings are built and in use. The full reviewed design is a longer-term
 target, and not every part of it is built: [capabilities and limits](docs/CAPABILITIES.md), [delivery evidence](docs/DELIVERY.md),
 [architecture](docs/ARCHITECTURE.md) and [release operations](docs/RELEASING.md) say which, and the
@@ -13,6 +15,10 @@ target, and not every part of it is built: [capabilities and limits](docs/CAPABI
 ![Resonant Pulse playing: the tempo dial with the scrolling tape of upcoming clicks, TAP, the time signature and the strength of every beat](packaging/store-assets/screenshots/en-US/01-play.png)
 
 ## Downloads
+
+**Microsoft Store:** [Resonant Pulse in the Microsoft Store](https://apps.microsoft.com/detail/9nrfh2c8x2ql) is free, installs in one
+click and is kept up to date by the Store. A new version reaches the Store only after Microsoft has certified it, so the Store can be
+behind the latest GitHub release. The listing artwork is in [packaging/store-assets](packaging/store-assets).
 
 **Releases:** [GitHub downloads](https://github.com/tinodo/Resonant-Pulse/releases), with x64/ARM64 downloads and SHA-256 checksums.
 
@@ -25,11 +31,6 @@ and SHA-256 checksum rather than disabling platform protection.
 
 ARM64 compilation is distinct from ARM64 hardware validation. Do not interpret
 the presence of an ARM64 artifact as proof of instrument/audio behavior.
-
-**Microsoft Store:** reserved as product `9NRFH2C8X2QL`, but not yet published.
-The exact Partner Center identity is configured, and the listing artwork is in
-[packaging/store-assets](packaging/store-assets). First submission, certification
-and API authorization remain required; update automation is separately guarded.
 
 ## Using ResonantPulse.Core
 
