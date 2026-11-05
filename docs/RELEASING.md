@@ -157,9 +157,11 @@ days as the artifact `website-preview`.
   request. `packaging/Build-Site.Tests.ps1` proves the check on each of those defects (and that the site as it is passes, in both Store
   states); `pages.yml` runs it before the build.
 - The Microsoft Store block of the home page follows `STORE_FIRST_PUBLICATION_COMPLETED`: `false` shows "coming soon", `true` shows the
-  Store badge and a link to `STORE_PRODUCT_ID`. After the variable is changed, run `pages.yml` (or wait for Monday).
+  Store badge and a link to `STORE_PRODUCT_ID`. After the variable is changed, run `pages.yml` (or wait for Monday). It has been `true`
+  since 5 November 2026, when the listing was found in the Store's public catalog.
 - After a deployment the job requests the live site: the home page, the privacy policy, the stylesheet, six pictures and a 404 page.
-  An accepted deployment is not yet a website that answers.
+  An accepted deployment is not yet a website that answers. The requests for the pages carry a query string of their own, because the CDN
+  keeps a page for up to ten minutes and the copy from before a change of the Store block failed this check on 5 November 2026.
 - `https://tinodo.github.io/Resonant-Pulse/privacy.html` is the privacy policy URL of the Store listing.
 
 ## Microsoft Store prerequisites
@@ -193,6 +195,11 @@ After first publication, configure protected `microsoft-store` environment
 secrets: `STORE_TENANT_ID`, `STORE_SELLER_ID`, `STORE_CLIENT_ID`,
 `STORE_CLIENT_SECRET`. These come from authorized Partner Center API access.
 Never paste a client secret into source, issues, logs or a chat transcript.
+
+The first publication is done: the owner submitted the package through Partner Center, and the Store's public catalog lists the app with
+4 November 2026 as its release date (docs/DELIVERY.md, Store first publication). The `microsoft-store` environment has no secrets yet, so
+`store.yml` cannot submit an update, and it would also need the owner's approval at the environment's gate; until the secrets are set
+up, a new version goes to the Store through Partner Center.
 
 An update submission authenticates, uploads and polls the provider result.
 Unknown delivery/certification is not success. Check Partner Center and the
